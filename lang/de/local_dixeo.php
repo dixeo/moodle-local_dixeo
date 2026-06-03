@@ -164,6 +164,23 @@ $string['period_month'] = 'Monatlich';
 $string['period_week'] = 'Wöchentlich';
 $string['pluginname'] = 'Dixeo AI';
 $string['pluginname_desc'] = 'Dixeo-AI-Integration für intelligente Inhaltserstellung und -bearbeitung.';
+$string['practice_quiz_default_title'] = 'Übungsquiz';
+$string['practice_quiz_difficulty_easy'] = 'einfach (Grundwissen, unkomplizierte Konzepte, für Anfänger geeignet)';
+$string['practice_quiz_difficulty_hard'] = 'schwer (anspruchsvolle Anwendung, Analyse oder Synthese fortgeschrittener Konzepte)';
+$string['practice_quiz_difficulty_medium'] = 'mittel (moderate Tiefe, Verständnis über reines Abrufen hinaus erforderlich)';
+$string['practice_quiz_error_invalid_result'] = 'Ungültiges Auftragsergebnis.';
+$string['practice_quiz_error_job_not_completed'] = 'Auftrag ist nicht abgeschlossen. Status: {$a->status}';
+$string['practice_quiz_error_no_questions'] = 'Keine Fragen im Auftragsergebnis.';
+$string['practice_quiz_error_wrong_module_type'] = 'Der Auftrag ist keine simplequiz2-Generierung.';
+$string['practice_quiz_instructions'] = 'Generieren Sie ein Übungsquiz zum Thema: {$a->topic}.
+
+PFLICHTANFORDERUNGEN — Sie MÜSSEN diese exakt befolgen:
+1. FRAGENANZAHL: Das Array „questions" MUSS genau {$a->count} Fragen enthalten. Geben Sie nicht {$a->count} minus eins, {$a->count} plus eins oder eine andere Anzahl aus — genau {$a->count}.
+2. SCHWIERIGKEITSGRAD: Jede Frage MUSS dem Schwierigkeitsgrad {$a->difficultylabel} entsprechen.
+3. FORMAT: Jede Frage MUSS eine Multiple-Choice-Frage mit 3 oder 4 Antwortoptionen und genau einer richtigen Antwort sein.
+
+Überprüfen Sie vor dem Abschluss, dass die Länge des questions-Arrays {$a->count} entspricht und alle Fragen dem Schwierigkeitsgrad {$a->difficulty} entsprechen.
+Konzentrieren Sie sich auf den bereitgestellten Kurskontext. Dies ist ein temporäres Tutor-Übungsquiz — verweisen Sie nicht namentlich auf Moodle-Aktivitäten.';
 $string['privacy:metadata'] = 'Das Dixeo-Plugin speichert operative Kennungen für die Kursdatei-Synchronisation und sendet Kursinhalte, Tutor-Nachrichten, Generierungskontext und zugehörige Kennungen zur Verarbeitung an die Dixeo-AI-API. Speicherung und Löschung der bei Dixeo gehaltenen Daten steuert dieser externe Dienst.';
 $string['privacy:metadata:course_ai'] = 'KI-Dateisynchronisationskonfiguration und -status pro Kurs.';
 $string['privacy:metadata:course_ai:courseid'] = 'Der Kurs, zu dem diese Synchronisationskonfiguration gehört.';

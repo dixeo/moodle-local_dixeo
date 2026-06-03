@@ -36,6 +36,7 @@ use local_dixeo\service\module_generation_service;
 use local_dixeo\service\module_types_service;
 use local_dixeo\service\file_sync_service;
 use local_dixeo\service\manual_upload_service;
+use local_dixeo\service\practice_quiz_service;
 use local_dixeo\service\tutor_service;
 
 /**
@@ -68,6 +69,9 @@ class service_factory {
 
     /** @var manual_upload_service|null Mock manual upload service for unit testing. */
     private static ?manual_upload_service $testmanualuploadservice = null;
+
+    /** @var practice_quiz_service|null Mock practice quiz service for unit testing. */
+    private static ?practice_quiz_service $testpracticequizservice = null;
 
     /** @var client|null Mock client instance for unit testing. */
     private static ?client $testclient = null;
@@ -189,6 +193,19 @@ class service_factory {
     }
 
     /**
+     * Get a practice_quiz_service instance.
+     *
+     * @return practice_quiz_service
+     */
+    public static function get_practice_quiz_service(): practice_quiz_service {
+        if (self::$testpracticequizservice !== null) {
+            return self::$testpracticequizservice;
+        }
+
+        return new practice_quiz_service();
+    }
+
+    /**
      * Get a client instance.
      *
      * Returns a fresh instance unless a test instance has been set.
@@ -289,6 +306,15 @@ class service_factory {
     }
 
     /**
+     * Set a test practice quiz service instance.
+     *
+     * @param practice_quiz_service|null $service
+     */
+    public static function set_test_practice_quiz_service(?practice_quiz_service $service): void {
+        self::$testpracticequizservice = $service;
+    }
+
+    /**
      * Set a test client instance.
      *
      * Use this in unit tests to inject mock clients.
@@ -313,6 +339,7 @@ class service_factory {
         self::$testmoduletypesservice = null;
         self::$testfilesyncservice = null;
         self::$testmanualuploadservice = null;
+        self::$testpracticequizservice = null;
         self::$testclient = null;
     }
 }
