@@ -98,12 +98,43 @@ class tutor_service {
      *
      * @param int $courseid The course ID.
      * @param int $userid The user ID.
-     * @param string $sinceid Optional message ID to fetch messages after.
-     * @param int $limit Maximum number of messages to return.
+     * @param string $sinceid Optional message ID cursor for newer messages (delta).
+     * @param int $limit Maximum number of messages to return per request.
+     * @param int $offset Optional offset for loading older message pages.
      * @return array Array of message objects with id, role, content, time keys.
      * @throws api_exception If the API request fails.
      */
-    public function get_conversation(int $courseid, int $userid, string $sinceid = '', int $limit = 50): array {
+    public function get_conversation(
+        int $courseid,
+        int $userid,
+        string $sinceid = '',
+        int $limit = 50,
+        int $offset = 0
+    ): array {
+        $limit = max(1, $limit);
+        $offset = max(0, $offset);
+
+        return $this->map_raw_messages(
+            $this->request_messages($courseid, $userid, $sinceid, $limit, $offset)
+        );
+    }
+
+    /**
+     * @param int $courseid
+     * @param int $userid
+     * @param string $sinceid
+     * @param int $limit
+     * @param int $offset
+     * @return array
+     * @throws api_exception
+     */
+    private function request_messages(
+        int $courseid,
+        int $userid,
+        string $sinceid,
+        int $limit,
+        int $offset = 0
+    ): array {
         $params = [
             'courseId' => (string) $courseid,
             'userId' => (string) $userid,
@@ -111,25 +142,38 @@ class tutor_service {
             'limit' => $limit,
         ];
 
-        if (!empty($sinceid)) {
+        if ($sinceid !== '') {
             $params['sinceId'] = $sinceid;
         }
 
-        $response = $this->client->get('/v1/tutor/messages', $params);
+        if ($offset > 0) {
+            $params['offset'] = $offset;
+        }
 
-        // Map API response format to Moodle format.
-        $messages = [];
+        $response = $this->client->get('/v1/tutor/messages', $params);
         $rawmessages = $response['messages'] ?? $response;
 
-        if (is_array($rawmessages)) {
-            foreach ($rawmessages as $msg) {
-                $messages[] = [
-                    'id' => $msg['id'] ?? '',
-                    'role' => strtolower((string) ($msg['role'] ?? 'user')),
-                    'content' => $msg['content'] ?? '',
-                    'time' => isset($msg['createdAt']) ? self::parse_iso_timestamp($msg['createdAt']) : 0,
-                ];
+        return is_array($rawmessages) ? $rawmessages : [];
+    }
+
+    /**
+     * @param array $rawmessages
+     * @return array
+     */
+    private function map_raw_messages(array $rawmessages): array {
+        $messages = [];
+
+        foreach ($rawmessages as $msg) {
+            if (!is_array($msg)) {
+                continue;
             }
+
+            $messages[] = [
+                'id' => $msg['id'] ?? '',
+                'role' => strtolower((string) ($msg['role'] ?? 'user')),
+                'content' => $msg['content'] ?? '',
+                'time' => isset($msg['createdAt']) ? self::parse_iso_timestamp($msg['createdAt']) : 0,
+            ];
         }
 
         return $messages;
