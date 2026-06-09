@@ -42,6 +42,9 @@ class simplequiz2_question_transformer {
 
         $question = new \stdClass();
         $question->text = is_string($questiontext) ? $questiontext : (string) $questiontext;
+        $question->correctfeedback = (string) ($fields['correctfeedback'] ?? '');
+        $question->partiallycorrectfeedback = (string) ($fields['partiallycorrectfeedback'] ?? '');
+        $question->incorrectfeedback = (string) ($fields['incorrectfeedback'] ?? '');
         $question->answers = [];
 
         foreach ($options as $index => $optiontext) {

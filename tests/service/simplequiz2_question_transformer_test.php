@@ -37,6 +37,39 @@ final class simplequiz2_question_transformer_test extends \advanced_testcase {
     }
 
     /**
+     * Moodle quiz combined feedback field names are stored on simplequiz2 questions.
+     */
+    public function test_transform_api_question_feedback_fields(): void {
+        $question = simplequiz2_question_transformer::transform_api_question([
+            'text' => 'Pick one',
+            'options' => ['A', 'B'],
+            'answer' => 0,
+            'correctfeedback' => '<p>Nice</p>',
+            'partiallycorrectfeedback' => '<p>Almost</p>',
+            'incorrectfeedback' => '<p>Oops</p>',
+        ]);
+
+        $this->assertEquals('<p>Nice</p>', $question->correctfeedback);
+        $this->assertEquals('<p>Almost</p>', $question->partiallycorrectfeedback);
+        $this->assertEquals('<p>Oops</p>', $question->incorrectfeedback);
+    }
+
+    /**
+     * Missing feedback defaults to empty strings.
+     */
+    public function test_transform_api_question_empty_feedback_defaults(): void {
+        $question = simplequiz2_question_transformer::transform_api_question([
+            'text' => 'Q',
+            'options' => ['A', 'B'],
+            'answer' => 0,
+        ]);
+
+        $this->assertSame('', $question->correctfeedback);
+        $this->assertSame('', $question->partiallycorrectfeedback);
+        $this->assertSame('', $question->incorrectfeedback);
+    }
+
+    /**
      * Batch transform preserves order.
      */
     public function test_transform_job_questions(): void {
