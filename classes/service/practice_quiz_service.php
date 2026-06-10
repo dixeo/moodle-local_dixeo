@@ -108,14 +108,16 @@ class practice_quiz_service {
     public function build_context(int $courseid, string $scope, ?int $sectionnum, ?int $cmid): string {
         switch ($scope) {
             case self::SCOPE_SECTION:
-                return context_builder_factory::buildCourseContext(
-                    $courseid,
-                    $sectionnum,
-                    course_context_builder::MODE_TEACHING
-                );
+                if ($sectionnum !== null && $sectionnum > 0) {
+                    return context_builder_factory::buildSectionContextForNumber($courseid, $sectionnum);
+                }
+                // Fall through to course if section number missing.
+                // no break
             case self::SCOPE_ACTIVITY:
-                if ($cmid > 0) {
-                    return context_builder_factory::buildModuleGenerationContext($cmid);
+                if ($cmid !== null && $cmid > 0) {
+                    // Reject cmids from other courses (section scope is enforced by its DB lookup).
+                    get_coursemodule_from_id('', $cmid, $courseid, false, MUST_EXIST);
+                    return context_builder_factory::buildModulePracticeContext($cmid);
                 }
                 // Fall through to course if cmid missing.
                 // no break
@@ -124,7 +126,7 @@ class practice_quiz_service {
                 return context_builder_factory::buildCourseContext(
                     $courseid,
                     null,
-                    course_context_builder::MODE_TEACHING
+                    course_context_builder::MODE_ASSESSMENT
                 );
         }
     }
