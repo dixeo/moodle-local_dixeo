@@ -172,7 +172,7 @@ $string['practice_quiz_error_invalid_result'] = 'Résultat du travail non valide
 $string['practice_quiz_error_job_not_completed'] = 'Le travail n\'est pas terminé. Statut : {$a->status}';
 $string['practice_quiz_error_no_questions'] = 'Aucune question dans le résultat du travail.';
 $string['practice_quiz_error_wrong_module_type'] = 'Le travail n\'est pas une génération simplequiz2.';
-$string['practice_quiz_instructions'] = 'Générez un quiz d\'entraînement sur le thème : {$a->topic}.
+$string['practice_quiz_instructions'] = 'Générez un quiz d\'entraînement pour {$a->scopedescription}.
 
 EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
 1. NOMBRE DE QUESTIONS : Le tableau « questions » DOIT contenir exactement {$a->count} questions. Ne produisez pas {$a->count} moins un, {$a->count} plus un, ni aucun autre nombre — exactement {$a->count}.
@@ -180,7 +180,10 @@ EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
 3. FORMAT : Chaque question DOIT être à choix multiples avec 3 ou 4 options de réponse et exactement une bonne réponse.
 
 Avant de terminer, vérifiez que la longueur du tableau questions est égale à {$a->count} et que toutes les questions correspondent au niveau de difficulté {$a->difficulty}.
-Concentrez-vous sur le contexte de cours fourni. Il s\'agit d\'un quiz d\'entraînement éphémère du tuteur — ne mentionnez pas les activités Moodle par leur nom.';
+Concentrez-vous sur le contexte de cours fourni.';
+$string['practice_quiz_scope_activity_description'] = 'l\'activité « {$a->name} »';
+$string['practice_quiz_scope_course_description'] = 'l\'ensemble du cours « {$a->name} »';
+$string['practice_quiz_scope_section_description'] = 'la section « {$a->name} »';
 $string['privacy:metadata'] = 'Le plugin Dixeo stocke des identifiants opérationnels pour la synchronisation des fichiers de cours et envoie le contenu des cours, les messages du tuteur, le contexte de génération et des identifiants associés à l\'API Dixeo AI. La conservation et la suppression des données chez Dixeo sont contrôlées par ce service externe.';
 $string['privacy:metadata:course_ai'] = 'Configuration et statut de synchronisation des fichiers IA par cours.';
 $string['privacy:metadata:course_ai:courseid'] = 'Le cours auquel appartient cette configuration de synchronisation.';

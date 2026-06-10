@@ -73,7 +73,7 @@ class practice_quiz_service {
             $sectionnum > 0 ? $sectionnum : null,
             $cmid > 0 ? $cmid : null
         );
-        $instructions = $this->build_instructions($count, $difficulty, $topictitle);
+        $instructions = $this->build_instructions($count, $difficulty, $scope, $topictitle);
 
         return $this->submit_job($courseid, $instructions, $contextmarkdown);
     }
@@ -134,13 +134,14 @@ class practice_quiz_service {
      *
      * @param int $count Number of questions (3-10).
      * @param string $difficulty easy|medium|hard
-     * @param string $topictitle Human-readable topic label.
+     * @param string $scope course|section|activity
+     * @param string $scopename Human-readable scope name (course, section, or activity title).
      * @return string
      */
-    public function build_instructions(int $count, string $difficulty, string $topictitle): string {
+    public function build_instructions(int $count, string $difficulty, string $scope, string $scopename): string {
         $count = max(3, min(10, $count));
         $difficulty = in_array($difficulty, ['easy', 'medium', 'hard'], true) ? $difficulty : 'medium';
-        $topictitle = trim($topictitle);
+        $scope = $this->normalize_scope($scope);
 
         $difficultylabel = match ($difficulty) {
             'easy' => get_string('practice_quiz_difficulty_easy', 'local_dixeo'),
@@ -149,11 +150,34 @@ class practice_quiz_service {
         };
 
         return get_string('practice_quiz_instructions', 'local_dixeo', (object) [
-            'topic' => $topictitle,
+            'scopedescription' => $this->build_scope_description($scope, $scopename),
             'count' => $count,
             'difficulty' => $difficulty,
             'difficultylabel' => $difficultylabel,
         ]);
+    }
+
+    /**
+     * Human-readable scope line for generation instructions.
+     *
+     * @param string $scope course|section|activity
+     * @param string $scopename Scope display name.
+     * @return string
+     */
+    private function build_scope_description(string $scope, string $scopename): string {
+        $name = trim($scopename);
+
+        return match ($scope) {
+            self::SCOPE_SECTION => get_string('practice_quiz_scope_section_description', 'local_dixeo', (object) [
+                'name' => $name,
+            ]),
+            self::SCOPE_ACTIVITY => get_string('practice_quiz_scope_activity_description', 'local_dixeo', (object) [
+                'name' => $name,
+            ]),
+            default => get_string('practice_quiz_scope_course_description', 'local_dixeo', (object) [
+                'name' => $name,
+            ]),
+        };
     }
 
     /**

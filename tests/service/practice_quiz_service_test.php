@@ -29,13 +29,15 @@ final class practice_quiz_service_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $service = new practice_quiz_service();
-        $instructions = $service->build_instructions(7, 'hard', 'Photosynthesis');
+        $instructions = $service->build_instructions(7, 'hard', practice_quiz_service::SCOPE_SECTION, 'Unit 2');
 
         $this->assertStringContainsString('exactly 7', $instructions);
         $this->assertStringContainsString('QUESTION COUNT', $instructions);
         $this->assertStringContainsString('DIFFICULTY LEVEL', $instructions);
         $this->assertStringContainsString('hard', $instructions);
-        $this->assertStringContainsString('Photosynthesis', $instructions);
+        $this->assertStringContainsString('section', $instructions);
+        $this->assertStringContainsString('Unit 2', $instructions);
+        $this->assertStringNotContainsString('ephemeral', $instructions);
     }
 
     /**

@@ -172,7 +172,7 @@ $string['practice_quiz_error_invalid_result'] = 'Resultado del trabajo no válid
 $string['practice_quiz_error_job_not_completed'] = 'El trabajo no está completado. Estado: {$a->status}';
 $string['practice_quiz_error_no_questions'] = 'No hay preguntas en el resultado del trabajo.';
 $string['practice_quiz_error_wrong_module_type'] = 'El trabajo no es una generación simplequiz2.';
-$string['practice_quiz_instructions'] = 'Genera un cuestionario de práctica sobre el tema: {$a->topic}.
+$string['practice_quiz_instructions'] = 'Genera un cuestionario de práctica para {$a->scopedescription}.
 
 REQUISITOS OBLIGATORIOS — debes seguirlos exactamente:
 1. NÚMERO DE PREGUNTAS: El array "questions" DEBE contener exactamente {$a->count} preguntas. No generes {$a->count} menos uno, {$a->count} más uno ni ningún otro número — exactamente {$a->count}.
@@ -180,7 +180,10 @@ REQUISITOS OBLIGATORIOS — debes seguirlos exactamente:
 3. FORMATO: Cada pregunta DEBE ser de opción múltiple con 3 o 4 opciones de respuesta y exactamente una respuesta correcta.
 
 Antes de terminar, verifica que la longitud del array questions sea {$a->count} y que todas las preguntas coincidan con el nivel de dificultad {$a->difficulty}.
-Céntrate en el contexto del curso proporcionado. Este es un cuestionario de práctica efímero del tutor — no menciones actividades de Moodle por su nombre.';
+Céntrate en el contexto del curso proporcionado.';
+$string['practice_quiz_scope_activity_description'] = 'la actividad «{$a->name}»';
+$string['practice_quiz_scope_course_description'] = 'el curso completo «{$a->name}»';
+$string['practice_quiz_scope_section_description'] = 'la sección «{$a->name}»';
 $string['privacy:metadata'] = 'El plugin Dixeo almacena identificadores operativos de la sincronización de archivos del curso y envía contenido del curso, mensajes del tutor, contexto de generación e identificadores relacionados a la API Dixeo AI. La retención y eliminación de datos en Dixeo las controla ese servicio externo.';
 $string['privacy:metadata:course_ai'] = 'Configuración y estado de sincronización de archivos AI por curso.';
 $string['privacy:metadata:course_ai:courseid'] = 'El curso al que pertenece esta configuración de sincronización.';
