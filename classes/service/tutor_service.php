@@ -32,6 +32,7 @@ use local_dixeo\api\client;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\dto\operation_result;
+use local_dixeo\dto\tutor_message;
 use local_dixeo\external\service_factory;
 
 /**
@@ -62,33 +63,25 @@ class tutor_service {
     }
 
     /**
-     * Submit a tutor message.
-     *
-     * Builds instructions, constructs payload, and submits a job via job_service.
+     * Submit a tutor message (user, assistant, or system).
      *
      * @param int $courseid The course ID.
      * @param int $userid The user ID.
-     * @param string $message The user message.
-     * @param string $pagecontext Optional page context information.
+     * @param tutor_message $message Unified message DTO.
+     * @param string $mode Tutor interaction mode.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
-    public function submit_message(int $courseid, int $userid, string $message, string $pagecontext = ''): operation_result {
+    public function submit(
+        int $courseid,
+        int $userid,
+        tutor_message $message,
+        string $mode = tutor_message::MODE_NORMAL
+    ): operation_result {
         service_factory::get_file_sync_service()->ensure_enabled_and_synchronized($courseid, $userid);
+        $message->validate();
 
-        $instructions = $this->build_instructions($courseid);
-
-        $payload = [
-            'courseId' => (string) $courseid,
-            'userId' => (string) $userid,
-            'message' => $message,
-            'instructions' => $instructions,
-            'namespace' => $this->namespace,
-        ];
-
-        if (!empty($pagecontext)) {
-            $payload['pageContext'] = $pagecontext;
-        }
+        $payload = $this->build_submit_payload($courseid, $userid, $message, $mode);
 
         return $this->jobservice->submit_job('/v1/tutor/messages', $payload);
     }
@@ -120,6 +113,7 @@ class tutor_service {
     }
 
     /**
+     * Request messages.
      * @param int $courseid
      * @param int $userid
      * @param string $sinceid
@@ -157,6 +151,7 @@ class tutor_service {
     }
 
     /**
+     * Map raw messages.
      * @param array $rawmessages
      * @return array
      */
@@ -168,27 +163,147 @@ class tutor_service {
                 continue;
             }
 
-            $messages[] = [
+            $role = tutor_message::normalize_role((string) ($msg['role'] ?? 'user'));
+            $content = (string) ($msg['content'] ?? '');
+            $instructions = isset($msg['instructions']) ? (string) $msg['instructions'] : null;
+
+            $normalized = [
                 'id' => $msg['id'] ?? '',
-                'role' => strtolower((string) ($msg['role'] ?? 'user')),
-                'content' => $msg['content'] ?? '',
+                'role' => $role,
+                'content' => $content,
                 'time' => isset($msg['createdAt']) ? self::parse_iso_timestamp($msg['createdAt']) : 0,
             ];
+
+            $context = self::passthrough_context($msg['context'] ?? null, $role);
+            if ($context !== null) {
+                $normalized['context'] = $context;
+            }
+            if ($instructions !== null && $instructions !== '') {
+                $normalized['instructions'] = $instructions;
+            }
+
+            $messages[] = $normalized;
         }
 
         return $messages;
     }
 
     /**
-     * Build system instructions for the tutor.
+     * Build submit payload.
+     * @param int $courseid
+     * @param int $userid
+     * @param tutor_message $message
+     * @param string $mode
+     * @return array
+     */
+    private function build_submit_payload(
+        int $courseid,
+        int $userid,
+        tutor_message $message,
+        string $mode
+    ): array {
+        $payload = [
+            'courseId' => (string) $courseid,
+            'userId' => (string) $userid,
+            'namespace' => $this->namespace,
+            'mode' => tutor_message::normalize_mode($mode),
+            'role' => $message->role,
+            'context' => $message->context,
+            'message' => $this->resolve_wire_message($message),
+        ];
+
+        $instructions = $this->resolve_instructions($courseid, $message);
+        if (
+            ($instructions === null || trim($instructions) === '')
+            && $message->role === tutor_message::ROLE_SYSTEM
+            && trim($message->message) !== ''
+        ) {
+            $instructions = $message->message;
+        }
+        $payload['instructions'] = $instructions ?? '';
+
+        if ($message->role === tutor_message::ROLE_SYSTEM) {
+            $payload['requireResponse'] = $message->requireresponse;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Resolve instructions.
+     * @param int $courseid
+     * @param tutor_message $message
+     * @return string|null
+     */
+    private function resolve_instructions(int $courseid, tutor_message $message): ?string {
+        if ($message->instructions !== null && trim($message->instructions) !== '') {
+            return $message->instructions;
+        }
+
+        if (
+            $message->role === tutor_message::ROLE_USER
+            || $message->role === tutor_message::ROLE_ASSISTANT
+        ) {
+            return $this->build_instructions($courseid);
+        }
+
+        return null;
+    }
+
+    /**
+     * Message text sent on the wire. Proactive system rows stay empty in the DTO but the
+     * remote API requires a non-empty string; those rows are hidden in the tutor UI anyway.
      *
-     * Combines the instruction template lang string with course context.
+     * @param tutor_message $message
+     * @return string
+     */
+    private function resolve_wire_message(tutor_message $message): string {
+        $text = $message->message;
+        if ($message->role === tutor_message::ROLE_SYSTEM && trim($text) === '') {
+            $instructions = $message->instructions ?? '';
+        }
+
+        return $text;
+    }
+
+    /**
+     * Normalize API context to an object (JSON string or legacy plain string).
+     *
+     * @param mixed $context
+     * @param string $role Message role for legacy plain-string wrapping.
+     * @return array|null
+     */
+    private static function passthrough_context(mixed $context, string $role): ?array {
+        if (is_array($context) && $context !== []) {
+            return $context;
+        }
+
+        if (!is_string($context) || trim($context) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($context, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        $trimmed = trim($context);
+        $role = tutor_message::normalize_role($role);
+        if ($role === tutor_message::ROLE_SYSTEM) {
+            return ['body' => $trimmed];
+        }
+
+        return ['url' => $trimmed];
+    }
+
+    /**
+     * Build course context markdown for tutor instructions.
      *
      * @param int $courseid The course ID.
      * @return string The complete instruction string.
      */
     private function build_instructions(int $courseid): string {
-        return context_builder_factory::buildcoursecontext($courseid, null, 'assessment');
+        return context_builder_factory::buildCourseContext($courseid, null, 'assessment');
     }
 
     /**
