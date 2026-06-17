@@ -231,6 +231,23 @@ $string['state_suspended'] = 'Suspendu';
 $string['task_cleanup_jobs'] = 'Nettoyer les anciens enregistrements de travaux';
 $string['task_poll_image_generation'] = 'Interroger la tâche de génération d\'images Dixeo';
 $string['task_process_file_sync'] = 'Traiter la synchronisation des fichiers Dixeo';
+$string['teach_lesson_default_title'] = 'Leçon personnalisée';
+$string['teach_lesson_error_invalid_result'] = 'Résultat du travail non valide.';
+$string['teach_lesson_error_job_not_completed'] = 'Le travail n\'est pas terminé. Statut : {$a->status}';
+$string['teach_lesson_error_no_content'] = 'Aucun contenu dans le résultat du travail.';
+$string['teach_lesson_error_wrong_module_type'] = 'Le travail n\'est pas une génération de page.';
+$string['teach_lesson_instructions'] = 'Générez une leçon de module Page personnalisée pour {$a->scopedescription}.
+
+L\'apprenant a demandé :
+"{$a->learnerrequest}"
+
+EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
+1. TYPE DE MODULE : Produisez un module Page avec un nom clair et descriptif, un bref résumé d\'introduction (intro) et un contenu principal riche (content).
+2. STRUCTURE : Organisez la leçon avec des titres clairs et des sections logiques. Utilisez des exemples lorsque c\'est utile.
+3. DEMANDE DE L\'APPRENANT : Répondez directement à la demande de l\'apprenant — approfondissez le sujet ou expliquez-le en termes plus simples comme il l\'a demandé.
+4. ALIGNEMENT : Basez la leçon sur le contexte de cours fourni. N\'inventez pas de faits qui contredisent le matériel source.
+
+Avant de terminer, vérifiez que le champ content est substantiel et répond directement à la demande de l\'apprenant.';
 $string['this_week_usage'] = 'Cette semaine';
 $string['total_used'] = 'Total utilisé';
 $string['transaction_type_deduction'] = 'Utilisation';

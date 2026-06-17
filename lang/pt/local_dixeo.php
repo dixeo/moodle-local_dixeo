@@ -231,6 +231,23 @@ $string['state_suspended'] = 'Suspenso';
 $string['task_cleanup_jobs'] = 'Limpar registos antigos de trabalhos';
 $string['task_poll_image_generation'] = 'Consultar a tarefa de geração de imagens Dixeo';
 $string['task_process_file_sync'] = 'Processar sincronização de ficheiros Dixeo';
+$string['teach_lesson_default_title'] = 'Lição personalizada';
+$string['teach_lesson_error_invalid_result'] = 'Resultado do trabalho inválido.';
+$string['teach_lesson_error_job_not_completed'] = 'O trabalho não está concluído. Estado: {$a->status}';
+$string['teach_lesson_error_no_content'] = 'Sem conteúdo no resultado do trabalho.';
+$string['teach_lesson_error_wrong_module_type'] = 'O trabalho não é uma geração de página.';
+$string['teach_lesson_instructions'] = 'Gere uma lição de módulo Page personalizada para {$a->scopedescription}.
+
+O aluno perguntou:
+"{$a->learnerrequest}"
+
+REQUISITOS OBRIGATÓRIOS — DEVE segui-los exatamente:
+1. TIPO DE MÓDULO: Produza um módulo Page com um nome claro e descritivo, um breve resumo introdutório (intro) e conteúdo principal rico (content).
+2. ESTRUTURA: Organize a lição com títulos claros e secções lógicas. Use exemplos quando útil.
+3. PEDIDO DO ALUNO: Responda diretamente ao pedido do aluno — aprofunde o assunto ou explique-o em termos mais simples como pediu.
+4. ALINHAMENTO: Baseie a lição no contexto do curso fornecido. Não invente factos que contradigam o material de origem.
+
+Antes de terminar, verifique se o campo content é substantivo e responde diretamente ao pedido do aluno.';
 $string['this_week_usage'] = 'Esta semana';
 $string['total_used'] = 'Total utilizado';
 $string['transaction_type_deduction'] = 'Utilização';
