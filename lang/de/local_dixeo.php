@@ -141,6 +141,7 @@ $string['filesync_status_synchronized'] = 'Dateien synchronisiert';
 $string['filesync_status_syncing'] = 'Dateien werden synchronisiert...';
 $string['filesync_timeout'] = 'Zeitüberschreitung bei der Dateisynchronisation, bevor Kursdateien indiziert wurden';
 $string['filesync_title'] = 'Dixeo-Dateisynchronisation';
+$string['generation_output_language'] = 'SPRACHE: Generieren Sie alle für Lernende sichtbaren Inhalte (Fragen, Antworten, Lektionstexte und Titel) in {$a->language}.';
 $string['image_generation'] = 'Bildgenerierung';
 $string['image_generation_course_mode'] = 'Kursbilder';
 $string['image_generation_course_mode_desc'] = 'Steuert KI-Bildaktionen für das Kursübersichtsbild.';

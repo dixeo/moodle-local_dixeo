@@ -141,6 +141,7 @@ $string['filesync_status_synchronized'] = 'File sincronizzati';
 $string['filesync_status_syncing'] = 'Sincronizzazione in corso...';
 $string['filesync_timeout'] = 'Timeout della sincronizzazione file prima dell\'indicizzazione dei file del corso';
 $string['filesync_title'] = 'Sincronizzazione file Dixeo';
+$string['generation_output_language'] = 'LINGUA: Genera tutti i contenuti per gli studenti (domande, risposte, testo della lezione e titoli) in {$a->language}.';
 $string['image_generation'] = 'Generazione di immagini';
 $string['image_generation_course_mode'] = 'Immagini del corso';
 $string['image_generation_course_mode_desc'] = 'Controlla le azioni IA sulle immagini per l\'immagine di riepilogo del corso.';

@@ -52,6 +52,7 @@ class teach_lesson_service {
      * @param int $cmid Course module id when scope is activity.
      * @param string $topictitle Human-readable topic label.
      * @param string $learnerrequest Learner's free-text learning request (required).
+     * @param string $language Moodle language code for generated content.
      * @return operation_result
      * @throws api_exception
      */
@@ -61,7 +62,8 @@ class teach_lesson_service {
         int $sectionnum = 0,
         int $cmid = 0,
         string $topictitle = '',
-        string $learnerrequest = ''
+        string $learnerrequest = '',
+        string $language = ''
     ): operation_result {
         $scope = $this->normalize_scope($scope);
         $learnerrequest = trim($learnerrequest);
@@ -75,7 +77,7 @@ class teach_lesson_service {
             $sectionnum > 0 ? $sectionnum : null,
             $cmid > 0 ? $cmid : null
         );
-        $instructions = $this->build_instructions($scope, $topictitle, $learnerrequest);
+        $instructions = $this->build_instructions($scope, $topictitle, $learnerrequest, $language);
 
         return $this->submit_job($courseid, $instructions, $contextmarkdown);
     }
@@ -138,15 +140,26 @@ class teach_lesson_service {
      * @param string $scope course|section|activity
      * @param string $scopename Human-readable scope name (course, section, or activity title).
      * @param string $learnerrequest Learner's free-text learning request.
+     * @param string $language Moodle language code for generated content.
      * @return string
      */
-    public function build_instructions(string $scope, string $scopename, string $learnerrequest): string {
-        $scope = $this->normalize_scope($scope);
+    public function build_instructions(
+        string $scope,
+        string $scopename,
+        string $learnerrequest,
+        string $language = ''
+    ): string {
+        global $USER;
 
-        return get_string('teach_lesson_instructions', 'local_dixeo', (object) [
-            'scopedescription' => $this->build_scope_description($scope, $scopename),
+        $scope = $this->normalize_scope($scope);
+        $language = generation_language_helper::resolve($language, (int) $USER->id);
+
+        $instructions = generation_language_helper::get_string('teach_lesson_instructions', (object) [
+            'scopedescription' => $this->build_scope_description($scope, $scopename, $language),
             'learnerrequest' => trim($learnerrequest),
-        ]);
+        ], $language);
+
+        return generation_language_helper::append_output_language_instruction($instructions, $language);
     }
 
     /**
@@ -154,21 +167,28 @@ class teach_lesson_service {
      *
      * @param string $scope course|section|activity
      * @param string $scopename Scope display name.
+     * @param string $language Moodle language code for localized scope text.
      * @return string
      */
-    private function build_scope_description(string $scope, string $scopename): string {
+    private function build_scope_description(string $scope, string $scopename, string $language): string {
         $name = trim($scopename);
 
         return match ($scope) {
-            self::SCOPE_SECTION => get_string('practice_quiz_scope_section_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
-            self::SCOPE_ACTIVITY => get_string('practice_quiz_scope_activity_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
-            default => get_string('practice_quiz_scope_course_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
+            self::SCOPE_SECTION => generation_language_helper::get_string(
+                'practice_quiz_scope_section_description',
+                (object) ['name' => $name],
+                $language
+            ),
+            self::SCOPE_ACTIVITY => generation_language_helper::get_string(
+                'practice_quiz_scope_activity_description',
+                (object) ['name' => $name],
+                $language
+            ),
+            default => generation_language_helper::get_string(
+                'practice_quiz_scope_course_description',
+                (object) ['name' => $name],
+                $language
+            ),
         };
     }
 

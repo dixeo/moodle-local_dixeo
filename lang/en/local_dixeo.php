@@ -141,6 +141,7 @@ $string['filesync_status_synchronized'] = 'Files synchronized';
 $string['filesync_status_syncing'] = 'Syncing files...';
 $string['filesync_timeout'] = 'File sync timed out before course files were indexed';
 $string['filesync_title'] = 'Dixeo File Sync';
+$string['generation_output_language'] = 'LANGUAGE: Generate all learner-facing content (questions, answers, lesson text, and titles) in {$a->language}.';
 $string['image_generation'] = 'Image generation';
 $string['image_generation_course_mode'] = 'Course images';
 $string['image_generation_course_mode_desc'] = 'Controls AI image actions for the course overview image.';

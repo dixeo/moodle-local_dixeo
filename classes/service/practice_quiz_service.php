@@ -54,6 +54,7 @@ class practice_quiz_service {
      * @param int $count Number of questions (3-10).
      * @param string $difficulty easy|medium|hard
      * @param string $topictitle Human-readable topic label.
+     * @param string $language Moodle language code for generated content.
      * @return operation_result
      * @throws api_exception
      */
@@ -64,7 +65,8 @@ class practice_quiz_service {
         int $cmid = 0,
         int $count = 5,
         string $difficulty = 'medium',
-        string $topictitle = ''
+        string $topictitle = '',
+        string $language = ''
     ): operation_result {
         $scope = $this->normalize_scope($scope);
         $contextmarkdown = $this->build_context(
@@ -73,7 +75,13 @@ class practice_quiz_service {
             $sectionnum > 0 ? $sectionnum : null,
             $cmid > 0 ? $cmid : null
         );
-        $instructions = $this->build_instructions($count, $difficulty, $scope, $topictitle);
+        $instructions = $this->build_instructions(
+            $count,
+            $difficulty,
+            $scope,
+            $topictitle,
+            $language
+        );
 
         return $this->submit_job($courseid, $instructions, $contextmarkdown);
     }
@@ -138,25 +146,37 @@ class practice_quiz_service {
      * @param string $difficulty easy|medium|hard
      * @param string $scope course|section|activity
      * @param string $scopename Human-readable scope name (course, section, or activity title).
+     * @param string $language Moodle language code for generated content.
      * @return string
      */
-    public function build_instructions(int $count, string $difficulty, string $scope, string $scopename): string {
+    public function build_instructions(
+        int $count,
+        string $difficulty,
+        string $scope,
+        string $scopename,
+        string $language = ''
+    ): string {
+        global $USER;
+
         $count = max(3, min(10, $count));
         $difficulty = in_array($difficulty, ['easy', 'medium', 'hard'], true) ? $difficulty : 'medium';
         $scope = $this->normalize_scope($scope);
+        $language = generation_language_helper::resolve($language, (int) $USER->id);
 
         $difficultylabel = match ($difficulty) {
-            'easy' => get_string('practice_quiz_difficulty_easy', 'local_dixeo'),
-            'hard' => get_string('practice_quiz_difficulty_hard', 'local_dixeo'),
-            default => get_string('practice_quiz_difficulty_medium', 'local_dixeo'),
+            'easy' => generation_language_helper::get_string('practice_quiz_difficulty_easy', null, $language),
+            'hard' => generation_language_helper::get_string('practice_quiz_difficulty_hard', null, $language),
+            default => generation_language_helper::get_string('practice_quiz_difficulty_medium', null, $language),
         };
 
-        return get_string('practice_quiz_instructions', 'local_dixeo', (object) [
-            'scopedescription' => $this->build_scope_description($scope, $scopename),
+        $instructions = generation_language_helper::get_string('practice_quiz_instructions', (object) [
+            'scopedescription' => $this->build_scope_description($scope, $scopename, $language),
             'count' => $count,
             'difficulty' => $difficulty,
             'difficultylabel' => $difficultylabel,
-        ]);
+        ], $language);
+
+        return generation_language_helper::append_output_language_instruction($instructions, $language);
     }
 
     /**
@@ -164,21 +184,28 @@ class practice_quiz_service {
      *
      * @param string $scope course|section|activity
      * @param string $scopename Scope display name.
+     * @param string $language Moodle language code for localized scope text.
      * @return string
      */
-    private function build_scope_description(string $scope, string $scopename): string {
+    private function build_scope_description(string $scope, string $scopename, string $language): string {
         $name = trim($scopename);
 
         return match ($scope) {
-            self::SCOPE_SECTION => get_string('practice_quiz_scope_section_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
-            self::SCOPE_ACTIVITY => get_string('practice_quiz_scope_activity_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
-            default => get_string('practice_quiz_scope_course_description', 'local_dixeo', (object) [
-                'name' => $name,
-            ]),
+            self::SCOPE_SECTION => generation_language_helper::get_string(
+                'practice_quiz_scope_section_description',
+                (object) ['name' => $name],
+                $language
+            ),
+            self::SCOPE_ACTIVITY => generation_language_helper::get_string(
+                'practice_quiz_scope_activity_description',
+                (object) ['name' => $name],
+                $language
+            ),
+            default => generation_language_helper::get_string(
+                'practice_quiz_scope_course_description',
+                (object) ['name' => $name],
+                $language
+            ),
         };
     }
 
