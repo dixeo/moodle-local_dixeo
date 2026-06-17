@@ -1,4 +1,19 @@
 <?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
 /**
  * Ephemeral teach-lesson generation (no Moodle module creation).
  *
@@ -10,19 +25,21 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
-use local_dixeo\context\context_builder_factory;
 use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\operation_result;
 
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Service for tutor teach-lesson generation jobs.
  */
 class teach_lesson_service {
+    use scoped_ephemeral_generation_trait;
 
+    /** @var string Constant SCOPE_COURSE. */
     public const SCOPE_COURSE = 'course';
+    /** @var string Constant SCOPE_SECTION. */
     public const SCOPE_SECTION = 'section';
+    /** @var string Constant SCOPE_ACTIVITY. */
     public const SCOPE_ACTIVITY = 'activity';
 
     /** @var module_generation_service */
@@ -32,6 +49,7 @@ class teach_lesson_service {
     private job_service $jobservice;
 
     /**
+     *   construct.
      * @param module_generation_service|null $modulegeneration
      * @param job_service|null $jobservice
      */
@@ -101,37 +119,11 @@ class teach_lesson_service {
     }
 
     /**
-     * Build markdown context for the selected scope.
-     *
-     * @param int $courseid
-     * @param string $scope course|section|activity
-     * @param int|null $sectionnum Section number when scope is section.
-     * @param int|null $cmid Course module id when scope is activity.
+     * Get course context mode.
      * @return string
      */
-    public function build_context(int $courseid, string $scope, ?int $sectionnum, ?int $cmid): string {
-        switch ($scope) {
-            case self::SCOPE_SECTION:
-                if ($sectionnum !== null && $sectionnum > 0) {
-                    return context_builder_factory::buildSectionContextForNumber($courseid, $sectionnum);
-                }
-                // Fall through to course if section number missing.
-                // no break
-            case self::SCOPE_ACTIVITY:
-                if ($cmid !== null && $cmid > 0) {
-                    get_coursemodule_from_id('', $cmid, $courseid, false, MUST_EXIST);
-                    return context_builder_factory::buildModulePracticeContext($cmid);
-                }
-                // Fall through to course if cmid missing.
-                // no break
-            case self::SCOPE_COURSE:
-            default:
-                return context_builder_factory::buildCourseContext(
-                    $courseid,
-                    null,
-                    course_context_builder::MODE_TEACHING
-                );
-        }
+    protected function get_course_context_mode(): string {
+        return course_context_builder::MODE_TEACHING;
     }
 
     /**
@@ -163,36 +155,6 @@ class teach_lesson_service {
     }
 
     /**
-     * Human-readable scope line for generation instructions.
-     *
-     * @param string $scope course|section|activity
-     * @param string $scopename Scope display name.
-     * @param string $language Moodle language code for localized scope text.
-     * @return string
-     */
-    private function build_scope_description(string $scope, string $scopename, string $language): string {
-        $name = trim($scopename);
-
-        return match ($scope) {
-            self::SCOPE_SECTION => generation_language_helper::get_string(
-                'practice_quiz_scope_section_description',
-                (object) ['name' => $name],
-                $language
-            ),
-            self::SCOPE_ACTIVITY => generation_language_helper::get_string(
-                'practice_quiz_scope_activity_description',
-                (object) ['name' => $name],
-                $language
-            ),
-            default => generation_language_helper::get_string(
-                'practice_quiz_scope_course_description',
-                (object) ['name' => $name],
-                $language
-            ),
-        };
-    }
-
-    /**
      * Transform a completed generation job into formatted lesson HTML.
      *
      * @param string $jobid
@@ -216,11 +178,8 @@ class teach_lesson_service {
             );
         }
 
-        $result = $status->result;
-        if (is_string($result)) {
-            $result = json_decode($result, true);
-        }
-        if (!is_array($result)) {
+        $result = $this->parse_completed_job_result($status->result);
+        if ($result === null) {
             return $this->teach_lesson_result(
                 false,
                 '',
@@ -298,24 +257,5 @@ class teach_lesson_service {
             'introhtml' => $introhtml,
             'contenthtml' => $contenthtml,
         ];
-    }
-
-    /**
-     * Normalize and validate a teach lesson scope value.
-     *
-     * @param string $scope
-     * @return string
-     */
-    private function normalize_scope(string $scope): string {
-        $scope = strtolower(trim($scope));
-        if (!in_array($scope, [
-            self::SCOPE_COURSE,
-            self::SCOPE_SECTION,
-            self::SCOPE_ACTIVITY,
-        ], true)) {
-            throw new \invalid_parameter_exception('Invalid scope');
-        }
-
-        return $scope;
     }
 }
