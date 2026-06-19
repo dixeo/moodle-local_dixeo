@@ -98,6 +98,16 @@ if ($hassiteconfig) {
         $imagemodechoices
     ));
 
+    if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_content_mode',
+            get_string('image_generation_content_mode', 'local_dixeo'),
+            get_string('image_generation_content_mode_desc', 'local_dixeo'),
+            'generate_edit',
+            $imagemodechoices
+        ));
+    }
+
     // Credit Balance Display section.
     $settings->add(new admin_setting_heading(
         'local_dixeo/credit_info',

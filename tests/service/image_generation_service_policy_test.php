@@ -53,10 +53,13 @@ final class image_generation_service_policy_test extends \advanced_testcase {
      * @param string $coursemode Course-level image generation mode.
      * @param string $sectionmode Section-level image generation mode.
      */
-    private function apply_image_generation_settings($global, string $coursemode, string $sectionmode): void {
+    private function apply_image_generation_settings($global, string $coursemode, string $sectionmode, string $contentmode = ''): void {
         set_config('image_generation_enabled', $global, 'local_dixeo');
         set_config('image_generation_course_mode', $coursemode, 'local_dixeo');
         set_config('image_generation_section_mode', $sectionmode, 'local_dixeo');
+        if ($contentmode !== '') {
+            set_config('image_generation_content_mode', $contentmode, 'local_dixeo');
+        }
     }
 
     /**
@@ -272,5 +275,75 @@ final class image_generation_service_policy_test extends \advanced_testcase {
             'Change background'
         );
         $this->assertSame('sec-edit-1', $result->jobid);
+    }
+
+    public function test_submit_content_image_generate_job_rejected_when_content_mode_disabled(): void {
+        $this->apply_image_generation_settings(
+            1,
+            image_generation_policy::MODE_GENERATE_EDIT,
+            image_generation_policy::MODE_GENERATE_EDIT,
+            image_generation_policy::MODE_DISABLED
+        );
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $this->expectException(\moodle_exception::class);
+        $this->make_service_with_mock_jobs($jobmock)->submit_content_image_generate_job(
+            (int) $course->id,
+            'Activity image',
+            'A sunny meadow'
+        );
+    }
+
+    public function test_submit_content_image_generate_job_calls_api_with_scope_course(): void {
+        $this->apply_image_generation_settings(
+            1,
+            image_generation_policy::MODE_DISABLED,
+            image_generation_policy::MODE_DISABLED,
+            image_generation_policy::MODE_GENERATE
+        );
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->once())->method('submit_job')->with(
+            $this->equalTo('/v1/images/generate'),
+            $this->callback(static function (array $payload): bool {
+                return ($payload['scope'] ?? '') === 'course'
+                    && ($payload['title'] ?? '') === 'Activity image'
+                    && ($payload['summary'] ?? '') === 'A sunny meadow';
+            })
+        )->willReturn($this->pending_result('content-gen-1'));
+
+        $result = $this->make_service_with_mock_jobs($jobmock)->submit_content_image_generate_job(
+            (int) $course->id,
+            'Activity image',
+            'A sunny meadow'
+        );
+        $this->assertSame('content-gen-1', $result->jobid);
+    }
+
+    public function test_submit_content_image_edit_job_rejected_when_content_generate_only(): void {
+        $this->apply_image_generation_settings(
+            1,
+            image_generation_policy::MODE_GENERATE_EDIT,
+            image_generation_policy::MODE_GENERATE_EDIT,
+            image_generation_policy::MODE_GENERATE
+        );
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $this->expectException(\moodle_exception::class);
+        $this->make_service_with_mock_jobs($jobmock)->submit_content_image_edit_job(
+            (int) $course->id,
+            ['Ym9n'],
+            'Brighten the image'
+        );
     }
 }

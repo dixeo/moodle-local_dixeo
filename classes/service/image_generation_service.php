@@ -259,6 +259,137 @@ class image_generation_service {
     }
 
     /**
+     * Submit an image generation job for embedded content (async, non-blocking).
+     *
+     * v1 uses scope "course" on the remote API with explicit title/summary; PHP gates on content policy.
+     *
+     * @param int $courseid The course ID.
+     * @param string $title Human-readable title (e.g. activity name).
+     * @param string $summary User prompt mapped to API summary.
+     * @param string $size Image dimensions.
+     * @param string $quality Quality level.
+     * @return operation_result
+     */
+    public function submit_content_image_generate_job(
+        int $courseid,
+        string $title,
+        string $summary,
+        string $size = self::DEFAULT_SIZE,
+        string $quality = self::DEFAULT_QUALITY
+    ): operation_result {
+        global $DB;
+
+        $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
+
+        image_generation_policy::assert_enabled(
+            image_generation_policy::ENTITY_CONTENT,
+            image_generation_policy::ACTION_GENERATE
+        );
+
+        $payload = $this->build_payload(
+            scope: 'course',
+            title: $title,
+            summary: $summary,
+            size: $size,
+            quality: $quality,
+            courseid: (string) $courseid,
+        );
+
+        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+    }
+
+    /**
+     * Submit an image edit job for embedded content (async, non-blocking).
+     *
+     * @param int $courseid The course ID.
+     * @param array $imagesbase64 Raw base64-encoded source images.
+     * @param string $instructions Change to apply (required).
+     * @param string $size Image dimensions.
+     * @param string $quality Quality level.
+     * @return operation_result
+     */
+    public function submit_content_image_edit_job(
+        int $courseid,
+        array $imagesbase64,
+        string $instructions,
+        string $size = self::DEFAULT_SIZE,
+        string $quality = self::DEFAULT_QUALITY
+    ): operation_result {
+        if ($imagesbase64 === []) {
+            throw new \invalid_parameter_exception('At least one source image is required for editing');
+        }
+        if (trim($instructions) === '') {
+            throw new \invalid_parameter_exception('Edit instructions are required');
+        }
+
+        image_generation_policy::assert_enabled(
+            image_generation_policy::ENTITY_CONTENT,
+            image_generation_policy::ACTION_EDIT
+        );
+
+        global $DB;
+        $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
+
+        $payload = $this->build_edit_payload(
+            $imagesbase64,
+            $instructions,
+            $size,
+            $quality,
+            (string) $courseid,
+        );
+
+        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+    }
+
+    /**
+     * Derive a human-readable title for an embedded content image from its file context.
+     *
+     * @param \stored_file $file
+     * @return string
+     */
+    public static function resolve_title_for_stored_file(\stored_file $file): string {
+        global $DB;
+
+        $context = \context::instance_by_id($file->get_contextid(), IGNORE_MISSING);
+        if (!$context) {
+            return get_string('contentimagetitlefallback', 'local_dixeo');
+        }
+
+        if ($context->contextlevel === CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id(null, $context->instanceid, 0, false, IGNORE_MISSING);
+            if ($cm && !empty($cm->name)) {
+                return (string) $cm->name;
+            }
+        }
+
+        if ($context->contextlevel === CONTEXT_BLOCK) {
+            $block = $DB->get_record('block_instances', ['id' => $context->instanceid], 'id, blockname, configdata', IGNORE_MISSING);
+            if ($block) {
+                $blocktitle = '';
+                if (!empty($block->configdata)) {
+                    $config = @unserialize($block->configdata);
+                    if (is_object($config) && !empty($config->title)) {
+                        $blocktitle = (string) $config->title;
+                    }
+                }
+                if ($blocktitle !== '') {
+                    return $blocktitle;
+                }
+            }
+        }
+
+        $coursecontext = $context->get_course_context(false);
+        if ($coursecontext) {
+            $course = $DB->get_record('course', ['id' => $coursecontext->instanceid], 'fullname', IGNORE_MISSING);
+            if ($course && !empty($course->fullname)) {
+                return (string) $course->fullname;
+            }
+        }
+
+        return get_string('contentimagetitlefallback', 'local_dixeo');
+    }
+
+    /**
      * Build the API request payload for image editing.
      *
      * @param array $imagesbase64 Raw base64-encoded source images.

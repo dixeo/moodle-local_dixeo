@@ -20,8 +20,7 @@ use context_course;
 use core_plugin_manager;
 
 /**
- * Writes async image job results into course images,
- * and resolves same-site pluginfile URLs for image edit payloads.
+ * Writes async image job results into course overview and Dixeo section images.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -259,79 +258,5 @@ final class course_image_writer {
             return '';
         }
         return $binary;
-    }
-
-    /**
-     * Resolve a wwwroot-relative or absolute pluginfile URL to a stored file.
-     *
-     * Supports standard slash-argument paths with itemid, and four-segment paths where
-     * itemid was omitted in the URL (see {@see moodle_url::make_pluginfile_url()} with null itemid).
-     *
-     * @param string $imageurl Full or relative URL.
-     * @return \stored_file|null
-     */
-    public static function get_stored_file_from_pluginfile_url(string $imageurl): ?\stored_file {
-        global $CFG;
-
-        $imageurl = trim($imageurl);
-        if ($imageurl === '') {
-            return null;
-        }
-
-        $parsedpath = parse_url($imageurl, PHP_URL_PATH);
-        $path = is_string($parsedpath) && $parsedpath !== ''
-            ? $parsedpath
-            : (string) preg_replace('#^' . preg_quote($CFG->wwwroot, '#') . '#', '', $imageurl);
-        $parts = explode('/pluginfile.php/', $path, 2);
-        if (count($parts) !== 2) {
-            return null;
-        }
-        $segmentsraw = explode('/', trim($parts[1], '/'));
-        $segments = array_map('rawurldecode', $segmentsraw);
-        if (count($segments) < 4) {
-            return null;
-        }
-        // Core course_image cache uses make_pluginfile_url(..., itemid: null, ...), which omits the
-        // itemid segment — URLs look like /ctx/component/filearea/filename (4 segments, itemid 0).
-        if (count($segments) === 4) {
-            $contextid = (int) $segments[0];
-            $component = (string) $segments[1];
-            $filearea = (string) $segments[2];
-            $filename = (string) $segments[3];
-            $itemid = 0;
-            $filepath = '/';
-        } else {
-            $contextid = (int) array_shift($segments);
-            $component = (string) array_shift($segments);
-            $filearea = (string) array_shift($segments);
-            $itemid = (int) array_shift($segments);
-            $filename = (string) array_pop($segments);
-            $filepath = '/' . implode('/', $segments) . '/';
-            if ($filepath === '//') {
-                $filepath = '/';
-            }
-        }
-
-        $fs = get_file_storage();
-        $file = $fs->get_file($contextid, $component, $filearea, $itemid, $filepath, $filename);
-        if (!$file || $file->is_directory()) {
-            return null;
-        }
-        return $file;
-    }
-
-    /**
-     * Encode the file referenced by a pluginfile URL as raw base64 (for image edit API).
-     *
-     * @param string $imageurl
-     * @return string
-     * @throws \moodle_exception When the URL does not resolve to a file.
-     */
-    public static function image_url_to_base64(string $imageurl): string {
-        $file = self::get_stored_file_from_pluginfile_url($imageurl);
-        if (!$file) {
-            throw new \moodle_exception('dixeo_pluginfile_not_found', 'local_dixeo');
-        }
-        return base64_encode($file->get_content());
     }
 }
