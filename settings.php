@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * Admin settings for the Dixeo plugin.
@@ -98,15 +98,23 @@ if ($hassiteconfig) {
         $imagemodechoices
     ));
 
+    $contentmodechoices = [
+        'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
+        'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
+    ];
     if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
-        $settings->add(new admin_setting_configselect(
-            'local_dixeo/image_generation_content_mode',
-            get_string('image_generation_content_mode', 'local_dixeo'),
-            get_string('image_generation_content_mode_desc', 'local_dixeo'),
-            'generate_edit',
-            $imagemodechoices
-        ));
+        $contentmodechoices['generate_edit'] = get_string('image_generation_mode_generate_edit', 'local_dixeo');
     }
+
+    $settings->add(new admin_setting_configselect(
+        'local_dixeo/image_generation_content_mode',
+        get_string('image_generation_content_mode', 'local_dixeo'),
+        get_string('image_generation_content_mode_desc', 'local_dixeo'),
+        \local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')
+            ? 'generate_edit'
+            : 'generate',
+        $contentmodechoices
+    ));
 
     // Credit Balance Display section.
     $settings->add(new admin_setting_heading(

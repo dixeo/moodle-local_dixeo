@@ -53,6 +53,9 @@ class provider implements
     /** @var string Local remote-job ownership table. */
     public const TABLE_JOBS = 'local_dixeo_jobs';
 
+    /** @var string Async image generation jobs. */
+    public const TABLE_IMAGE_JOB = 'local_dixeo_image_job';
+
     /**
      * Describe metadata stored or transmitted by this plugin.
      *
@@ -88,6 +91,21 @@ class provider implements
                 'timecreated' => 'privacy:metadata:jobs:timecreated',
             ],
             'privacy:metadata:jobs'
+        );
+
+        $collection->add_database_table(
+            self::TABLE_IMAGE_JOB,
+            [
+                'userid' => 'privacy:metadata:image_job:userid',
+                'courseid' => 'privacy:metadata:image_job:courseid',
+                'jobid' => 'privacy:metadata:image_job:jobid',
+                'prompt' => 'privacy:metadata:image_job:prompt',
+                'status' => 'privacy:metadata:image_job:status',
+                'errormessage' => 'privacy:metadata:image_job:errormessage',
+                'timecreated' => 'privacy:metadata:image_job:timecreated',
+                'timemodified' => 'privacy:metadata:image_job:timemodified',
+            ],
+            'privacy:metadata:image_job'
         );
 
         $collection->add_external_location_link(
@@ -156,6 +174,16 @@ class provider implements
             'userid' => $userid,
         ]);
 
+        $sql = "SELECT ctx.id
+                  FROM {" . self::TABLE_IMAGE_JOB . "} ij
+                  JOIN {context} ctx ON ctx.instanceid = ij.courseid AND ctx.contextlevel = :contextlevel
+                 WHERE ij.userid = :userid AND ij.courseid > 0";
+
+        $contextlist->add_from_sql($sql, [
+            'contextlevel' => CONTEXT_COURSE,
+            'userid' => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -214,6 +242,7 @@ class provider implements
             }
 
             self::export_user_jobs($context, $userid, $courseid);
+            self::export_user_image_jobs($context, $userid, $courseid);
         }
     }
 
@@ -253,6 +282,43 @@ class provider implements
     }
 
     /**
+     * Export image generation job rows for a user within a course.
+     *
+     * @param \context $context Export context.
+     * @param int $userid User id.
+     * @param int $courseid Course id.
+     */
+    private static function export_user_image_jobs(\context $context, int $userid, int $courseid): void {
+        global $DB;
+
+        $imagejobs = $DB->get_records(self::TABLE_IMAGE_JOB, [
+            'courseid' => $courseid,
+            'userid' => $userid,
+        ]);
+        if (!$imagejobs) {
+            return;
+        }
+
+        $exportedimagejobs = [];
+        foreach ($imagejobs as $imagejob) {
+            $exportedimagejobs[] = (object) [
+                'jobid' => (string) $imagejob->jobid,
+                'courseid' => (int) $imagejob->courseid,
+                'prompt' => (string) ($imagejob->prompt ?? ''),
+                'status' => (string) $imagejob->status,
+                'errormessage' => (string) ($imagejob->errormessage ?? ''),
+                'timecreated' => transform::datetime((int) $imagejob->timecreated),
+                'timemodified' => transform::datetime((int) $imagejob->timemodified),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:image_jobs', 'local_dixeo')],
+            (object) ['image_jobs' => $exportedimagejobs]
+        );
+    }
+
+    /**
      * Delete all plugin data for a course context (the entire sync configuration row).
      *
      * @param \context $context The context.
@@ -271,6 +337,7 @@ class provider implements
 
         $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => (int) $context->instanceid]);
         $DB->delete_records(self::TABLE_JOBS, ['courseid' => (int) $context->instanceid]);
+        $DB->delete_records(self::TABLE_IMAGE_JOB, ['courseid' => (int) $context->instanceid]);
     }
 
     /**
@@ -334,6 +401,14 @@ class provider implements
             "userid = :userid AND courseid {$insql3}",
             $params3
         );
+
+        [$insql4, $params4] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+        $params4['userid'] = $userid;
+        $DB->delete_records_select(
+            self::TABLE_IMAGE_JOB,
+            "userid = :userid AND courseid {$insql4}",
+            $params4
+        );
     }
 
     /**
@@ -382,6 +457,14 @@ class provider implements
             "SELECT j.userid AS userid
                FROM {" . self::TABLE_JOBS . "} j
               WHERE j.courseid = :courseid AND j.userid > 0",
+            $params
+        );
+
+        $userlist->add_from_sql(
+            'userid',
+            "SELECT ij.userid AS userid
+               FROM {" . self::TABLE_IMAGE_JOB . "} ij
+              WHERE ij.courseid = :courseid AND ij.userid > 0",
             $params
         );
     }
@@ -449,6 +532,14 @@ class provider implements
             self::TABLE_JOBS,
             "courseid = :courseid AND userid {$insql3}",
             $params3
+        );
+
+        [$insql4, $params4] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $params4['courseid'] = $courseid;
+        $DB->delete_records_select(
+            self::TABLE_IMAGE_JOB,
+            "courseid = :courseid AND userid {$insql4}",
+            $params4
         );
     }
 }

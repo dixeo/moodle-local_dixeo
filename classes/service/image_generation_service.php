@@ -17,10 +17,9 @@
 /**
  * Service for AI-powered image generation and editing.
  *
- * Exposes library-level methods to submit async image generation/edit jobs
- * for a course or a section. Consumers (blocks, format overrides, etc.)
- * call these methods, poll the returned job via job_service, and decide
- * themselves what to do with the resulting base64 WebP payload.
+ * Shared Dixeo image API client: submits async generate/edit jobs for course banners,
+ * section chapter images, and embedded content images. Callers poll via job_service and
+ * apply bytes through structure_image\writer or content_image\file_service.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -32,9 +31,10 @@ namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\operation_result;
+use local_dixeo\service\image\policy;
 
 /**
- * Service for course/section image generation and edit operations.
+ * Shared API client for course, section, and embedded content image jobs.
  */
 class image_generation_service {
     /** @var string API endpoint for image generation. */
@@ -93,7 +93,7 @@ class image_generation_service {
      * @param string|null $title When non-null, sent as payload title instead of course.fullname (e.g. draft before DB update).
      * @param string|null $summary When non-null, sent instead of course.summary (same use-case).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If image generation is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If image generation is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -108,9 +108,9 @@ class image_generation_service {
 
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, summary', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_COURSE,
-            image_generation_policy::ACTION_GENERATE
+        policy::assert_enabled(
+            policy::ENTITY_COURSE,
+            policy::ACTION_GENERATE
         );
 
         $resolvedtitle = $title !== null ? $title : $course->fullname;
@@ -138,7 +138,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (low/medium/high, default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If section image generation is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If section image generation is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -151,9 +151,9 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, section, name, summary', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_SECTION,
-            image_generation_policy::ACTION_GENERATE
+        policy::assert_enabled(
+            policy::ENTITY_SECTION,
+            policy::ACTION_GENERATE
         );
 
         $title = $this->resolve_section_title($section);
@@ -179,7 +179,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If course image editing is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If course image editing is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -198,9 +198,9 @@ class image_generation_service {
 
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_COURSE,
-            image_generation_policy::ACTION_EDIT
+        policy::assert_enabled(
+            policy::ENTITY_COURSE,
+            policy::ACTION_EDIT
         );
 
         $payload = $this->build_edit_payload(
@@ -223,7 +223,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If section image editing is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If section image editing is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -242,9 +242,9 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_SECTION,
-            image_generation_policy::ACTION_EDIT
+        policy::assert_enabled(
+            policy::ENTITY_SECTION,
+            policy::ACTION_EDIT
         );
 
         $payload = $this->build_edit_payload(
@@ -281,9 +281,9 @@ class image_generation_service {
 
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_CONTENT,
-            image_generation_policy::ACTION_GENERATE
+        policy::assert_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_GENERATE
         );
 
         $payload = $this->build_payload(
@@ -322,9 +322,9 @@ class image_generation_service {
             throw new \invalid_parameter_exception('Edit instructions are required');
         }
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_CONTENT,
-            image_generation_policy::ACTION_EDIT
+        policy::assert_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_EDIT
         );
 
         global $DB;
@@ -363,7 +363,12 @@ class image_generation_service {
         }
 
         if ($context->contextlevel === CONTEXT_BLOCK) {
-            $block = $DB->get_record('block_instances', ['id' => $context->instanceid], 'id, blockname, configdata', IGNORE_MISSING);
+            $block = $DB->get_record(
+                'block_instances',
+                ['id' => $context->instanceid],
+                'id, blockname, configdata',
+                IGNORE_MISSING
+            );
             if ($block) {
                 $blocktitle = '';
                 if (!empty($block->configdata)) {

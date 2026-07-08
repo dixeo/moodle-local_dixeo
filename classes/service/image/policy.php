@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,14 +12,17 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle. If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_dixeo\service;
+namespace local_dixeo\service\image;
 
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Resolves image-generation availability from local_dixeo settings.
+ *
+ * Site-wide master switch plus per-entity mode (course, section, content).
+ * Externals should also enforce capabilities ({@see image\content\capability})
+ * and filter UI gates ({@see \filter_dixeo_imageeditor\adapter\feature_gate}).
  *
  * Course, section, and embedded content each use a mode select: disabled, generate only, or generate+edit.
  *
@@ -27,16 +30,25 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright  2026 Dixeo
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class image_generation_policy {
+final class policy {
+    /** @var string Constant ENTITY_COURSE. */
     public const ENTITY_COURSE = 'course';
+    /** @var string Constant ENTITY_SECTION. */
     public const ENTITY_SECTION = 'section';
+    /** @var string Constant ENTITY_CONTENT. */
+    /** @var string Entity key for content-level image generation. */
     public const ENTITY_CONTENT = 'content';
 
+    /** @var string Constant ACTION_GENERATE. */
     public const ACTION_GENERATE = 'generate';
+    /** @var string Constant ACTION_EDIT. */
     public const ACTION_EDIT = 'edit';
 
+    /** @var string Constant MODE_DISABLED. */
     public const MODE_DISABLED = 'disabled';
+    /** @var string Constant MODE_GENERATE. */
     public const MODE_GENERATE = 'generate';
+    /** @var string Constant MODE_GENERATE_EDIT. */
     public const MODE_GENERATE_EDIT = 'generate_edit';
 
     /**
@@ -89,6 +101,7 @@ final class image_generation_policy {
     }
 
     /**
+     * Get mode for entity.
      * @param string $entity course|section|content
      * @return string One of {@see self::MODE_DISABLED}, {@see self::MODE_GENERATE}, {@see self::MODE_GENERATE_EDIT}.
      */
@@ -112,6 +125,7 @@ final class image_generation_policy {
             return $mode;
         }
 
-        return self::MODE_GENERATE_EDIT;
+        // Fail safe: missing or invalid configuration disables the feature.
+        return self::MODE_DISABLED;
     }
 }

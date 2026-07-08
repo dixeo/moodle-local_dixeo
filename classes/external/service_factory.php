@@ -29,6 +29,7 @@
 namespace local_dixeo\external;
 
 use local_dixeo\api\client;
+use local_dixeo\service\image\content\shortcode_service;
 use local_dixeo\service\course_structure_service;
 use local_dixeo\service\course_template_service;
 use local_dixeo\service\job_service;
@@ -72,6 +73,9 @@ class service_factory {
 
     /** @var image_generation_service|null Mock image generation service for unit testing. */
     private static ?image_generation_service $testimagegenerationservice = null;
+
+    /** @var shortcode_service|null Mock content image shortcode service for unit testing. */
+    private static ?shortcode_service $testcontentimageshortcodeservice = null;
 
     /** @var client|null Mock client instance for unit testing. */
     private static ?client $testclient = null;
@@ -206,6 +210,19 @@ class service_factory {
     }
 
     /**
+     * Get a content_image shortcode_service instance.
+     *
+     * @return shortcode_service
+     */
+    public static function get_content_image_shortcode_service(): shortcode_service {
+        if (self::$testcontentimageshortcodeservice !== null) {
+            return self::$testcontentimageshortcodeservice;
+        }
+
+        return new shortcode_service(self::get_image_generation_service());
+    }
+
+    /**
      * Get a client instance.
      *
      * Returns a fresh instance unless a test instance has been set.
@@ -315,6 +332,14 @@ class service_factory {
     }
 
     /**
+     * Set test content image shortcode service.
+     * @param shortcode_service|null $service
+     */
+    public static function set_test_content_image_shortcode_service(?shortcode_service $service): void {
+        self::$testcontentimageshortcodeservice = $service;
+    }
+
+    /**
      * Set a test client instance.
      *
      * Use this in unit tests to inject mock clients.
@@ -340,6 +365,7 @@ class service_factory {
         self::$testfilesyncservice = null;
         self::$testmanualuploadservice = null;
         self::$testimagegenerationservice = null;
+        self::$testcontentimageshortcodeservice = null;
         self::$testclient = null;
     }
 }
