@@ -61,11 +61,13 @@ jobs:
       - name: Install moodle-plugin-ci
         run: |
           # Needed for get_module_types courseid=0 (designer system-context) PHPUnit coverage.
-          moodle-plugin-ci add-plugin dixeo/moodle-block_dixeo_designer
+          # Match Dixeo sibling branch: development/main/release → same on block_dixeo_designer.
+          moodle-plugin-ci add-plugin --branch "$DIXEO_DEP_BRANCH" dixeo/moodle-block_dixeo_designer
           moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
         env:
           DB: ${{ matrix.database }}
           MOODLE_BRANCH: ${{ matrix.moodle-branch }}
+          DIXEO_DEP_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           # Uncomment this to run Behat tests using the Moodle App.
           # MOODLE_APP: 'true'
 
