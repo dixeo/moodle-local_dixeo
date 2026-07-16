@@ -240,5 +240,34 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026071400, 'local', 'dixeo');
     }
 
+    // Repair local_dixeo_jobs schema drift from early dev deploys (orphan timemodified, missing columns).
+    if ($oldversion < 2026072203) {
+        $table = new xmldb_table('local_dixeo_jobs');
+
+        if ($dbman->table_exists($table)) {
+            $field = new xmldb_field('timemodified');
+            if ($dbman->field_exists($table, $field)) {
+                $dbman->drop_field($table, $field);
+            }
+
+            $field = new xmldb_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+
+            $field = new xmldb_field('namespace', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, 'default');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+
+            $field = new xmldb_field('operation', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, 'unknown');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026072203, 'local', 'dixeo');
+    }
+
     return true;
 }
