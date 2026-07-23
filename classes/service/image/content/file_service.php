@@ -44,7 +44,7 @@ final class file_service {
             $existing->delete();
         }
 
-        return $fs->create_file_from_string([
+        $stored = $fs->create_file_from_string([
             'contextid' => $location->contextid,
             'component' => $location->component,
             'filearea' => $location->filearea,
@@ -54,6 +54,8 @@ final class file_service {
             'userid' => $userid,
             'mimetype' => 'image/png',
         ], asset_helper::get_placeholder_binary());
+
+        return $stored;
     }
 
     /**
@@ -115,5 +117,24 @@ final class file_service {
      */
     public static function is_generated_stub_filename(string $filename): bool {
         return str_starts_with($filename, self::STUB_FILENAME_PREFIX);
+    }
+
+    /**
+     * Extract the placeholder UUID from a generated stub filename.
+     *
+     * @param string $filename Stored filename (e.g. dixeo-gen-{uuid}.png).
+     * @return string|null Placeholder id or null when not a stub filename.
+     */
+    public static function placeholderid_from_stub_filename(string $filename): ?string {
+        if (!self::is_generated_stub_filename($filename)) {
+            return null;
+        }
+
+        $uuid = substr($filename, strlen(self::STUB_FILENAME_PREFIX), -4);
+        if ($uuid === '' || !preg_match('/^[a-f0-9-]+$/i', $uuid)) {
+            return null;
+        }
+
+        return $uuid;
     }
 }

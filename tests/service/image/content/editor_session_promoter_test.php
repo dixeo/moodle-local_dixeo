@@ -126,6 +126,28 @@ final class editor_session_promoter_test extends \advanced_testcase {
     }
 
     /**
+     * Promote still works when data-dixeo-img-gen was stripped before save.
+     */
+    public function test_promote_copies_draft_file_without_data_attribute(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $ctx = $this->make_page_context();
+        $placeholderid = 'cccccccc-dddd-eeee-ffff-000000000001';
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $this->create_file_at($ctx->draft_location($filename));
+
+        $draftsrc = $ctx->draft_location($filename)->get_pluginfile_url();
+        $html = '<img class="img-fluid dixeo-img-gen-pending" src="' . s($draftsrc) . '" alt="" />';
+
+        $result = editor_session_promoter::promote_html($html, $ctx, (int) get_admin()->id);
+
+        $this->assertNotNull($ctx->module_location($filename)->get_stored_file());
+        $this->assertStringContainsString('src="@@PLUGINFILE@@/' . $filename . '"', $result);
+        $this->assertStringNotContainsString('local_dixeo_editor/draft_page', $result);
+    }
+
+    /**
      * Test promote leaves unresolvable img gen untouched.
      */
     public function test_promote_leaves_unresolvable_img_gen_untouched(): void {

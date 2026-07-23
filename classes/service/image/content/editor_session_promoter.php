@@ -39,7 +39,8 @@ final class editor_session_promoter {
         if (
             $html === ''
                 || (stripos($html, 'data-dixeo-img-gen') === false
-                    && stripos($html, 'data-dixeo-draft-file') === false)
+                    && stripos($html, 'data-dixeo-draft-file') === false
+                    && !preg_match('/dixeo-gen-[a-f0-9-]+\.png/i', $html))
         ) {
             return $html;
         }
@@ -55,10 +56,31 @@ final class editor_session_promoter {
                     $filename = html_entity_decode(trim($attr[1]), ENT_QUOTES);
                     return self::rewrite_file_tag($tag, $filename, $ctx, $userid);
                 }
+                $placeholderid = self::placeholderid_from_img_tag($tag);
+                if ($placeholderid !== null) {
+                    return self::promote_img_tag($tag, $placeholderid, $ctx, $userid);
+                }
                 return $tag;
             },
             $html
         );
+    }
+
+    /**
+     * Resolve a generated-image placeholder id from an img tag.
+     *
+     * Falls back to the dixeo-gen stub filename in src when data-dixeo-img-gen
+     * was stripped by the HTML purifier before save.
+     *
+     * @param string $imghtml
+     * @return string|null
+     */
+    private static function placeholderid_from_img_tag(string $imghtml): ?string {
+        if (preg_match('/\b(?:src|data-mce-src)="[^"]*\/(dixeo-gen-[a-f0-9-]+\.png)/iu', $imghtml, $match)) {
+            return file_service::placeholderid_from_stub_filename($match[1]);
+        }
+
+        return null;
     }
 
     /**
