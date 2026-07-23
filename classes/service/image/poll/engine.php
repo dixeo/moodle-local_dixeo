@@ -17,6 +17,7 @@
 namespace local_dixeo\service\image\poll;
 
 
+use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
 
 /**
@@ -49,7 +50,11 @@ final class engine {
      * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
      */
     public static function poll_once(string $remotejobid): array {
-        $jobstatus = self::poll_remote_once($remotejobid);
+        try {
+            $jobstatus = self::poll_remote_once($remotejobid);
+        } catch (api_exception $e) {
+            return self::failed_outcome();
+        }
 
         if ($jobstatus->is_completed()) {
             return [
@@ -99,5 +104,20 @@ final class engine {
             return $result;
         }
         return $result !== null ? (array) $result : [];
+    }
+
+    /**
+     * Build a generic failed poll outcome for transport/configuration errors.
+     *
+     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
+     */
+    private static function failed_outcome(): array {
+        return [
+            'done' => true,
+            'completed' => false,
+            'failed' => true,
+            'result' => [],
+            'errormessage' => get_string('dixeo_image_job_failed', 'local_dixeo'),
+        ];
     }
 }
