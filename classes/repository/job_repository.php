@@ -113,7 +113,7 @@ class job_repository {
     }
 
     /**
-     * Whether the job is registered to the given course and user.
+     * Whether the job is registered to the given course and initiating user.
      *
      * @param string $jobid Remote job UUID.
      * @param int $courseid Expected course ID.

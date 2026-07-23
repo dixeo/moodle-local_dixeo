@@ -119,10 +119,10 @@ class job_service {
      *
      * @param string $jobid The job UUID.
      * @param int|null $courseid Course ID to enforce ownership for (required for AJAX paths).
-     * @param int|null $userid Optional initiating user ID for initiator-scoped jobs.
+     * @param int|null $userid Initiating user ID for initiator-scoped jobs (optional).
      * @return job_status The current job status.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function get_job_status(string $jobid, ?int $courseid = null, ?int $userid = null): job_status {
         $this->require_job_access($jobid, $courseid, $userid);
@@ -137,10 +137,10 @@ class job_service {
      *
      * @param string $jobid The job UUID to cancel.
      * @param int|null $courseid Course ID to enforce ownership for (required for AJAX paths).
-     * @param int|null $userid Optional initiating user ID for initiator-scoped jobs.
+     * @param int|null $userid Initiating user ID for initiator-scoped jobs (optional).
      * @return array The cancellation response from the API.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function cancel_job(string $jobid, ?int $courseid = null, ?int $userid = null): array {
         global $USER;
@@ -171,10 +171,10 @@ class job_service {
      * @param string $jobid The job UUID.
      * @param string $jobtype The job type for polling configuration.
      * @param int|null $courseid Optional course ownership check.
-     * @param int|null $userid Optional initiating user ownership check.
+     * @param int|null $userid Initiating user ID for initiator-scoped jobs (optional).
      * @return operation_result The operation result.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function wait_for_job(
         string $jobid,
@@ -199,10 +199,12 @@ class job_service {
         if ($courseid === null) {
             return;
         }
-        if ($userid !== null) {
+
+        if ($userid !== null && $userid > 0) {
             $this->require_job_for_user_and_course($jobid, $courseid, $userid);
             return;
         }
+
         $this->require_job_for_course($jobid, $courseid);
     }
 
@@ -224,7 +226,7 @@ class job_service {
     /**
      * Ensure the job is registered to the given course and initiating user.
      *
-     * Uses the same error string as course-only checks to avoid leaking existence.
+     * Uses a single error string for missing and mismatched jobs to avoid leaking existence.
      *
      * @param string $jobid Remote job UUID.
      * @param int $courseid Expected course ID.
