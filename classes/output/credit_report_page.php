@@ -167,13 +167,11 @@ class credit_report_page implements renderable, templatable {
                 'action' => $this->report_url([]),
                 'datefrom' => !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart'],
                 'dateto' => !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend'],
-                'datefromformatted' => userdate(
-                    !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart'],
-                    '%Y-%m-%d'
+                'datefromformatted' => credit_usage_report_service::format_date_param(
+                    !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart']
                 ),
-                'datetoformatted' => userdate(
-                    !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend'],
-                    '%Y-%m-%d'
+                'datetoformatted' => credit_usage_report_service::format_date_param(
+                    !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend']
                 ),
                 'view' => $view,
                 'anchor' => $this->params['anchor'] ?? '',
@@ -234,11 +232,13 @@ class credit_report_page implements renderable, templatable {
     /**
      * Build a credit report page URL.
      *
+     * moodle_url rejects array parameter values, so multi-value filters are appended manually.
+     *
      * @param array $params URL parameters.
      * @return string Rendered URL.
      */
     protected function report_url(array $params): string {
-        return (new \moodle_url('/local/dixeo/credit_report.php', $params))->out(false);
+        return credit_usage_report_service::build_report_url($params);
     }
 
     /**
@@ -255,8 +255,12 @@ class credit_report_page implements renderable, templatable {
         ];
 
         if ($view === credit_usage_report_service::VIEW_CUSTOM) {
-            $params['datefrom'] = !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart'];
-            $params['dateto'] = !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend'];
+            $params['datefrom'] = credit_usage_report_service::format_date_param(
+                !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart']
+            );
+            $params['dateto'] = credit_usage_report_service::format_date_param(
+                !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend']
+            );
         } else if (!empty($this->params['anchor'])) {
             $params['anchor'] = $this->params['anchor'];
         }

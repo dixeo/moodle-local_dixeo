@@ -174,6 +174,53 @@ final class credit_usage_report_service_test extends \advanced_testcase {
     }
 
     /**
+     * Report URLs support multi-value filter query parameters.
+     */
+    public function test_build_report_url_supports_array_filters(): void {
+        $url = credit_usage_report_service::build_report_url([
+            'view' => 'custom',
+            'datefrom' => '2026-06-08',
+            'dateto' => '2026-08-29',
+            'jobtype' => ['course_structure'],
+        ]);
+
+        $this->assertStringContainsString('view=custom', $url);
+        $this->assertStringContainsString('datefrom=2026-06-08', $url);
+        $this->assertStringContainsString('dateto=2026-08-29', $url);
+        $this->assertStringContainsString('jobtype%5B0%5D=course_structure', $url);
+    }
+
+    /**
+     * Parse and format custom date params in the user timezone.
+     */
+    public function test_date_param_roundtrip_uses_user_timezone(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $USER->timezone = 'America/New_York';
+
+        $raw = '2026-01-15';
+        $from = credit_usage_report_service::parse_date_from_param($raw);
+        $to = credit_usage_report_service::parse_date_to_param($raw);
+
+        $this->assertSame($raw, credit_usage_report_service::format_date_param($from));
+        $this->assertSame($raw, credit_usage_report_service::format_date_param($to));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', credit_usage_report_service::format_date_param($from));
+    }
+
+    /**
+     * Legacy unix timestamps in URLs still parse correctly.
+     */
+    public function test_date_param_accepts_legacy_unix_timestamp(): void {
+        $this->resetAfterTest();
+
+        $from = credit_usage_report_service::parse_date_from_param('2026-01-15');
+        $legacy = (string) $from;
+
+        $this->assertSame($from, credit_usage_report_service::parse_date_from_param($legacy));
+    }
+
+    /**
      * Custom range without dates defaults to the current week.
      */
     public function test_resolve_period_custom_defaults_to_week(): void {

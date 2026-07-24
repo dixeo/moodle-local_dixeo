@@ -38,6 +38,93 @@ class credit_usage_report_service {
     public const VIEW_CUSTOM = 'custom';
 
     /**
+     * Parse a report date-from request value to a user-timezone midnight timestamp.
+     *
+     * @param string $raw Raw request value (Y-m-d or legacy unix timestamp).
+     * @return int Timestamp or 0 when empty/invalid.
+     */
+    public static function parse_date_from_param(string $raw): int {
+        if ($raw === '') {
+            return 0;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $matches)) {
+            return make_timestamp((int) $matches[1], (int) $matches[2], (int) $matches[3], 0, 0, 0);
+        }
+        if (ctype_digit($raw)) {
+            return usergetmidnight((int) $raw);
+        }
+        return 0;
+    }
+
+    /**
+     * Parse a report date-to request value to a user-timezone end-of-day timestamp.
+     *
+     * @param string $raw Raw request value (Y-m-d or legacy unix timestamp).
+     * @return int Timestamp or 0 when empty/invalid.
+     */
+    public static function parse_date_to_param(string $raw): int {
+        if ($raw === '') {
+            return 0;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $matches)) {
+            return make_timestamp((int) $matches[1], (int) $matches[2], (int) $matches[3], 23, 59, 59);
+        }
+        if (ctype_digit($raw)) {
+            $date = usergetdate((int) $raw);
+            return make_timestamp($date['year'], $date['mon'], $date['mday'], 23, 59, 59);
+        }
+        return 0;
+    }
+
+    /**
+     * Format a timestamp for report date form fields and URLs.
+     *
+     * @param int $timestamp Unix timestamp.
+     * @return string Date in Y-m-d format.
+     */
+    public static function format_date_param(int $timestamp): string {
+        $date = usergetdate($timestamp);
+        return sprintf('%04d-%02d-%02d', $date['year'], $date['mon'], $date['mday']);
+    }
+
+    /**
+     * Build a credit report URL, supporting multi-value filter parameters.
+     *
+     * @param array $params URL parameters.
+     * @return string Rendered URL.
+     */
+    public static function build_report_url(array $params): string {
+        $scalarparams = [];
+        $arrayparams = [];
+
+        foreach ($params as $key => $value) {
+            if (is_array($value)) {
+                if (!empty($value)) {
+                    $arrayparams[$key] = array_values($value);
+                }
+                continue;
+            }
+            if ($value !== null && $value !== '') {
+                $scalarparams[$key] = $value;
+            }
+        }
+
+        $url = (new \moodle_url('/local/dixeo/credit_report.php', $scalarparams))->out(false);
+        if (empty($arrayparams)) {
+            return $url;
+        }
+
+        $parts = [];
+        foreach ($arrayparams as $key => $values) {
+            foreach ($values as $index => $value) {
+                $parts[] = rawurlencode($key . '[' . $index . ']') . '=' . rawurlencode((string) $value);
+            }
+        }
+
+        return $url . (str_contains($url, '?') ? '&' : '?') . implode('&', $parts);
+    }
+
+    /**
      * Build SQL filter conditions from report filters.
      *
      * @param array $filters Report filters.
@@ -136,10 +223,15 @@ class credit_usage_report_service {
                 $start = (clone $anchordate)->modify('-' . ($dayofweek - 1) . ' days')->setTime(0, 0, 0);
                 $end = (clone $start)->modify('+6 days')->setTime(23, 59, 59);
             } else {
-                $start = (new \DateTime())->setTimestamp($datefrom ?: strtotime('today'));
-                $start->setTime(0, 0, 0);
-                $end = (new \DateTime())->setTimestamp($dateto ?: $start->getTimestamp());
-                $end->setTime(23, 59, 59);
+                $startts = (int) ($datefrom ?: usergetmidnight(time()));
+                if ($dateto) {
+                    $endts = (int) $dateto;
+                } else {
+                    $dateparts = usergetdate($startts);
+                    $endts = make_timestamp($dateparts['year'], $dateparts['mon'], $dateparts['mday'], 23, 59, 59);
+                }
+                $start = (new \DateTime())->setTimestamp($startts);
+                $end = (new \DateTime())->setTimestamp($endts);
             }
             $prev = null;
             $next = null;

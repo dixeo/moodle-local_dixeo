@@ -40,8 +40,8 @@ $view = optional_param('view', credit_usage_report_service::VIEW_WEEK, PARAM_ALP
 $anchor = optional_param('anchor', '', PARAM_TEXT);
 $datefromraw = optional_param('datefrom', '', PARAM_TEXT);
 $datetoraw = optional_param('dateto', '', PARAM_TEXT);
-$datefrom = $datefromraw !== '' ? strtotime($datefromraw . ' 00:00:00') : 0;
-$dateto = $datetoraw !== '' ? strtotime($datetoraw . ' 23:59:59') : 0;
+$datefrom = credit_usage_report_service::parse_date_from_param($datefromraw);
+$dateto = credit_usage_report_service::parse_date_to_param($datetoraw);
 $page = optional_param('page', 0, PARAM_INT);
 $perpage = optional_param('perpage', 50, PARAM_INT);
 $userids = optional_param_array('userid', [], PARAM_INT);
@@ -53,8 +53,12 @@ $moduletypes = optional_param_array('moduletype', [], PARAM_ALPHANUMEXT);
 $params = array_filter([
     'view' => $view,
     'anchor' => $anchor ?: null,
-    'datefrom' => $datefrom ?: null,
-    'dateto' => $dateto ?: null,
+    'datefrom' => $view === credit_usage_report_service::VIEW_CUSTOM && $datefrom
+        ? credit_usage_report_service::format_date_param($datefrom)
+        : null,
+    'dateto' => $view === credit_usage_report_service::VIEW_CUSTOM && $dateto
+        ? credit_usage_report_service::format_date_param($dateto)
+        : null,
     'page' => $page ?: null,
     'perpage' => $perpage !== 50 ? $perpage : null,
 ], static fn($value) => $value !== null && $value !== '');
@@ -79,8 +83,21 @@ foreach ($moduletypes as $moduletype) {
     $params['moduletype'][] = $moduletype;
 }
 
+$pageurlparams = array_filter([
+    'view' => $view,
+    'anchor' => $anchor ?: null,
+    'datefrom' => $view === credit_usage_report_service::VIEW_CUSTOM && $datefrom
+        ? credit_usage_report_service::format_date_param($datefrom)
+        : null,
+    'dateto' => $view === credit_usage_report_service::VIEW_CUSTOM && $dateto
+        ? credit_usage_report_service::format_date_param($dateto)
+        : null,
+    'page' => $page ?: null,
+    'perpage' => $perpage !== 50 ? $perpage : null,
+], static fn($value) => $value !== null && $value !== '');
+
 $PAGE->set_context($context);
-$PAGE->set_url(new moodle_url('/local/dixeo/credit_report.php', $params));
+$PAGE->set_url(new moodle_url('/local/dixeo/credit_report.php', $pageurlparams));
 $PAGE->set_title(get_string('credit_report', 'local_dixeo'));
 $PAGE->set_heading(get_string('credit_report', 'local_dixeo'));
 $PAGE->set_pagelayout('admin');
