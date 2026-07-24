@@ -441,3 +441,8 @@ h2:has(.dixeo-sync-indicator),
 #page-local-dixeo-credit_report .badge.bg-danger {
     color: #fff;
 }
+
+#page-local-dixeo-credit_report #creditUsageHistogram,
+#page-local-dixeo-credit_report #creditUsageBreakdown {
+    min-height: 240px;
+}

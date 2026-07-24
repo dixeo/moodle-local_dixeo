@@ -196,4 +196,43 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         $this->assertSame('2026-01-05', $period['prevanchor']);
         $this->assertSame('2026-01-19', $period['nextanchor']);
     }
+
+    /**
+     * Histogram includes every day in the period, with zero for days without usage.
+     */
+    public function test_get_histogram_fills_empty_days_in_period(): void {
+        $this->resetAfterTest();
+
+        $service = new credit_usage_report_service();
+        $period = $service->resolve_period(credit_usage_report_service::VIEW_WEEK, '2026-01-15');
+        $filters = [
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $period['timestart'],
+            'timeend' => $period['timeend'],
+        ];
+
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-histogram-1',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -7,
+                'balanceAfter' => 93,
+                'createdAt' => gmdate('c', strtotime('2026-01-14 12:00:00')),
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => 0,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $histogram = $service->get_histogram($filters);
+
+        $this->assertCount(7, $histogram['labels']);
+        $this->assertCount(7, $histogram['values']);
+        $this->assertSame(7, array_sum($histogram['values']));
+        $this->assertSame(1, count(array_filter($histogram['values'])));
+    }
 }

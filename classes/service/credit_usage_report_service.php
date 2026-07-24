@@ -208,17 +208,27 @@ class credit_usage_report_service {
 
         foreach ($records as $record) {
             $day = userdate((int) $record->timecreated, '%Y-%m-%d');
-            if (!isset($buckets[$day])) {
-                $buckets[$day] = 0;
-            }
-            $buckets[$day] += (int) $record->credits;
+            $buckets[$day] = ($buckets[$day] ?? 0) + (int) $record->credits;
         }
 
         $labels = [];
         $values = [];
-        foreach ($buckets as $day => $total) {
-            $labels[] = userdate(strtotime($day . ' UTC'), '%d %b');
-            $values[] = $total;
+        $timestart = (int) ($filters['timestart'] ?? 0);
+        $timeend = (int) ($filters['timeend'] ?? 0);
+
+        if ($timestart > 0 && $timeend >= $timestart) {
+            $daystart = usergetmidnight($timestart);
+            $dayend = usergetmidnight($timeend);
+            for ($ts = $daystart; $ts <= $dayend; $ts += DAYSECS) {
+                $daykey = userdate($ts, '%Y-%m-%d');
+                $labels[] = userdate($ts, '%d %b');
+                $values[] = $buckets[$daykey] ?? 0;
+            }
+        } else {
+            foreach ($buckets as $day => $total) {
+                $labels[] = userdate(strtotime($day . ' UTC'), '%d %b');
+                $values[] = $total;
+            }
         }
 
         return [
