@@ -20,7 +20,9 @@ use renderable;
 use templatable;
 use renderer_base;
 use core\output\paging_bar;
+use core\plugin_manager;
 use local_dixeo\dto\credit_transaction;
+use local_dixeo\local\credit_report_request;
 use local_dixeo\service\credit_service;
 use local_dixeo\service\credit_usage_report_service;
 use local_dixeo\service\credit_usage_sync_service;
@@ -132,6 +134,11 @@ class credit_report_page implements renderable, templatable {
             ));
         }
 
+        $exportselector = $this->build_export_selector(
+            $output,
+            credit_report_request::from_renderable_params($this->params)
+        );
+
         return [
             'configured' => true,
             'error' => null,
@@ -227,6 +234,7 @@ class credit_report_page implements renderable, templatable {
             'hasrows' => !empty($rowsresult['rows']),
             'paginationbar' => $paginationbar,
             'haspagination' => $haspagination,
+            'exportselector' => $exportselector,
             'reseturl' => $this->report_url([]),
         ];
     }
@@ -241,6 +249,35 @@ class credit_report_page implements renderable, templatable {
      */
     protected function report_url(array $params): string {
         return credit_usage_report_service::build_report_url($params);
+    }
+
+    /**
+     * Build the Moodle dataformat export selector for the current report filters.
+     *
+     * @param renderer_base $output Renderer.
+     * @param credit_report_request $request Current report request.
+     * @return string Rendered HTML.
+     */
+    protected function build_export_selector(renderer_base $output, credit_report_request $request): string {
+        $options = [];
+        foreach (plugin_manager::instance()->get_plugins_of_type('dataformat') as $format) {
+            if ($format->is_enabled()) {
+                $options[] = [
+                    'value' => $format->name,
+                    'label' => get_string('dataformat', $format->component),
+                ];
+            }
+        }
+
+        return $output->render_from_template('core/dataformat_selector', [
+            'label' => get_string('downloadas', 'table'),
+            'base' => (new \moodle_url('/local/dixeo/credit_report_download.php'))->out(false),
+            'name' => 'dataformat',
+            'params' => $request->to_export_hidden_params(),
+            'options' => $options,
+            'sesskey' => sesskey(),
+            'submit' => get_string('download'),
+        ]);
     }
 
     /**

@@ -446,3 +446,7 @@ h2:has(.dixeo-sync-indicator),
 #page-local-dixeo-credit_report #creditUsageBreakdown {
     min-height: 240px;
 }
+
+.local-dixeo-credit-report .dixeo-credit-report-export .dataformatselector {
+    margin: 0;
+}

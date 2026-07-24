@@ -491,6 +491,59 @@ class credit_usage_report_service {
     }
 
     /**
+     * Column definitions for dataformat export.
+     *
+     * @return array<string, string>
+     */
+    public function get_export_columns(): array {
+        return [
+            'credits' => get_string('credit_report_column_credits', 'local_dixeo'),
+            'component' => get_string('credit_report_column_module', 'local_dixeo'),
+            'action' => get_string('credit_report_column_action', 'local_dixeo'),
+            'date' => get_string('credit_report_column_date', 'local_dixeo'),
+            'user' => get_string('credit_report_column_user', 'local_dixeo'),
+            'course' => get_string('credit_report_column_course', 'local_dixeo'),
+        ];
+    }
+
+    /**
+     * Get record IDs for export in report order.
+     *
+     * @param array $filters Report filters.
+     * @return int[]
+     */
+    public function get_export_record_ids(array $filters): array {
+        global $DB;
+
+        $built = $this->build_conditions($filters);
+        $sql = "SELECT cu.id
+                  FROM {" . credit_usage_repository::TABLE . "} cu
+                 WHERE {$built['sql']}
+              ORDER BY cu.timecreated DESC";
+
+        return array_map('intval', $DB->get_fieldset_sql($sql, $built['params']));
+    }
+
+    /**
+     * Format a database row for dataformat export.
+     *
+     * @param \stdClass $record Usage record.
+     * @return array<string, string|int>
+     */
+    public function format_export_row(\stdClass $record): array {
+        $row = $this->format_row($record);
+
+        return [
+            'credits' => $row['creditsformatted'],
+            'component' => $row['componentlabel'],
+            'action' => $row['actionlabel'],
+            'date' => $row['dateformatted'],
+            'user' => $row['userlabel'],
+            'course' => $row['courselabel'],
+        ];
+    }
+
+    /**
      * Format a database row for template output.
      *
      * @param \stdClass $record Usage record.

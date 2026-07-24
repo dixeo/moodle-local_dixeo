@@ -16,6 +16,7 @@
 
 namespace local_dixeo;
 
+use local_dixeo\local\credit_report_request;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\repository\credit_usage_repository;
 use local_dixeo\service\credit_usage_report_service;
@@ -171,6 +172,45 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         $rows = $service->get_rows($filters, 0, 10);
         $this->assertSame(1, $rows['total']);
         $this->assertSame(get_string('credit_context_site', 'local_dixeo'), $rows['rows'][0]['courselabel']);
+    }
+
+    /**
+     * Export hidden params preserve multi-value filters.
+     */
+    public function test_to_export_hidden_params_includes_array_filters(): void {
+        $request = credit_report_request::from_renderable_params([
+            'view' => credit_usage_report_service::VIEW_CUSTOM,
+            'datefrom' => credit_usage_report_service::parse_date_from_param('2026-06-08'),
+            'dateto' => credit_usage_report_service::parse_date_to_param('2026-08-29'),
+            'jobtypes' => ['course_structure'],
+            'components' => [],
+            'moduletypes' => [],
+            'userids' => [],
+            'courseids' => [],
+        ]);
+
+        $hidden = $request->to_export_hidden_params();
+        $serialized = json_encode($hidden);
+
+        $this->assertStringContainsString('jobtype[]', $serialized);
+        $this->assertStringContainsString('course_structure', $serialized);
+        $this->assertStringContainsString('datefrom', $serialized);
+        $this->assertStringContainsString('2026-06-08', $serialized);
+    }
+
+    /**
+     * Export columns match the report table.
+     */
+    public function test_get_export_columns_match_table_headers(): void {
+        $service = new credit_usage_report_service();
+        $columns = $service->get_export_columns();
+
+        $this->assertArrayHasKey('credits', $columns);
+        $this->assertArrayHasKey('component', $columns);
+        $this->assertArrayHasKey('action', $columns);
+        $this->assertArrayHasKey('date', $columns);
+        $this->assertArrayHasKey('user', $columns);
+        $this->assertArrayHasKey('course', $columns);
     }
 
     /**
