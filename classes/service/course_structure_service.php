@@ -87,7 +87,7 @@ class course_structure_service {
     ): operation_result {
         $payload = $this->build_payload($instructions, $templateid, $courseid);
 
-        return $this->jobservice->submit_job(self::ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::ENDPOINT, $payload, 'block_dixeo_designer');
     }
 
     /**
@@ -110,7 +110,7 @@ class course_structure_service {
     ): operation_result {
         $payload = $this->build_payload($instructions, $templateid, $courseid);
 
-        return $this->jobservice->submit_and_wait(self::ENDPOINT, $payload, self::JOB_TYPE);
+        return $this->jobservice->submit_and_wait(self::ENDPOINT, $payload, self::JOB_TYPE, 'block_dixeo_designer');
     }
 
     /**

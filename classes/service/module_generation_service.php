@@ -64,18 +64,35 @@ class module_generation_service {
     /** @var string|null The namespace for API requests. */
     private ?string $namespace;
 
+    /** @var string|null Originating frankenstyle component. */
+    private ?string $component;
+
     /**
      * Constructor.
      *
      * @param job_service|null $jobservice Optional job service.
      * @param string|null $namespace Optional namespace override.
+     * @param string|null $component Optional originating component.
      */
     public function __construct(
         ?job_service $jobservice = null,
-        ?string $namespace = null
+        ?string $namespace = null,
+        ?string $component = null
     ) {
         $this->jobservice = $jobservice ?? new job_service();
         $this->namespace = $namespace ?? $this->get_configured_namespace();
+        $this->component = $component;
+    }
+
+    /**
+     * Set the originating component for subsequent job submissions.
+     *
+     * @param string|null $component Frankenstyle component name.
+     * @return self
+     */
+    public function set_component(?string $component): self {
+        $this->component = $component;
+        return $this;
     }
 
     /**
@@ -125,7 +142,7 @@ class module_generation_service {
     ): operation_result {
         $payload = $this->build_payload($moduletype, $instructions, $context, $courseid);
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -184,7 +201,7 @@ class module_generation_service {
     ): operation_result {
         $payload = $this->build_payload($moduletype, $instructions, $context, $courseid);
 
-        return $this->jobservice->submit_job(self::FILL_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::FILL_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -210,7 +227,8 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::GENERATE_ENDPOINT,
             $payload,
-            self::JOB_TYPE_GENERATE
+            self::JOB_TYPE_GENERATE,
+            $this->component
         );
     }
 
@@ -238,7 +256,8 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::FILL_ENDPOINT,
             $payload,
-            self::JOB_TYPE_FILL
+            self::JOB_TYPE_FILL,
+            $this->component
         );
     }
 
@@ -299,7 +318,8 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::EDIT_ENDPOINT,
             $payload,
-            self::JOB_TYPE_EDIT
+            self::JOB_TYPE_EDIT,
+            $this->component
         );
     }
 

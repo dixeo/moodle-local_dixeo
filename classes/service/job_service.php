@@ -51,6 +51,9 @@ class job_service {
     /** @var job_repository Local job ownership store. */
     private job_repository $jobrepository;
 
+    /** @var array<string, bool> Jobs already synced to credit usage in this request. */
+    private array $syncedjobs = [];
+
     /**
      * Constructor.
      *
@@ -76,13 +79,14 @@ class job_service {
      *
      * @param string $endpoint The API endpoint to submit to.
      * @param array $payload The request payload.
+     * @param string|null $component Originating frankenstyle component.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
-    public function submit_job(string $endpoint, array $payload): operation_result {
+    public function submit_job(string $endpoint, array $payload, ?string $component = null): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload);
+        $this->register_job($jobid, $endpoint, $payload, $component);
 
         return operation_result::pending($jobid, 'pending', 0);
     }
@@ -96,13 +100,19 @@ class job_service {
      * @param string $endpoint The API endpoint to submit to.
      * @param array $payload The request payload.
      * @param string $jobtype The job type for polling configuration.
+     * @param string|null $component Originating frankenstyle component.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
      */
-    public function submit_and_wait(string $endpoint, array $payload, string $jobtype): operation_result {
+    public function submit_and_wait(
+        string $endpoint,
+        array $payload,
+        string $jobtype,
+        ?string $component = null
+    ): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload);
+        $this->register_job($jobid, $endpoint, $payload, $component);
         $config = polling_config::for_job_type($jobtype);
 
         return $this->poller->poll($jobid, $config);
@@ -127,7 +137,10 @@ class job_service {
     public function get_job_status(string $jobid, ?int $courseid = null, ?int $userid = null): job_status {
         $this->require_job_access($jobid, $courseid, $userid);
 
-        return $this->poller->get_job_status($jobid);
+        $status = $this->poller->get_job_status($jobid);
+        $this->maybe_sync_credit_usage($status);
+
+        return $status;
     }
 
     /**
@@ -270,8 +283,9 @@ class job_service {
      * @param string $jobid Remote job UUID.
      * @param string $endpoint API endpoint used to create the job.
      * @param array $payload Request payload.
+     * @param string|null $component Originating frankenstyle component.
      */
-    private function register_job(string $jobid, string $endpoint, array $payload): void {
+    private function register_job(string $jobid, string $endpoint, array $payload, ?string $component = null): void {
         global $USER, $CFG;
 
         if (trim($jobid) === '') {
@@ -289,7 +303,21 @@ class job_service {
         $namespace = (string) ($payload['namespace'] ?? \local_dixeo_get_configured_namespace());
         $operation = $this->operation_from_endpoint($endpoint);
 
-        $this->jobrepository->register($jobid, $courseid, $userid, $namespace, $operation);
+        $this->jobrepository->register($jobid, $courseid, $userid, $namespace, $operation, $component);
+    }
+
+    /**
+     * Sync credit usage when a job reaches a terminal state.
+     *
+     * @param job_status $status Job status from API.
+     */
+    private function maybe_sync_credit_usage(job_status $status): void {
+        if (!$status->is_terminal() || isset($this->syncedjobs[$status->jobid])) {
+            return;
+        }
+
+        $this->syncedjobs[$status->jobid] = true;
+        (new credit_usage_sync_service())->sync_for_job($status->jobid);
     }
 
     /**

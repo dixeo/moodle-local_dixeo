@@ -64,21 +64,27 @@ class image_generation_service {
     /** @var string|null Namespace for API requests. */
     private ?string $namespace;
 
+    /** @var string|null Originating frankenstyle component. */
+    private ?string $component;
+
     /**
      * Constructor.
      *
      * @param job_service|null $jobservice Optional job service.
      * @param html_helper|null $htmlhelper Optional HTML helper.
      * @param string|null $namespace Optional namespace override.
+     * @param string|null $component Optional originating component.
      */
     public function __construct(
         ?job_service $jobservice = null,
         ?html_helper $htmlhelper = null,
-        ?string $namespace = null
+        ?string $namespace = null,
+        ?string $component = null
     ) {
         $this->jobservice = $jobservice ?? new job_service();
         $this->htmlhelper = $htmlhelper ?? new html_helper();
         $this->namespace = $namespace ?? $this->get_configured_namespace();
+        $this->component = $component;
     }
 
     /**
@@ -125,7 +131,7 @@ class image_generation_service {
             courseid: (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -167,7 +173,7 @@ class image_generation_service {
             courseid: (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -211,7 +217,7 @@ class image_generation_service {
             (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -255,7 +261,7 @@ class image_generation_service {
             (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
     }
 
     /**

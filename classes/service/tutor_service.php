@@ -90,7 +90,7 @@ class tutor_service {
             $payload['pageContext'] = $pagecontext;
         }
 
-        return $this->jobservice->submit_job('/v1/tutor/messages', $payload);
+        return $this->jobservice->submit_job('/v1/tutor/messages', $payload, 'block_dixeo_tutor');
     }
 
     /**

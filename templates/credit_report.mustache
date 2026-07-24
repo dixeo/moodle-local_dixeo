@@ -17,44 +17,29 @@
 {{!
     @template local_dixeo/credit_report
 
-    Credit report page template with weekly usage view.
+    Credit usage report with balance, filters, KPIs, charts, and table.
 
     Context variables required for this template:
     * configured - bool - Whether the API is configured.
     * error - string|null - Error message if any.
     * balance - object - Credit balance information.
-    * usage - object - Weekly usage statistics.
-    * chartdata - string - JSON chart data with today highlighting.
-    * transactions - array - Transaction list.
-    * pagination - object - Pagination data.
-
-    Example context (json):
-    {
-        "configured": true,
-        "balance": {
-            "formatted": "9,976 credits",
-            "state": "active",
-            "stateclass": "success"
-        },
-        "usage": {
-            "weektotalformatted": "24 credits",
-            "weekrange": "Dec 16 - Dec 22"
-        }
-    }
+    * period - object - Active period label and navigation URLs.
+    * views - array - Period view toggle links.
+    * filters - object - Filter form values and options.
+    * kpis - object - Summary KPI values.
+    * histogramdata - string - JSON histogram chart data.
+    * breakdowndata - string - JSON donut chart data.
+    * rows - array - Paginated usage rows.
+    * pagination - object - Pagination metadata.
 }}
 {{#error}}
-    <div class="alert alert-danger" role="alert">
-        {{error}}
-    </div>
+    <div class="alert alert-danger" role="alert">{{error}}</div>
     {{^configured}}
-        <a href="{{settingsurl}}" class="btn btn-primary">
-            {{#str}}configure_api, local_dixeo{{/str}}
-        </a>
+        <a href="{{settingsurl}}" class="btn btn-primary">{{#str}}configure_api, local_dixeo{{/str}}</a>
     {{/configured}}
 {{/error}}
 
 {{^error}}
-    {{! Balance Card }}
     <div class="card mb-4">
         <div class="card-header">
             <h4 class="mb-0">{{#str}}current_balance, local_dixeo{{/str}}</h4>
@@ -62,191 +47,184 @@
         <div class="card-body">
             <div class="d-flex align-items-center" style="gap: 1rem;">
                 <span class="h2 mb-0">{{balance.formatted}}</span>
-                <span class="badge bg-{{balance.stateclass}}">
-                    {{balance.statedescription}}
-                </span>
+                <span class="badge bg-{{balance.stateclass}}">{{balance.statedescription}}</span>
             </div>
             {{#balance.isfrozen}}
-                <div class="alert alert-warning mt-3 mb-0">
-                    {{#str}}account_frozen_warning, local_dixeo{{/str}}
-                </div>
+                <div class="alert alert-warning mt-3 mb-0">{{#str}}account_frozen_warning, local_dixeo{{/str}}</div>
             {{/balance.isfrozen}}
             {{#balance.issuspended}}
-                <div class="alert alert-danger mt-3 mb-0">
-                    {{#str}}account_suspended_warning, local_dixeo{{/str}}
-                </div>
+                <div class="alert alert-danger mt-3 mb-0">{{#str}}account_suspended_warning, local_dixeo{{/str}}</div>
             {{/balance.issuspended}}
         </div>
     </div>
 
-    {{! Weekly Usage Statistics Card }}
     <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">{{#str}}usage_statistics, local_dixeo{{/str}}</h4>
-            <span class="text-muted small">{{usage.weekrange}}</span>
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h4 class="mb-0">{{#str}}credit_report_filters, local_dixeo{{/str}}</h4>
+            <div class="btn-group" role="group" aria-label="{{#str}}credit_report_period, local_dixeo{{/str}}">
+                {{#views}}
+                    <a href="{{url}}" class="btn btn-sm {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}">{{label}}</a>
+                {{/views}}
+            </div>
         </div>
         <div class="card-body">
-            <div class="row mb-4">
-                <div class="col-md-12">
-                    <div class="text-muted">{{#str}}week_total, local_dixeo{{/str}}</div>
-                    <div class="h5">{{usage.weektotalformatted}}</div>
-                </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <div class="h5 mb-0">{{period.label}}</div>
+                {{^period.iscustom}}
+                    <div class="btn-group">
+                        <a href="{{period.prevurl}}" class="btn btn-outline-secondary btn-sm {{^period.hasprev}}disabled{{/period.hasprev}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</a>
+                        <a href="{{period.nexturl}}" class="btn btn-outline-secondary btn-sm {{^period.hasnext}}disabled{{/period.hasnext}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</a>
+                    </div>
+                {{/period.iscustom}}
             </div>
 
-            {{#haschartdata}}
-                <div class="chart-container" style="position: relative; height: 250px;">
-                    <canvas id="usageChart"></canvas>
+            <form method="get" action="{{filters.action}}" class="row g-3">
+                <input type="hidden" name="view" value="{{filters.view}}">
+                {{#filters.anchor}}<input type="hidden" name="anchor" value="{{filters.anchor}}">{{/filters.anchor}}
+
+                {{#period.iscustom}}
+                    <div class="col-md-3">
+                        <label class="form-label" for="datefrom">{{#str}}from{{/str}}</label>
+                        <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="dateto">{{#str}}to{{/str}}</label>
+                        <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
+                    </div>
+                {{/period.iscustom}}
+
+                <div class="col-md-3">
+                    <label class="form-label" for="component">{{#str}}credit_report_filter_component, local_dixeo{{/str}}</label>
+                    <select class="form-select" id="component" name="component[]" multiple size="4">
+                        {{#filters.components}}
+                            <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                        {{/filters.components}}
+                    </select>
                 </div>
-            {{/haschartdata}}
+                <div class="col-md-3">
+                    <label class="form-label" for="jobtype">{{#str}}credit_report_filter_action, local_dixeo{{/str}}</label>
+                    <select class="form-select" id="jobtype" name="jobtype[]" multiple size="4">
+                        {{#filters.jobtypes}}
+                            <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                        {{/filters.jobtypes}}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="moduletype">{{#str}}credit_report_filter_moduletype, local_dixeo{{/str}}</label>
+                    <select class="form-select" id="moduletype" name="moduletype[]" multiple size="4">
+                        {{#filters.moduletypes}}
+                            <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                        {{/filters.moduletypes}}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="userid">{{#str}}credit_report_filter_user, local_dixeo{{/str}}</label>
+                    <input type="number" class="form-control" id="userid" name="userid" value="{{#filters.userid}}{{filters.userid}}{{/filters.userid}}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="courseid">{{#str}}credit_report_filter_course, local_dixeo{{/str}}</label>
+                    <input type="number" class="form-control" id="courseid" name="courseid" value="{{#filters.courseid}}{{filters.courseid}}{{/filters.courseid}}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="creditsmin">{{#str}}credit_report_filter_credits_min, local_dixeo{{/str}}</label>
+                    <input type="number" class="form-control" id="creditsmin" name="creditsmin" value="{{filters.creditsmin}}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="creditsmax">{{#str}}credit_report_filter_credits_max, local_dixeo{{/str}}</label>
+                    <input type="number" class="form-control" id="creditsmax" name="creditsmax" value="{{filters.creditsmax}}">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">{{#str}}credit_report_apply_filters, local_dixeo{{/str}}</button>
+                    <a href="{{reseturl}}" class="btn btn-secondary">{{#str}}credit_report_reset_filters, local_dixeo{{/str}}</a>
+                </div>
+            </form>
         </div>
     </div>
 
-    {{! Transactions Table }}
-    <div class="card">
-        <div class="card-header">
-            <h4 class="mb-0">{{#str}}recent_transactions, local_dixeo{{/str}}</h4>
+    <div class="row mb-4">
+        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_credits, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.credits}}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_users, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.users}}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_courses, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.courses}}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_rows, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.rows}}</div></div></div></div>
+    </div>
+
+    {{#haschartdata}}
+        <div class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card h-100">
+                    <div class="card-header"><h5 class="mb-0">{{#str}}credit_report_histogram, local_dixeo{{/str}}</h5></div>
+                    <div class="card-body"><canvas id="creditUsageHistogram" height="120"></canvas></div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-header"><h5 class="mb-0">{{#str}}credit_report_breakdown, local_dixeo{{/str}}</h5></div>
+                    <div class="card-body"><canvas id="creditUsageBreakdown" height="120"></canvas></div>
+                </div>
+            </div>
         </div>
+    {{/haschartdata}}
+
+    <div class="card">
+        <div class="card-header"><h4 class="mb-0">{{#str}}recent_transactions, local_dixeo{{/str}}</h4></div>
         <div class="card-body">
-            {{#hastransactions}}
+            {{#hasrows}}
                 <div class="table-responsive">
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>{{#str}}date, local_dixeo{{/str}}</th>
-                                <th>{{#str}}type, local_dixeo{{/str}}</th>
-                                <th>{{#str}}description, local_dixeo{{/str}}</th>
-                                <th class="text-end">{{#str}}amount, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_credits, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_module, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_action, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_date, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_user, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_column_course, local_dixeo{{/str}}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {{#transactions}}
+                            {{#rows}}
                                 <tr>
+                                    <td>{{creditsformatted}}</td>
+                                    <td>{{componentlabel}}</td>
+                                    <td>{{actionlabel}}</td>
+                                    <td><span class="text-nowrap">{{dateformatted}}</span></td>
                                     <td>
-                                        <span class="text-nowrap">{{createdatformatted}}</span>
+                                        {{#userurl}}<a href="{{userurl}}">{{userlabel}}</a>{{/userurl}}
+                                        {{^userurl}}{{userlabel}}{{/userurl}}
                                     </td>
                                     <td>
-                                        <span class="badge bg-{{typeclass}}">{{typelabel}}</span>
-                                    </td>
-                                    <td>{{description}}</td>
-                                    <td class="text-end">
-                                        <span class="text-{{typeclass}}">
-                                            {{amountsign}}{{amountformatted}}
-                                        </span>
+                                        {{#courseurl}}<a href="{{courseurl}}">{{courselabel}}</a>{{/courseurl}}
+                                        {{^courseurl}}{{courselabel}}{{/courseurl}}
                                     </td>
                                 </tr>
-                            {{/transactions}}
+                            {{/rows}}
                         </tbody>
                     </table>
                 </div>
-
                 {{#haspagination}}
                     <nav aria-label="{{#str}}pagination, local_dixeo{{/str}}">
                         <ul class="pagination justify-content-center mb-0">
                             <li class="page-item {{^pagination.hasprev}}disabled{{/pagination.hasprev}}">
-                                <a class="page-link" href="{{reporturl}}?offset={{pagination.prevoffset}}">
-                                    {{#str}}previous{{/str}}
-                                </a>
+                                <a class="page-link" href="{{pagination.prevurl}}">{{#str}}previous{{/str}}</a>
                             </li>
                             <li class="page-item disabled">
-                                <span class="page-link">
-                                    {{#str}}page_x_of_y, local_dixeo, {"current": "{{pagination.currentpage}}", "total": "{{pagination.totalpages}}"}{{/str}}
-                                </span>
+                                <span class="page-link">{{pagination.page}} / {{pagination.totalpages}}</span>
                             </li>
                             <li class="page-item {{^pagination.hasnext}}disabled{{/pagination.hasnext}}">
-                                <a class="page-link" href="{{reporturl}}?offset={{pagination.nextoffset}}">
-                                    {{#str}}next{{/str}}
-                                </a>
+                                <a class="page-link" href="{{pagination.nexturl}}">{{#str}}next{{/str}}</a>
                             </li>
                         </ul>
                     </nav>
                 {{/haspagination}}
-            {{/hastransactions}}
-            {{^hastransactions}}
-                <div class="alert alert-info mb-0">
-                    {{#str}}no_transactions, local_dixeo{{/str}}
-                </div>
-            {{/hastransactions}}
+            {{/hasrows}}
+            {{^hasrows}}
+                <div class="alert alert-info mb-0">{{#str}}credit_report_no_rows, local_dixeo{{/str}}</div>
+            {{/hasrows}}
         </div>
     </div>
+
+    {{#haschartdata}}
+        <script type="application/json" id="credit-report-histogram-data">{{{histogramdata}}}</script>
+        <script type="application/json" id="credit-report-breakdown-data">{{{breakdowndata}}}</script>
+    {{/haschartdata}}
 {{/error}}
-
-{{#haschartdata}}
-{{#js}}
-require(['core/chartjs'], function(Chart) {
-    var ctx = document.getElementById('usageChart').getContext('2d');
-    var chartData = {{{chartdata}}};
-
-    // Create background colors array with highlight for today
-    var backgroundColors = chartData.values.map(function(value, index) {
-        if (chartData.todayindex === index) {
-            return 'rgba(37, 99, 235, 0.8)'; // Bright blue for today
-        }
-        return 'rgba(148, 163, 184, 0.5)'; // Slate gray for other days
-    });
-
-    var borderColors = chartData.values.map(function(value, index) {
-        if (chartData.todayindex === index) {
-            return 'rgba(37, 99, 235, 1)'; // Bright blue border for today
-        }
-        return 'rgba(148, 163, 184, 0.8)'; // Slate gray border for other days
-    });
-
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: chartData.labels,
-            datasets: [{
-                label: chartData.label,
-                data: chartData.values,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 2,
-                borderRadius: 6,
-                borderSkipped: false
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.raw.toLocaleString() + ' credits';
-                        },
-                        title: function(context) {
-                            var fullLabel = chartData.fulllabels[context[0].dataIndex];
-                            if (chartData.todayindex === context[0].dataIndex) {
-                                return fullLabel + ' (Today)';
-                            }
-                            return fullLabel;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(148, 163, 184, 0.1)'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            }
-        }
-    });
-});
-{{/js}}
-{{/haschartdata}}

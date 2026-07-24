@@ -41,6 +41,7 @@ class job_repository {
      * @param int $userid User who initiated the job.
      * @param string $namespace API namespace.
      * @param string $operation Logical operation name (e.g. module_generate).
+     * @param string|null $component Originating frankenstyle component.
      * @return \stdClass The stored record.
      */
     public function register(
@@ -48,7 +49,8 @@ class job_repository {
         int $courseid,
         int $userid,
         string $namespace,
-        string $operation
+        string $operation,
+        ?string $component = null
     ): \stdClass {
         global $DB;
 
@@ -65,6 +67,7 @@ class job_repository {
                 'userid' => $userid,
                 'namespace' => $namespace,
                 'operation' => $operation,
+                'component' => $component,
             ];
             $DB->update_record(self::TABLE, $update);
             return $DB->get_record(self::TABLE, ['id' => $existing->id], '*', MUST_EXIST);
@@ -76,6 +79,7 @@ class job_repository {
             'userid' => $userid,
             'namespace' => $namespace,
             'operation' => $operation,
+            'component' => $component,
             'timecreated' => time(),
         ];
         $record->id = $DB->insert_record(self::TABLE, $record);

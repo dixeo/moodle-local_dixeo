@@ -53,6 +53,9 @@ class provider implements
     /** @var string Local remote-job ownership table. */
     public const TABLE_JOBS = 'local_dixeo_jobs';
 
+    /** @var string Synced credit usage table. */
+    public const TABLE_CREDIT_USAGE = 'local_dixeo_credit_usage';
+
     /**
      * Describe metadata stored or transmitted by this plugin.
      *
@@ -85,9 +88,32 @@ class provider implements
                 'userid' => 'privacy:metadata:jobs:userid',
                 'namespace' => 'privacy:metadata:jobs:namespace',
                 'operation' => 'privacy:metadata:jobs:operation',
+                'component' => 'privacy:metadata:jobs:component',
                 'timecreated' => 'privacy:metadata:jobs:timecreated',
             ],
             'privacy:metadata:jobs'
+        );
+
+        $collection->add_database_table(
+            self::TABLE_CREDIT_USAGE,
+            [
+                'transactionid' => 'privacy:metadata:credit_usage:transactionid',
+                'jobid' => 'privacy:metadata:credit_usage:jobid',
+                'type' => 'privacy:metadata:credit_usage:type',
+                'amount' => 'privacy:metadata:credit_usage:amount',
+                'credits' => 'privacy:metadata:credit_usage:credits',
+                'jobtype' => 'privacy:metadata:credit_usage:jobtype',
+                'moduletype' => 'privacy:metadata:credit_usage:moduletype',
+                'component' => 'privacy:metadata:credit_usage:component',
+                'operation' => 'privacy:metadata:credit_usage:operation',
+                'description' => 'privacy:metadata:credit_usage:description',
+                'userid' => 'privacy:metadata:credit_usage:userid',
+                'courseid' => 'privacy:metadata:credit_usage:courseid',
+                'contextid' => 'privacy:metadata:credit_usage:contextid',
+                'timecreated' => 'privacy:metadata:credit_usage:timecreated',
+                'timesynced' => 'privacy:metadata:credit_usage:timesynced',
+            ],
+            'privacy:metadata:credit_usage'
         );
 
         $collection->add_external_location_link(
@@ -135,6 +161,14 @@ class provider implements
             );
         }
 
+        if ($DB->record_exists(self::TABLE_CREDIT_USAGE, ['userid' => $userid, 'courseid' => 0])) {
+            \context_system::instance(0, MUST_EXIST, false);
+            $contextlist->add_from_sql(
+                'SELECT id FROM {context} WHERE contextlevel = :contextlevel AND instanceid = 0',
+                ['contextlevel' => CONTEXT_SYSTEM]
+            );
+        }
+
         $sql = "SELECT ctx.id
                   FROM {" . self::TABLE_COURSE_AI . "} cai
                   JOIN {context} ctx ON ctx.instanceid = cai.courseid AND ctx.contextlevel = :contextlevel
@@ -150,6 +184,16 @@ class provider implements
                   FROM {" . self::TABLE_JOBS . "} j
                   JOIN {context} ctx ON ctx.instanceid = j.courseid AND ctx.contextlevel = :contextlevel
                  WHERE j.userid = :userid AND j.courseid > 0";
+
+        $contextlist->add_from_sql($sql, [
+            'contextlevel' => CONTEXT_COURSE,
+            'userid' => $userid,
+        ]);
+
+        $sql = "SELECT ctx.id
+                  FROM {" . self::TABLE_CREDIT_USAGE . "} cu
+                  JOIN {context} ctx ON ctx.instanceid = cu.courseid AND ctx.contextlevel = :contextlevel
+                 WHERE cu.userid = :userid AND cu.courseid > 0";
 
         $contextlist->add_from_sql($sql, [
             'contextlevel' => CONTEXT_COURSE,
@@ -176,6 +220,7 @@ class provider implements
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
                 self::export_user_jobs($context, $userid, 0);
+                self::export_user_credit_usage($context, $userid, 0);
                 continue;
             }
 
@@ -214,7 +259,43 @@ class provider implements
             }
 
             self::export_user_jobs($context, $userid, $courseid);
+            self::export_user_credit_usage($context, $userid, $courseid);
         }
+    }
+
+    /**
+     * Export credit usage rows for a user within a course or site scope.
+     *
+     * @param \context $context Export context.
+     * @param int $userid User id.
+     * @param int $courseid Course id, or 0 for site scope.
+     */
+    private static function export_user_credit_usage(\context $context, int $userid, int $courseid): void {
+        global $DB;
+
+        $records = $DB->get_records(self::TABLE_CREDIT_USAGE, [
+            'courseid' => $courseid,
+            'userid' => $userid,
+        ]);
+        if (!$records) {
+            return;
+        }
+
+        $exported = [];
+        foreach ($records as $record) {
+            $exported[] = (object) [
+                'transactionid' => (string) $record->transactionid,
+                'credits' => (int) $record->credits,
+                'component' => (string) ($record->component ?? ''),
+                'jobtype' => (string) ($record->jobtype ?? ''),
+                'timecreated' => transform::datetime((int) $record->timecreated),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:credit_usage', 'local_dixeo')],
+            (object) ['records' => $exported]
+        );
     }
 
     /**
@@ -262,6 +343,7 @@ class provider implements
 
         if ($context->contextlevel === CONTEXT_SYSTEM) {
             $DB->delete_records(self::TABLE_JOBS, ['courseid' => 0]);
+            $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => 0]);
             return;
         }
 
@@ -271,6 +353,7 @@ class provider implements
 
         $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => (int) $context->instanceid]);
         $DB->delete_records(self::TABLE_JOBS, ['courseid' => (int) $context->instanceid]);
+        $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => (int) $context->instanceid]);
     }
 
     /**
@@ -291,6 +374,10 @@ class provider implements
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
                 $DB->delete_records(self::TABLE_JOBS, [
+                    'userid' => $userid,
+                    'courseid' => 0,
+                ]);
+                $DB->delete_records(self::TABLE_CREDIT_USAGE, [
                     'userid' => $userid,
                     'courseid' => 0,
                 ]);
@@ -333,6 +420,14 @@ class provider implements
             self::TABLE_JOBS,
             "userid = :userid AND courseid {$insql3}",
             $params3
+        );
+
+        [$insql4, $params4] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+        $params4['userid'] = $userid;
+        $DB->delete_records_select(
+            self::TABLE_CREDIT_USAGE,
+            "userid = :userid AND courseid {$insql4}",
+            $params4
         );
     }
 
@@ -384,6 +479,14 @@ class provider implements
               WHERE j.courseid = :courseid AND j.userid > 0",
             $params
         );
+
+        $userlist->add_from_sql(
+            'userid',
+            "SELECT cu.userid AS userid
+               FROM {" . self::TABLE_CREDIT_USAGE . "} cu
+              WHERE cu.courseid = :courseid AND cu.userid > 0",
+            $params
+        );
     }
 
     /**
@@ -405,6 +508,11 @@ class provider implements
             [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
             $DB->delete_records_select(
                 self::TABLE_JOBS,
+                "courseid = 0 AND userid {$insql}",
+                $params
+            );
+            $DB->delete_records_select(
+                self::TABLE_CREDIT_USAGE,
                 "courseid = 0 AND userid {$insql}",
                 $params
             );
@@ -449,6 +557,14 @@ class provider implements
             self::TABLE_JOBS,
             "courseid = :courseid AND userid {$insql3}",
             $params3
+        );
+
+        [$insql4, $params4] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $params4['courseid'] = $courseid;
+        $DB->delete_records_select(
+            self::TABLE_CREDIT_USAGE,
+            "courseid = :courseid AND userid {$insql4}",
+            $params4
         );
     }
 }
