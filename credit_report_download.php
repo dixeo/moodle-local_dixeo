@@ -54,7 +54,7 @@ credit_report_exported::create_for_request($request, count($recordids), $datafor
     $dataformat,
     $columns,
     $recordids,
-    static function(int $recordid) use ($service): ?array {
+    static function (int $recordid) use ($service): ?array {
         global $DB;
 
         $record = $DB->get_record(credit_usage_repository::TABLE, ['id' => $recordid], '*', IGNORE_MISSING);

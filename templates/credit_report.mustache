@@ -33,6 +33,102 @@
     * paginationbar - string - Rendered Moodle paging bar HTML.
     * haspagination - bool - Whether pagination should be shown.
     * exportselector - string - Rendered Moodle dataformat export selector HTML.
+    * reseturl - string - URL to reset filters.
+    * haschartdata - bool - Whether chart data is available.
+    * hasrows - bool - Whether table rows are available.
+
+    Example context (json):
+    {
+        "configured": true,
+        "error": false,
+        "balance": {
+            "formatted": "1,500",
+            "state": "active",
+            "stateclass": "success",
+            "statedescription": "Active",
+            "isfrozen": false,
+            "issuspended": false
+        },
+        "period": {
+            "label": "14 Jul – 20 Jul 2026",
+            "view": "week",
+            "isweek": true,
+            "ismonth": false,
+            "iscustom": false,
+            "prevurl": "https://example.com/local/dixeo/credit_report.php?view=week&anchor=2026-07-07",
+            "nexturl": "https://example.com/local/dixeo/credit_report.php?view=week&anchor=2026-07-21",
+            "hasprev": true,
+            "hasnext": true
+        },
+        "views": [
+            {
+                "id": "week",
+                "label": "Week",
+                "url": "https://example.com/local/dixeo/credit_report.php?view=week",
+                "active": true
+            },
+            {
+                "id": "month",
+                "label": "Month",
+                "url": "https://example.com/local/dixeo/credit_report.php?view=month",
+                "active": false
+            },
+            {
+                "id": "custom",
+                "label": "Custom range",
+                "url": "https://example.com/local/dixeo/credit_report.php?view=custom",
+                "active": false
+            }
+        ],
+        "filters": {
+            "action": "https://example.com/local/dixeo/credit_report.php",
+            "view": "week",
+            "anchor": "",
+            "datefromformatted": "2026-07-14",
+            "datetoformatted": "2026-07-20",
+            "components": [
+                {"value": "block_dixeo_modulegen", "label": "Module Generator", "selected": false}
+            ],
+            "jobtypes": [
+                {"value": "module_generate", "label": "Generate module", "selected": false}
+            ],
+            "moduletypes": [
+                {"value": "page", "label": "page", "selected": false}
+            ],
+            "users": [
+                {"value": "2", "label": "Admin User", "selected": false}
+            ],
+            "courses": [
+                {"value": "3", "label": "Sample course", "selected": false}
+            ]
+        },
+        "kpis": {
+            "credits": "120",
+            "users": "5",
+            "courses": "2",
+            "rows": "12"
+        },
+        "histogramdata": "{\"labels\":[\"14 Jul\",\"15 Jul\"],\"values\":[40,80]}",
+        "breakdowndata": "{\"labels\":[\"Module Generator\"],\"values\":[120]}",
+        "haschartdata": true,
+        "rows": [
+            {
+                "creditsformatted": "10",
+                "componentlabel": "Module Generator",
+                "actionlabel": "Generate module",
+                "dateformatted": "14 Jul 2026, 10:00",
+                "userlabel": "Admin User",
+                "userurl": "https://example.com/user/profile.php?id=2",
+                "courselabel": "Sample course",
+                "courseurl": "https://example.com/course/view.php?id=3"
+            }
+        ],
+        "hasrows": true,
+        "paginationbar": "",
+        "haspagination": false,
+        "exportselector": "<div class=\"form-inline\"><label>Download as</label></div>",
+        "reseturl": "https://example.com/local/dixeo/credit_report.php"
+    }
 }}
 {{#error}}
     <div class="alert alert-danger" role="alert">{{error}}</div>
@@ -73,7 +169,7 @@
             {{^period.iscustom}}
                 <div class="d-flex flex-wrap justify-content-center align-items-center mb-3">
                     <a href="{{period.prevurl}}" class="btn btn-outline-secondary btn-sm me-4 {{^period.hasprev}}disabled{{/period.hasprev}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</a>
-                    <h5 class="mb-0 mx-2">{{period.label}}</h5>
+                    <p class="h5 mb-0 mx-2">{{period.label}}</p>
                     <a href="{{period.nexturl}}" class="btn btn-outline-secondary btn-sm ms-4 {{^period.hasnext}}disabled{{/period.hasnext}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</a>
                 </div>
             {{/period.iscustom}}

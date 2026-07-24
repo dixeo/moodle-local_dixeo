@@ -46,7 +46,7 @@ const palette = [
 /**
  * Enhance filter dropdowns with Moodle autocomplete widgets.
  */
-const initFilters = async () => {
+const initFilters = async() => {
     const selects = FILTER_SELECTORS
         .map((selector) => document.querySelector(selector))
         .filter((node) => node !== null);
