@@ -69,9 +69,10 @@ $capabilities = [
         ],
     ],
 
-    // Capability to view credit usage reports.
+    // Site-wide credit usage overview, detailed report, and export (includes user/course PII).
+    // Grant explicitly to trusted roles only; managers receive it by default.
     'local/dixeo:viewusage' => [
-        'riskbitmask' => 0,
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [

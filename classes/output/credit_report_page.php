@@ -22,6 +22,7 @@ use renderer_base;
 use core\output\paging_bar;
 use core\plugin_manager;
 use local_dixeo\dto\credit_transaction;
+use local_dixeo\event\credit_report_viewed;
 use local_dixeo\local\credit_report_request;
 use local_dixeo\service\credit_service;
 use local_dixeo\service\credit_usage_report_service;
@@ -134,10 +135,10 @@ class credit_report_page implements renderable, templatable {
             ));
         }
 
-        $exportselector = $this->build_export_selector(
-            $output,
-            credit_report_request::from_renderable_params($this->params)
-        );
+        $request = credit_report_request::from_renderable_params($this->params);
+        $exportselector = $this->build_export_selector($output, $request);
+
+        credit_report_viewed::create_for_request($request, (int) $rowsresult['total'])->trigger();
 
         return [
             'configured' => true,

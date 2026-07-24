@@ -28,6 +28,7 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 
+use local_dixeo\event\credit_report_exported;
 use local_dixeo\local\credit_report_request;
 use local_dixeo\repository\credit_usage_repository;
 use local_dixeo\service\credit_usage_report_service;
@@ -45,6 +46,8 @@ $service = new credit_usage_report_service();
 $filters = $request->to_filters($service);
 $columns = $service->get_export_columns();
 $recordids = $service->get_export_record_ids($filters);
+
+credit_report_exported::create_for_request($request, count($recordids), $dataformat)->trigger();
 
 \core\dataformat::download_data(
     clean_filename(get_string('credit_report', 'local_dixeo')),

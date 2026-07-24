@@ -21,7 +21,8 @@
  * Sync activation itself is a manual action by an admin or teacher.
  *
  * This plugin also emits custom events (not observed here) for audit logging:
- * file_sync_enabled, file_sync_disabled, file_sync_triggered, and job_cancelled.
+ * file_sync_enabled, file_sync_disabled, file_sync_triggered, job_cancelled,
+ * credit_report_viewed, and credit_report_exported.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)

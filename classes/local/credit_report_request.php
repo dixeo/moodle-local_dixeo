@@ -238,4 +238,30 @@ final class credit_report_request {
 
         return $hidden;
     }
+
+    /**
+     * Build audit event metadata without personal data.
+     *
+     * @param int $rowcount Total or exported row count.
+     * @param string|null $dataformat Export format when applicable.
+     * @return array
+     */
+    public function to_event_other(int $rowcount = 0, ?string $dataformat = null): array {
+        $other = [
+            'view' => $this->view,
+            'rowcount' => $rowcount,
+            'page' => $this->page,
+            'filtercomponents' => count($this->components),
+            'filterjobtypes' => count($this->jobtypes),
+            'filtermoduletypes' => count($this->moduletypes),
+            'filterusers' => count($this->userids),
+            'filtercourses' => count($this->courseids),
+        ];
+
+        if ($dataformat !== null && $dataformat !== '') {
+            $other['dataformat'] = $dataformat;
+        }
+
+        return $other;
+    }
 }
