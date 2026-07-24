@@ -95,10 +95,14 @@ class credit_report_page implements renderable, templatable {
             'components' => $this->params['components'] ?? [],
             'jobtypes' => $this->params['jobtypes'] ?? [],
             'moduletypes' => $this->params['moduletypes'] ?? [],
-            'userid' => (int) ($this->params['userid'] ?? 0),
-            'courseid' => (int) ($this->params['courseid'] ?? 0),
-            'creditsmin' => $this->params['creditsmin'] ?? '',
-            'creditsmax' => $this->params['creditsmax'] ?? '',
+            'userids' => $this->params['userids'] ?? [],
+            'courseids' => $this->params['courseids'] ?? [],
+        ];
+
+        $periodfilters = [
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $period['timestart'],
+            'timeend' => $period['timeend'],
         ];
 
         $page = max(0, (int) ($this->params['page'] ?? 0));
@@ -107,7 +111,7 @@ class credit_report_page implements renderable, templatable {
         $kpis = $reportservice->get_kpis($filters);
         $histogram = $reportservice->get_histogram($filters);
         $breakdown = $reportservice->get_breakdown($filters);
-        $filteroptions = $reportservice->get_filter_options();
+        $filteroptions = $reportservice->get_filter_options($periodfilters);
         $balance = $creditservice->get_balance();
 
         $baseparams = $this->base_url_params($view, $period);
@@ -131,10 +135,10 @@ class credit_report_page implements renderable, templatable {
                 'ismonth' => $view === credit_usage_report_service::VIEW_MONTH,
                 'iscustom' => $view === credit_usage_report_service::VIEW_CUSTOM,
                 'prevurl' => $period['prevanchor']
-                    ? $this->report_url($baseparams + ['anchor' => $period['prevanchor']])
+                    ? $this->report_url(array_merge($baseparams, ['anchor' => $period['prevanchor']]))
                     : null,
                 'nexturl' => $period['nextanchor']
-                    ? $this->report_url($baseparams + ['anchor' => $period['nextanchor']])
+                    ? $this->report_url(array_merge($baseparams, ['anchor' => $period['nextanchor']]))
                     : null,
                 'hasprev' => !empty($period['prevanchor']),
                 'hasnext' => !empty($period['nextanchor']),
@@ -161,10 +165,6 @@ class credit_report_page implements renderable, templatable {
             ],
             'filters' => [
                 'action' => $this->report_url([]),
-                'userid' => (int) ($this->params['userid'] ?? 0),
-                'courseid' => (int) ($this->params['courseid'] ?? 0),
-                'creditsmin' => (string) ($this->params['creditsmin'] ?? ''),
-                'creditsmax' => (string) ($this->params['creditsmax'] ?? ''),
                 'datefrom' => !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart'],
                 'dateto' => !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend'],
                 'datefromformatted' => userdate(
@@ -191,6 +191,14 @@ class credit_report_page implements renderable, templatable {
                     $filteroptions['moduletypes'],
                     $this->params['moduletypes'] ?? [],
                     null
+                ),
+                'users' => $this->build_named_filter_options(
+                    $filteroptions['users'],
+                    $this->params['userids'] ?? []
+                ),
+                'courses' => $this->build_named_filter_options(
+                    $filteroptions['courses'],
+                    $this->params['courseids'] ?? []
                 ),
             ],
             'kpis' => [
@@ -253,9 +261,9 @@ class credit_report_page implements renderable, templatable {
             $params['anchor'] = $this->params['anchor'];
         }
 
-        foreach (['userid', 'courseid', 'creditsmin', 'creditsmax'] as $key) {
-            if (!empty($this->params[$key])) {
-                $params[$key] = $this->params[$key];
+        foreach (['userids' => 'userid', 'courseids' => 'courseid'] as $source => $param) {
+            foreach ($this->params[$source] ?? [] as $value) {
+                $params[$param][] = $value;
             }
         }
 
@@ -294,6 +302,29 @@ class credit_report_page implements renderable, templatable {
                 'value' => $value,
                 'label' => $label,
                 'selected' => in_array($value, $selected, true),
+            ];
+        }
+        return $options;
+    }
+
+    /**
+     * Build select options from pre-labelled value rows.
+     *
+     * @param array $items Rows with value and label keys.
+     * @param array $selected Selected values.
+     * @return array
+     */
+    protected function build_named_filter_options(array $items, array $selected): array {
+        $options = [];
+        foreach ($items as $item) {
+            $value = (string) ($item['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $options[] = [
+                'value' => $value,
+                'label' => (string) ($item['label'] ?? $value),
+                'selected' => in_array((int) $value, array_map('intval', $selected), true),
             ];
         }
         return $options;

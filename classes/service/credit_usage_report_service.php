@@ -73,7 +73,7 @@ class credit_usage_report_service {
 
         if (!empty($filters['jobtypes']) && is_array($filters['jobtypes'])) {
             [$insql, $inparams] = $DB->get_in_or_equal($filters['jobtypes'], SQL_PARAMS_NAMED, 'jt');
-            $conditions[] = "cu.jobtype {$insql}";
+            $conditions[] = "COALESCE(NULLIF(cu.jobtype, ''), NULLIF(cu.operation, '')) {$insql}";
             $params = array_merge($params, $inparams);
         }
 
@@ -83,24 +83,22 @@ class credit_usage_report_service {
             $params = array_merge($params, $inparams);
         }
 
-        if (!empty($filters['userid'])) {
+        if (!empty($filters['userids']) && is_array($filters['userids'])) {
+            [$insql, $inparams] = $DB->get_in_or_equal($filters['userids'], SQL_PARAMS_NAMED, 'uid');
+            $conditions[] = "cu.userid {$insql}";
+            $params = array_merge($params, $inparams);
+        } else if (!empty($filters['userid'])) {
             $conditions[] = 'cu.userid = :userid';
             $params['userid'] = (int) $filters['userid'];
         }
 
-        if (!empty($filters['courseid'])) {
+        if (!empty($filters['courseids']) && is_array($filters['courseids'])) {
+            [$insql, $inparams] = $DB->get_in_or_equal($filters['courseids'], SQL_PARAMS_NAMED, 'cid');
+            $conditions[] = "cu.courseid {$insql}";
+            $params = array_merge($params, $inparams);
+        } else if (!empty($filters['courseid'])) {
             $conditions[] = 'cu.courseid = :courseid';
             $params['courseid'] = (int) $filters['courseid'];
-        }
-
-        if (isset($filters['creditsmin']) && $filters['creditsmin'] !== '' && $filters['creditsmin'] !== null) {
-            $conditions[] = 'cu.credits >= :creditsmin';
-            $params['creditsmin'] = (int) $filters['creditsmin'];
-        }
-
-        if (isset($filters['creditsmax']) && $filters['creditsmax'] !== '' && $filters['creditsmax'] !== null) {
-            $conditions[] = 'cu.credits <= :creditsmax';
-            $params['creditsmax'] = (int) $filters['creditsmax'];
         }
 
         return [
@@ -133,10 +131,16 @@ class credit_usage_report_service {
             $next = (clone $anchordate)->modify('+1 month')->format('Y-m-d');
             $label = userdate($start->getTimestamp(), get_string('strftimemonthyear', 'langconfig'));
         } else if ($view === self::VIEW_CUSTOM) {
-            $start = (new \DateTime())->setTimestamp($datefrom ?: strtotime('today'));
-            $start->setTime(0, 0, 0);
-            $end = (new \DateTime())->setTimestamp($dateto ?: strtotime('today'));
-            $end->setTime(23, 59, 59);
+            if (empty($datefrom) && empty($dateto)) {
+                $dayofweek = (int) $anchordate->format('N');
+                $start = (clone $anchordate)->modify('-' . ($dayofweek - 1) . ' days')->setTime(0, 0, 0);
+                $end = (clone $start)->modify('+6 days')->setTime(23, 59, 59);
+            } else {
+                $start = (new \DateTime())->setTimestamp($datefrom ?: strtotime('today'));
+                $start->setTime(0, 0, 0);
+                $end = (new \DateTime())->setTimestamp($dateto ?: $start->getTimestamp());
+                $end->setTime(23, 59, 59);
+            }
             $prev = null;
             $next = null;
             $label = userdate($start->getTimestamp(), '%d %b %Y') . ' - ' . userdate($end->getTimestamp(), '%d %b %Y');
@@ -254,36 +258,98 @@ class credit_usage_report_service {
     }
 
     /**
-     * Get distinct filter option values.
+     * Get distinct filter option values scoped to the active period.
      *
-     * @return array{components: array, jobtypes: array, moduletypes: array}
+     * @param array $filters Period-scoped filters (type, timestart, timeend).
+     * @return array{components: array, jobtypes: array, moduletypes: array, users: array, courses: array}
      */
-    public function get_filter_options(): array {
+    public function get_filter_options(array $filters): array {
         global $DB;
 
-        $components = $DB->get_fieldset_select(
-            credit_usage_repository::TABLE,
-            'DISTINCT component',
-            "component IS NOT NULL AND component <> ''",
-            []
+        $built = $this->build_conditions($filters);
+
+        $components = $DB->get_fieldset_sql(
+            "SELECT DISTINCT cu.component
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+                AND cu.component IS NOT NULL
+                AND cu.component <> ''
+           ORDER BY cu.component ASC",
+            $built['params']
         );
-        $jobtypes = $DB->get_fieldset_select(
-            credit_usage_repository::TABLE,
-            'DISTINCT jobtype',
-            "jobtype IS NOT NULL AND jobtype <> ''",
-            []
+
+        $jobtypes = $DB->get_fieldset_sql(
+            "SELECT DISTINCT COALESCE(NULLIF(cu.jobtype, ''), NULLIF(cu.operation, '')) AS actioncode
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+                AND COALESCE(NULLIF(cu.jobtype, ''), NULLIF(cu.operation, '')) IS NOT NULL
+                AND COALESCE(NULLIF(cu.jobtype, ''), NULLIF(cu.operation, '')) <> ''
+           ORDER BY actioncode ASC",
+            $built['params']
         );
-        $moduletypes = $DB->get_fieldset_select(
-            credit_usage_repository::TABLE,
-            'DISTINCT moduletype',
-            "moduletype IS NOT NULL AND moduletype <> ''",
-            []
+
+        $moduletypes = $DB->get_fieldset_sql(
+            "SELECT DISTINCT cu.moduletype
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+                AND cu.moduletype IS NOT NULL
+                AND cu.moduletype <> ''
+           ORDER BY cu.moduletype ASC",
+            $built['params']
         );
+
+        $userrecords = $DB->get_records_sql(
+            "SELECT DISTINCT cu.userid
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+                AND cu.userid > 0
+           ORDER BY cu.userid ASC",
+            $built['params']
+        );
+
+        $users = [];
+        foreach ($userrecords as $record) {
+            $user = \core_user::get_user((int) $record->userid, '*', IGNORE_MISSING);
+            if (!$user) {
+                continue;
+            }
+            $users[] = [
+                'value' => (int) $user->id,
+                'label' => fullname($user),
+            ];
+        }
+
+        usort($users, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
+
+        $courserecords = $DB->get_records_sql(
+            "SELECT DISTINCT cu.courseid
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+                AND cu.courseid > 0
+           ORDER BY cu.courseid ASC",
+            $built['params']
+        );
+
+        $courses = [];
+        foreach ($courserecords as $record) {
+            $course = $DB->get_record('course', ['id' => (int) $record->courseid], '*', IGNORE_MISSING);
+            if (!$course) {
+                continue;
+            }
+            $courses[] = [
+                'value' => (int) $course->id,
+                'label' => format_string($course->fullname),
+            ];
+        }
+
+        usort($courses, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
 
         return [
             'components' => array_values(array_filter($components)),
             'jobtypes' => array_values(array_filter($jobtypes)),
             'moduletypes' => array_values(array_filter($moduletypes)),
+            'users' => $users,
+            'courses' => $courses,
         ];
     }
 
@@ -329,6 +395,8 @@ class credit_usage_report_service {
      * @return array
      */
     private function format_row(\stdClass $record): array {
+        global $DB;
+
         $userlabel = get_string('credit_user_unknown', 'local_dixeo');
         $userurl = null;
         if (!empty($record->userid)) {
@@ -342,8 +410,8 @@ class credit_usage_report_service {
         $courselabel = get_string('credit_context_site', 'local_dixeo');
         $courseurl = null;
         if (!empty($record->courseid)) {
-            $course = get_course((int) $record->courseid, IGNORE_MISSING);
-            if ($course && !empty($course->id)) {
+            $course = $DB->get_record('course', ['id' => (int) $record->courseid], '*', IGNORE_MISSING);
+            if ($course) {
                 $courselabel = format_string($course->fullname);
                 $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);
             }

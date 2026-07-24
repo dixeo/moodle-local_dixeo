@@ -400,3 +400,44 @@ h2:has(.dixeo-sync-indicator),
         display: none !important;
     }
 }
+
+/* ==========================================================================
+   Credit report
+   ========================================================================== */
+
+.local-dixeo-credit-report .dixeo-credit-report-filter-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    margin-top: 1.5rem;
+    font-weight: 700;
+}
+
+.local-dixeo-credit-report .dixeo-credit-report-filter-select {
+    width: 100%;
+    min-height: 7.5rem;
+}
+
+.local-dixeo-credit-report .form-autocomplete {
+    width: 100%;
+}
+
+/* Hide the chips area until at least one value is selected. */
+.local-dixeo-credit-report .form-autocomplete-selection.form-autocomplete-multiple:not(:has([role=option])) {
+    display: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.local-dixeo-credit-report .form-autocomplete-selection.form-autocomplete-multiple.focus,
+.local-dixeo-credit-report .form-autocomplete-selection.form-autocomplete-multiple:focus,
+.local-dixeo-credit-report .form-autocomplete-selection.form-autocomplete-multiple:focus:hover {
+    box-shadow: none;
+}
+
+#page-local-dixeo-credit_report .badge.bg-success,
+#page-local-dixeo-credit_report .badge.bg-warning,
+#page-local-dixeo-credit_report .badge.bg-danger {
+    color: #fff;
+}

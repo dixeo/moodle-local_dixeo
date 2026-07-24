@@ -58,7 +58,7 @@
         </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card mb-4 local-dixeo-credit-report">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h4 class="mb-0">{{#str}}credit_report_filters, local_dixeo{{/str}}</h4>
             <div class="btn-group" role="group" aria-label="{{#str}}credit_report_period, local_dixeo{{/str}}">
@@ -68,73 +68,75 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-                <div class="h5 mb-0">{{period.label}}</div>
-                {{^period.iscustom}}
-                    <div class="btn-group">
-                        <a href="{{period.prevurl}}" class="btn btn-outline-secondary btn-sm {{^period.hasprev}}disabled{{/period.hasprev}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</a>
-                        <a href="{{period.nexturl}}" class="btn btn-outline-secondary btn-sm {{^period.hasnext}}disabled{{/period.hasnext}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</a>
-                    </div>
-                {{/period.iscustom}}
-            </div>
+            {{^period.iscustom}}
+                <div class="d-flex flex-wrap justify-content-center align-items-center mb-3">
+                    <a href="{{period.prevurl}}" class="btn btn-outline-secondary btn-sm me-4 {{^period.hasprev}}disabled{{/period.hasprev}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</a>
+                    <h5 class="mb-0 mx-2">{{period.label}}</h5>
+                    <a href="{{period.nexturl}}" class="btn btn-outline-secondary btn-sm ms-4 {{^period.hasnext}}disabled{{/period.hasnext}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</a>
+                </div>
+            {{/period.iscustom}}
 
             <form method="get" action="{{filters.action}}" class="row g-3">
                 <input type="hidden" name="view" value="{{filters.view}}">
                 {{#filters.anchor}}<input type="hidden" name="anchor" value="{{filters.anchor}}">{{/filters.anchor}}
 
                 {{#period.iscustom}}
-                    <div class="col-md-3">
-                        <label class="form-label" for="datefrom">{{#str}}from{{/str}}</label>
-                        <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label" for="dateto">{{#str}}to{{/str}}</label>
-                        <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
+                    <div class="col-12 mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <h5 class="dixeo-credit-report-filter-label" for="datefrom">{{#str}}from{{/str}}</h5>
+                                <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
+                            </div>
+                            <div class="col-md-3">
+                                <h5 class="dixeo-credit-report-filter-label" for="dateto">{{#str}}to{{/str}}</h5>
+                                <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
+                            </div>
+                        </div>
                     </div>
                 {{/period.iscustom}}
 
                 <div class="col-md-3">
-                    <label class="form-label" for="component">{{#str}}credit_report_filter_component, local_dixeo{{/str}}</label>
-                    <select class="form-select" id="component" name="component[]" multiple size="4">
+                    <label class="dixeo-credit-report-filter-label" for="component">{{#str}}credit_report_filter_component, local_dixeo{{/str}}</label>
+                    <select class="form-control dixeo-credit-report-filter-select" id="component" name="component[]" multiple size="5">
                         {{#filters.components}}
                             <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                         {{/filters.components}}
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label" for="jobtype">{{#str}}credit_report_filter_action, local_dixeo{{/str}}</label>
-                    <select class="form-select" id="jobtype" name="jobtype[]" multiple size="4">
+                    <label class="dixeo-credit-report-filter-label" for="jobtype">{{#str}}credit_report_filter_action, local_dixeo{{/str}}</label>
+                    <select class="form-control dixeo-credit-report-filter-select" id="jobtype" name="jobtype[]" multiple size="5">
                         {{#filters.jobtypes}}
                             <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                         {{/filters.jobtypes}}
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label" for="moduletype">{{#str}}credit_report_filter_moduletype, local_dixeo{{/str}}</label>
-                    <select class="form-select" id="moduletype" name="moduletype[]" multiple size="4">
+                    <label class="dixeo-credit-report-filter-label" for="moduletype">{{#str}}credit_report_filter_moduletype, local_dixeo{{/str}}</label>
+                    <select class="form-control dixeo-credit-report-filter-select" id="moduletype" name="moduletype[]" multiple size="5">
                         {{#filters.moduletypes}}
                             <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                         {{/filters.moduletypes}}
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="userid">{{#str}}credit_report_filter_user, local_dixeo{{/str}}</label>
-                    <input type="number" class="form-control" id="userid" name="userid" value="{{#filters.userid}}{{filters.userid}}{{/filters.userid}}">
+                <div class="col-md-3">
+                    <label class="dixeo-credit-report-filter-label" for="userid">{{#str}}credit_report_filter_user, local_dixeo{{/str}}</label>
+                    <select class="form-control dixeo-credit-report-filter-select" id="userid" name="userid[]" multiple size="5">
+                        {{#filters.users}}
+                            <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                        {{/filters.users}}
+                    </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="courseid">{{#str}}credit_report_filter_course, local_dixeo{{/str}}</label>
-                    <input type="number" class="form-control" id="courseid" name="courseid" value="{{#filters.courseid}}{{filters.courseid}}{{/filters.courseid}}">
+                <div class="col-md-3">
+                    <label class="dixeo-credit-report-filter-label" for="courseid">{{#str}}credit_report_filter_course, local_dixeo{{/str}}</label>
+                    <select class="form-control dixeo-credit-report-filter-select" id="courseid" name="courseid[]" multiple size="5">
+                        {{#filters.courses}}
+                            <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                        {{/filters.courses}}
+                    </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="creditsmin">{{#str}}credit_report_filter_credits_min, local_dixeo{{/str}}</label>
-                    <input type="number" class="form-control" id="creditsmin" name="creditsmin" value="{{filters.creditsmin}}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="creditsmax">{{#str}}credit_report_filter_credits_max, local_dixeo{{/str}}</label>
-                    <input type="number" class="form-control" id="creditsmax" name="creditsmax" value="{{filters.creditsmax}}">
-                </div>
-                <div class="col-12 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">{{#str}}credit_report_apply_filters, local_dixeo{{/str}}</button>
+                <div class="col-12 d-flex justify-content-end align-items-center mt-2 pt-2">
+                    <button type="submit" class="btn btn-primary me-2">{{#str}}credit_report_apply_filters, local_dixeo{{/str}}</button>
                     <a href="{{reseturl}}" class="btn btn-secondary">{{#str}}credit_report_reset_filters, local_dixeo{{/str}}</a>
                 </div>
             </form>

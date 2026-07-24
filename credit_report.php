@@ -44,10 +44,8 @@ $datefrom = $datefromraw !== '' ? strtotime($datefromraw . ' 00:00:00') : 0;
 $dateto = $datetoraw !== '' ? strtotime($datetoraw . ' 23:59:59') : 0;
 $page = optional_param('page', 0, PARAM_INT);
 $perpage = optional_param('perpage', 50, PARAM_INT);
-$userid = optional_param('userid', 0, PARAM_INT);
-$courseid = optional_param('courseid', 0, PARAM_INT);
-$creditsmin = optional_param('creditsmin', '', PARAM_RAW_TRIMMED);
-$creditsmax = optional_param('creditsmax', '', PARAM_RAW_TRIMMED);
+$userids = optional_param_array('userid', [], PARAM_INT);
+$courseids = optional_param_array('courseid', [], PARAM_INT);
 $components = optional_param_array('component', [], PARAM_ALPHANUMEXT);
 $jobtypes = optional_param_array('jobtype', [], PARAM_ALPHANUMEXT);
 $moduletypes = optional_param_array('moduletype', [], PARAM_ALPHANUMEXT);
@@ -59,12 +57,18 @@ $params = array_filter([
     'dateto' => $dateto ?: null,
     'page' => $page ?: null,
     'perpage' => $perpage !== 50 ? $perpage : null,
-    'userid' => $userid ?: null,
-    'courseid' => $courseid ?: null,
-    'creditsmin' => $creditsmin !== '' ? $creditsmin : null,
-    'creditsmax' => $creditsmax !== '' ? $creditsmax : null,
 ], static fn($value) => $value !== null && $value !== '');
 
+foreach ($userids as $userid) {
+    if ($userid > 0) {
+        $params['userid'][] = $userid;
+    }
+}
+foreach ($courseids as $courseid) {
+    if ($courseid > 0) {
+        $params['courseid'][] = $courseid;
+    }
+}
 foreach ($components as $component) {
     $params['component'][] = $component;
 }
@@ -80,6 +84,7 @@ $PAGE->set_url(new moodle_url('/local/dixeo/credit_report.php', $params));
 $PAGE->set_title(get_string('credit_report', 'local_dixeo'));
 $PAGE->set_heading(get_string('credit_report', 'local_dixeo'));
 $PAGE->set_pagelayout('admin');
+$PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
 $PAGE->requires->js_call_amd('local_dixeo/credit_report', 'init');
 
 $PAGE->navbar->add(get_string('pluginname', 'local_dixeo'), new moodle_url('/admin/settings.php', ['section' => 'local_dixeo']));
@@ -92,10 +97,8 @@ $report = new credit_report_page([
     'dateto' => $dateto,
     'page' => $page,
     'perpage' => $perpage,
-    'userid' => $userid,
-    'courseid' => $courseid,
-    'creditsmin' => $creditsmin,
-    'creditsmax' => $creditsmax,
+    'userids' => array_values(array_filter($userids)),
+    'courseids' => array_values(array_filter($courseids)),
     'components' => $components,
     'jobtypes' => $jobtypes,
     'moduletypes' => $moduletypes,

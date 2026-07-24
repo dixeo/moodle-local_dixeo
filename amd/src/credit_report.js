@@ -22,6 +22,17 @@
  */
 
 import Chart from 'core/chartjs';
+import AutoComplete from 'core/form-autocomplete';
+import Notification from 'core/notification';
+import {getStrings} from 'core/str';
+
+const FILTER_SELECTORS = [
+    '#component',
+    '#jobtype',
+    '#moduletype',
+    '#userid',
+    '#courseid',
+];
 
 const palette = [
     'rgba(37, 99, 235, 0.8)',
@@ -33,9 +44,41 @@ const palette = [
 ];
 
 /**
+ * Enhance filter dropdowns with Moodle autocomplete widgets.
+ */
+const initFilters = async () => {
+    const selects = FILTER_SELECTORS
+        .map((selector) => document.querySelector(selector))
+        .filter((node) => node !== null);
+
+    if (selects.length === 0) {
+        return;
+    }
+
+    const [placeholder] = await getStrings([
+        {key: 'credit_report_filter_placeholder', component: 'local_dixeo'},
+    ]).catch(() => getStrings([
+        {key: 'filter', component: 'moodle'},
+    ]));
+
+    await Promise.all(selects.map((select) => AutoComplete.enhance(
+        '#' + select.id,
+        false,
+        '',
+        placeholder,
+        false,
+        true,
+        '',
+        true,
+    ))).catch(Notification.exception);
+};
+
+/**
  * Initialize credit report charts.
  */
 export const init = () => {
+    initFilters();
+
     const histogramNode = document.getElementById('credit-report-histogram-data');
     const breakdownNode = document.getElementById('credit-report-breakdown-data');
     if (!histogramNode && !breakdownNode) {
