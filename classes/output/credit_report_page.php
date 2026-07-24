@@ -19,6 +19,7 @@ namespace local_dixeo\output;
 use renderable;
 use templatable;
 use renderer_base;
+use core\output\paging_bar;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\service\credit_service;
 use local_dixeo\service\credit_usage_report_service;
@@ -63,7 +64,7 @@ class credit_report_page implements renderable, templatable {
 
         try {
             (new credit_usage_sync_service($creditservice))->sync_recent();
-            return $this->build_template_data($creditservice);
+            return $this->build_template_data($creditservice, $output);
         } catch (\Exception $e) {
             return [
                 'configured' => true,
@@ -76,9 +77,10 @@ class credit_report_page implements renderable, templatable {
      * Build template data.
      *
      * @param credit_service $creditservice Credit service.
+     * @param renderer_base $output The renderer.
      * @return array
      */
-    protected function build_template_data(credit_service $creditservice): array {
+    protected function build_template_data(credit_service $creditservice, renderer_base $output): array {
         $reportservice = new credit_usage_report_service();
         $view = $this->params['view'] ?? credit_usage_report_service::VIEW_WEEK;
         $period = $reportservice->resolve_period(
@@ -116,6 +118,19 @@ class credit_report_page implements renderable, templatable {
 
         $baseparams = $this->base_url_params($view, $period);
         $totalpages = $perpage > 0 ? (int) ceil($rowsresult['total'] / $perpage) : 1;
+        $haspagination = $totalpages > 1;
+
+        $paginationbar = '';
+        if ($haspagination) {
+            $baseurl = new \moodle_url($this->report_url($baseparams));
+            $baseurl->remove_params('page');
+            $paginationbar = $output->render(new paging_bar(
+                $rowsresult['total'],
+                $page,
+                $perpage,
+                $baseurl
+            ));
+        }
 
         return [
             'configured' => true,
@@ -210,21 +225,8 @@ class credit_report_page implements renderable, templatable {
             'haschartdata' => !empty($histogram['values']) || !empty($breakdown['values']),
             'rows' => $rowsresult['rows'],
             'hasrows' => !empty($rowsresult['rows']),
-            'pagination' => [
-                'total' => $rowsresult['total'],
-                'page' => $page,
-                'perpage' => $perpage,
-                'totalpages' => max(1, $totalpages),
-                'hasprev' => $page > 0,
-                'hasnext' => ($page + 1) < $totalpages,
-                'prevurl' => $page > 0
-                    ? $this->report_url($baseparams + ['page' => $page - 1])
-                    : null,
-                'nexturl' => ($page + 1) < $totalpages
-                    ? $this->report_url($baseparams + ['page' => $page + 1])
-                    : null,
-            ],
-            'haspagination' => $totalpages > 1,
+            'paginationbar' => $paginationbar,
+            'haspagination' => $haspagination,
             'reseturl' => $this->report_url([]),
         ];
     }

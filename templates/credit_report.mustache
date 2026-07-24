@@ -30,7 +30,8 @@
     * histogramdata - string - JSON histogram chart data.
     * breakdowndata - string - JSON donut chart data.
     * rows - array - Paginated usage rows.
-    * pagination - object - Pagination metadata.
+    * paginationbar - string - Rendered Moodle paging bar HTML.
+    * haspagination - bool - Whether pagination should be shown.
 }}
 {{#error}}
     <div class="alert alert-danger" role="alert">{{error}}</div>
@@ -204,19 +205,9 @@
                     </table>
                 </div>
                 {{#haspagination}}
-                    <nav aria-label="{{#str}}pagination, local_dixeo{{/str}}">
-                        <ul class="pagination justify-content-center mb-0">
-                            <li class="page-item {{^pagination.hasprev}}disabled{{/pagination.hasprev}}">
-                                <a class="page-link" href="{{pagination.prevurl}}">{{#str}}previous{{/str}}</a>
-                            </li>
-                            <li class="page-item disabled">
-                                <span class="page-link">{{pagination.page}} / {{pagination.totalpages}}</span>
-                            </li>
-                            <li class="page-item {{^pagination.hasnext}}disabled{{/pagination.hasnext}}">
-                                <a class="page-link" href="{{pagination.nexturl}}">{{#str}}next{{/str}}</a>
-                            </li>
-                        </ul>
-                    </nav>
+                    <div class="mt-3">
+                        {{{paginationbar}}}
+                    </div>
                 {{/haspagination}}
             {{/hasrows}}
             {{^hasrows}}
