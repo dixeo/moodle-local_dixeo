@@ -181,4 +181,24 @@ class credit_usage_sync_service {
             debugging('Credit usage job sync failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
     }
+
+    /**
+     * Re-apply job binding metadata to already-synced usage rows.
+     *
+     * @param string $jobid Remote job UUID.
+     * @return int Number of usage rows updated.
+     */
+    public function resync_for_job(string $jobid): int {
+        $jobid = trim($jobid);
+        if ($jobid === '') {
+            return 0;
+        }
+
+        $job = $this->jobrepository->get_by_jobid($jobid);
+        if ($job === null) {
+            return 0;
+        }
+
+        return $this->usagerepository->enrich_from_job($jobid, $job);
+    }
 }

@@ -288,5 +288,69 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072801, 'local', 'dixeo');
     }
 
+    // Job binding metadata and credit usage module context for reporting.
+    if ($oldversion < 2026072803) {
+        $jobstable = new xmldb_table('local_dixeo_jobs');
+
+        $moduletypefield = new xmldb_field(
+            'moduletype',
+            XMLDB_TYPE_CHAR,
+            '50',
+            null,
+            null,
+            null,
+            null,
+            'component'
+        );
+        if (!$dbman->field_exists($jobstable, $moduletypefield)) {
+            $dbman->add_field($jobstable, $moduletypefield);
+        }
+
+        $contextidfield = new xmldb_field(
+            'contextid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'moduletype'
+        );
+        if (!$dbman->field_exists($jobstable, $contextidfield)) {
+            $dbman->add_field($jobstable, $contextidfield);
+        }
+
+        $cmidfield = new xmldb_field(
+            'cmid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'contextid'
+        );
+        if (!$dbman->field_exists($jobstable, $cmidfield)) {
+            $dbman->add_field($jobstable, $cmidfield);
+        }
+
+        $usagetable = new xmldb_table('local_dixeo_credit_usage');
+        $usagecmidfield = new xmldb_field(
+            'cmid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'contextid'
+        );
+        if (!$dbman->field_exists($usagetable, $usagecmidfield)) {
+            $dbman->add_field($usagetable, $usagecmidfield);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072803, 'local', 'dixeo');
+    }
+
     return true;
 }

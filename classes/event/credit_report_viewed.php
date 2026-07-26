@@ -24,7 +24,7 @@
 
 namespace local_dixeo\event;
 
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 
 /**
  * Fired after a successful credit usage report page render.

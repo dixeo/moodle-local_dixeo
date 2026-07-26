@@ -24,7 +24,7 @@
 
 namespace local_dixeo\event;
 
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 
 /**
  * Fired before a credit usage report export download starts.

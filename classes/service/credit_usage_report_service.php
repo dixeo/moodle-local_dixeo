@@ -19,6 +19,7 @@ namespace local_dixeo\service;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\repository\credit_usage_repository;
 use local_dixeo\util\credit_component_mapper;
+use local_dixeo\util\credit_moduletype_mapper;
 
 /**
  * Builds credit usage report data from the local usage table.
@@ -500,6 +501,7 @@ class credit_usage_report_service {
             'credits' => get_string('credit_report_column_credits', 'local_dixeo'),
             'component' => get_string('credit_report_column_module', 'local_dixeo'),
             'action' => get_string('credit_report_column_action', 'local_dixeo'),
+            'moduletype' => get_string('credit_report_filter_moduletype', 'local_dixeo'),
             'date' => get_string('credit_report_column_date', 'local_dixeo'),
             'user' => get_string('credit_report_column_user', 'local_dixeo'),
             'course' => get_string('credit_report_column_course', 'local_dixeo'),
@@ -537,9 +539,10 @@ class credit_usage_report_service {
             'credits' => $row['creditsformatted'],
             'component' => $row['componentlabel'],
             'action' => $row['actionlabel'],
+            'moduletype' => $row['moduletypelabel'],
             'date' => $row['dateformatted'],
             'user' => $row['userlabel'],
-            'course' => $row['courselabel'],
+            'course' => $row['coursecontextlabel'],
         ];
     }
 
@@ -564,13 +567,42 @@ class credit_usage_report_service {
 
         $courselabel = get_string('credit_context_site', 'local_dixeo');
         $courseurl = null;
-        if (!empty($record->courseid)) {
+        $activitylabel = null;
+        $activityurl = null;
+        $hasactivitycontext = false;
+        $coursecontextlabel = $courselabel;
+
+        $cmid = (int) ($record->cmid ?? 0);
+        if ($cmid < 1 && !empty($record->contextid)) {
+            $context = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+            if ($context && $context->contextlevel === CONTEXT_MODULE) {
+                $cmid = (int) $context->instanceid;
+            }
+        }
+
+        if ($cmid > 0) {
+            $cm = get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING);
+            if ($cm) {
+                $course = $DB->get_record('course', ['id' => (int) $cm->course], '*', IGNORE_MISSING);
+                if ($course) {
+                    $courselabel = format_string($course->fullname);
+                    $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);
+                    $activitylabel = format_string($cm->name);
+                    $activityurl = (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->id]))->out(false);
+                    $hasactivitycontext = true;
+                    $coursecontextlabel = $courselabel . ': ' . $activitylabel;
+                }
+            }
+        } else if (!empty($record->courseid)) {
             $course = $DB->get_record('course', ['id' => (int) $record->courseid], '*', IGNORE_MISSING);
             if ($course) {
                 $courselabel = format_string($course->fullname);
                 $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);
+                $coursecontextlabel = $courselabel;
             }
         }
+
+        $moduletype = (string) ($record->moduletype ?? '');
 
         return [
             'credits' => (int) $record->credits,
@@ -579,12 +611,17 @@ class credit_usage_report_service {
             'componentlabel' => credit_component_mapper::get_label($record->component),
             'actioncode' => (string) ($record->jobtype ?: $record->operation),
             'actionlabel' => credit_component_mapper::get_action_label($record->jobtype, $record->operation),
-            'moduletype' => (string) ($record->moduletype ?? ''),
+            'moduletype' => $moduletype,
+            'moduletypelabel' => credit_moduletype_mapper::get_label($moduletype),
             'dateformatted' => userdate((int) $record->timecreated, get_string('strftimedatetime', 'langconfig')),
             'userlabel' => $userlabel,
             'userurl' => $userurl,
             'courselabel' => $courselabel,
             'courseurl' => $courseurl,
+            'activitylabel' => $activitylabel,
+            'activityurl' => $activityurl,
+            'hasactivitycontext' => $hasactivitycontext,
+            'coursecontextlabel' => $coursecontextlabel,
             'description' => (string) ($record->description ?? ''),
         ];
     }

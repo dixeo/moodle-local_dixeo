@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-namespace local_dixeo\local;
+namespace local_dixeo\output;
 
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\service\credit_usage_report_service;

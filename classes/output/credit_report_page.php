@@ -23,7 +23,7 @@ use core\output\paging_bar;
 use core\plugin_manager;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\event\credit_report_viewed;
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 use local_dixeo\service\credit_service;
 use local_dixeo\service\credit_usage_report_service;
 use local_dixeo\service\credit_usage_sync_service;
@@ -211,7 +211,7 @@ class credit_report_page implements renderable, templatable {
                 'moduletypes' => $this->build_filter_options(
                     $filteroptions['moduletypes'],
                     $this->params['moduletypes'] ?? [],
-                    null
+                    'credit_moduletype_'
                 ),
                 'users' => $this->build_named_filter_options(
                     $filteroptions['users'],

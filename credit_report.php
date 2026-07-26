@@ -26,7 +26,7 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 use local_dixeo\output\credit_report_page;
 
 credit_report_request::require_access();

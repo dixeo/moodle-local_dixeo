@@ -34,7 +34,7 @@ use local_dixeo\event\file_sync_triggered;
 use local_dixeo\event\job_cancelled;
 use local_dixeo\repository\course_ai_repository;
 use local_dixeo\repository\job_repository;
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 use local_dixeo\service\credit_usage_report_service;
 use local_dixeo\service\file_sync_service;
 use local_dixeo\service\job_service;

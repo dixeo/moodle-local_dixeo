@@ -89,6 +89,9 @@ class provider implements
                 'namespace' => 'privacy:metadata:jobs:namespace',
                 'operation' => 'privacy:metadata:jobs:operation',
                 'component' => 'privacy:metadata:jobs:component',
+                'moduletype' => 'privacy:metadata:jobs:moduletype',
+                'contextid' => 'privacy:metadata:jobs:contextid',
+                'cmid' => 'privacy:metadata:jobs:cmid',
                 'timecreated' => 'privacy:metadata:jobs:timecreated',
             ],
             'privacy:metadata:jobs'
@@ -110,6 +113,7 @@ class provider implements
                 'userid' => 'privacy:metadata:credit_usage:userid',
                 'courseid' => 'privacy:metadata:credit_usage:courseid',
                 'contextid' => 'privacy:metadata:credit_usage:contextid',
+                'cmid' => 'privacy:metadata:credit_usage:cmid',
                 'timecreated' => 'privacy:metadata:credit_usage:timecreated',
                 'timesynced' => 'privacy:metadata:credit_usage:timesynced',
             ],
@@ -288,6 +292,9 @@ class provider implements
                 'credits' => (int) $record->credits,
                 'component' => (string) ($record->component ?? ''),
                 'jobtype' => (string) ($record->jobtype ?? ''),
+                'moduletype' => (string) ($record->moduletype ?? ''),
+                'contextid' => (int) ($record->contextid ?? 0),
+                'cmid' => (int) ($record->cmid ?? 0),
                 'timecreated' => transform::datetime((int) $record->timecreated),
             ];
         }
@@ -323,6 +330,10 @@ class provider implements
                 'courseid' => (int) $job->courseid,
                 'namespace' => (string) $job->namespace,
                 'operation' => (string) $job->operation,
+                'component' => (string) ($job->component ?? ''),
+                'moduletype' => (string) ($job->moduletype ?? ''),
+                'contextid' => (int) ($job->contextid ?? 0),
+                'cmid' => (int) ($job->cmid ?? 0),
                 'timecreated' => transform::datetime((int) $job->timecreated),
             ];
         }

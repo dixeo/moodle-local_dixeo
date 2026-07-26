@@ -35,6 +35,7 @@ use local_dixeo\api\polling_config;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\operation_result;
 use local_dixeo\dto\job_status;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\event\job_cancelled;
 use local_dixeo\repository\job_repository;
 
@@ -80,13 +81,19 @@ class job_service {
      * @param string $endpoint The API endpoint to submit to.
      * @param array $payload The request payload.
      * @param string|null $component Originating frankenstyle component.
+     * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
-    public function submit_job(string $endpoint, array $payload, ?string $component = null): operation_result {
+    public function submit_job(
+        string $endpoint,
+        array $payload,
+        ?string $component = null,
+        ?job_binding_metadata $metadata = null
+    ): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component);
+        $this->register_job($jobid, $endpoint, $payload, $component, $metadata);
 
         return operation_result::pending($jobid, 'pending', 0);
     }
@@ -101,6 +108,7 @@ class job_service {
      * @param array $payload The request payload.
      * @param string $jobtype The job type for polling configuration.
      * @param string|null $component Originating frankenstyle component.
+     * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
      */
@@ -108,11 +116,12 @@ class job_service {
         string $endpoint,
         array $payload,
         string $jobtype,
-        ?string $component = null
+        ?string $component = null,
+        ?job_binding_metadata $metadata = null
     ): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component);
+        $this->register_job($jobid, $endpoint, $payload, $component, $metadata);
         $config = polling_config::for_job_type($jobtype);
 
         return $this->poller->poll($jobid, $config);
@@ -278,14 +287,39 @@ class job_service {
     }
 
     /**
+     * Update job binding metadata after module creation or context resolution.
+     *
+     * Re-syncs credit usage rows when they already exist for the job.
+     *
+     * @param string $jobid Remote job UUID.
+     * @param job_binding_metadata $metadata Metadata to merge.
+     */
+    public function enrich_job_metadata(string $jobid, job_binding_metadata $metadata): void {
+        $jobid = trim($jobid);
+        if ($jobid === '' || !$metadata->has_data()) {
+            return;
+        }
+
+        $this->jobrepository->update_metadata($jobid, $metadata);
+        (new credit_usage_sync_service())->resync_for_job($jobid);
+    }
+
+    /**
      * Register a local binding for a remote job using the request payload.
      *
      * @param string $jobid Remote job UUID.
      * @param string $endpoint API endpoint used to create the job.
      * @param array $payload Request payload.
      * @param string|null $component Originating frankenstyle component.
+     * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      */
-    private function register_job(string $jobid, string $endpoint, array $payload, ?string $component = null): void {
+    private function register_job(
+        string $jobid,
+        string $endpoint,
+        array $payload,
+        ?string $component = null,
+        ?job_binding_metadata $metadata = null
+    ): void {
         global $USER, $CFG;
 
         if (trim($jobid) === '') {
@@ -302,8 +336,17 @@ class job_service {
 
         $namespace = (string) ($payload['namespace'] ?? \local_dixeo_get_configured_namespace());
         $operation = $this->operation_from_endpoint($endpoint);
+        $mergedmetadata = job_binding_metadata::resolve_for_submit($payload, null, $metadata);
 
-        $this->jobrepository->register($jobid, $courseid, $userid, $namespace, $operation, $component);
+        $this->jobrepository->register(
+            $jobid,
+            $courseid,
+            $userid,
+            $namespace,
+            $operation,
+            $component,
+            $mergedmetadata
+        );
     }
 
     /**

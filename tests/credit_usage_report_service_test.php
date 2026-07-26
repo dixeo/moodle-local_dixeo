@@ -16,7 +16,7 @@
 
 namespace local_dixeo;
 
-use local_dixeo\local\credit_report_request;
+use local_dixeo\output\credit_report_request;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\repository\credit_usage_repository;
 use local_dixeo\service\credit_usage_report_service;
@@ -211,6 +211,56 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         $this->assertArrayHasKey('date', $columns);
         $this->assertArrayHasKey('user', $columns);
         $this->assertArrayHasKey('course', $columns);
+        $this->assertArrayHasKey('moduletype', $columns);
+    }
+
+    /**
+     * Rows with a course module show linked course and activity names.
+     */
+    public function test_format_row_includes_module_context_links(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Context Course']);
+        $page = $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'name' => 'Intro page',
+        ]);
+        $modulecontext = \context_module::instance($page->cmid);
+        $now = time();
+
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-context',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -2,
+                'balanceAfter' => 98,
+                'createdAt' => gmdate('c', $now),
+                'moduleType' => 'page',
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => (int) $course->id,
+                'operation' => 'module_edit',
+                'component' => 'local_dixeo_editor',
+                'contextid' => (int) $modulecontext->id,
+                'cmid' => (int) $page->cmid,
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $rows = $service->get_rows([
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $now - DAYSECS,
+            'timeend' => $now + DAYSECS,
+        ], 0, 10);
+
+        $row = $rows['rows'][0];
+        $this->assertTrue($row['hasactivitycontext']);
+        $this->assertStringContainsString('Context Course', $row['courselabel']);
+        $this->assertSame('Intro page', $row['activitylabel']);
+        $this->assertStringContainsString('/course/view.php?id=' . $course->id, (string) $row['courseurl']);
+        $this->assertStringContainsString('/mod/page/view.php?id=' . $page->cmid, (string) $row['activityurl']);
     }
 
     /**

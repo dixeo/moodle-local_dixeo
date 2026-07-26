@@ -47,6 +47,11 @@ class credit_usage_repository {
             $job->operation ?? null
         );
 
+        $moduletype = $transaction->moduletype;
+        if (empty($moduletype) && $job !== null && !empty($job->moduletype)) {
+            $moduletype = (string) $job->moduletype;
+        }
+
         $record = (object) [
             'transactionid' => $transaction->id,
             'jobid' => $transaction->jobid,
@@ -54,13 +59,14 @@ class credit_usage_repository {
             'amount' => $transaction->amount,
             'credits' => $transaction->get_usage_credits(),
             'jobtype' => $transaction->jobtype,
-            'moduletype' => $transaction->moduletype,
+            'moduletype' => $moduletype,
             'component' => $component,
             'operation' => $job->operation ?? null,
             'description' => $transaction->description,
             'userid' => (int) ($job->userid ?? 0),
             'courseid' => (int) ($job->courseid ?? 0),
-            'contextid' => 0,
+            'contextid' => $job !== null ? (int) ($job->contextid ?? 0) : 0,
+            'cmid' => $job !== null ? (int) ($job->cmid ?? 0) : 0,
             'timecreated' => $transaction->createdat > 0 ? $transaction->createdat : $now,
             'timesynced' => $now,
         ];
@@ -74,6 +80,54 @@ class credit_usage_repository {
 
         $record->id = $DB->insert_record(self::TABLE, $record);
         return $DB->get_record(self::TABLE, ['id' => $record->id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Refresh stored context fields from an updated job binding.
+     *
+     * @param string $jobid Remote job UUID.
+     * @param \stdClass $job Updated job binding row.
+     * @return int Number of usage rows updated.
+     */
+    public function enrich_from_job(string $jobid, \stdClass $job): int {
+        global $DB;
+
+        $jobid = trim($jobid);
+        if ($jobid === '') {
+            return 0;
+        }
+
+        $records = $DB->get_records(self::TABLE, ['jobid' => $jobid]);
+        if ($records === []) {
+            return 0;
+        }
+
+        $now = time();
+        $updated = 0;
+        foreach ($records as $record) {
+            $patch = (object) ['id' => $record->id, 'timesynced' => $now];
+            $changed = false;
+
+            if (!empty($job->moduletype) && ($record->moduletype ?? '') !== $job->moduletype) {
+                $patch->moduletype = $job->moduletype;
+                $changed = true;
+            }
+            if (!empty($job->contextid) && (int) ($record->contextid ?? 0) !== (int) $job->contextid) {
+                $patch->contextid = (int) $job->contextid;
+                $changed = true;
+            }
+            if (!empty($job->cmid) && (int) ($record->cmid ?? 0) !== (int) $job->cmid) {
+                $patch->cmid = (int) $job->cmid;
+                $changed = true;
+            }
+
+            if ($changed) {
+                $DB->update_record(self::TABLE, $patch);
+                $updated++;
+            }
+        }
+
+        return $updated;
     }
 
     /**

@@ -31,6 +31,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 
 /**
@@ -131,7 +132,12 @@ class image_generation_service {
             courseid: (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course($courseid)
+        );
     }
 
     /**
@@ -173,7 +179,12 @@ class image_generation_service {
             courseid: (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course((int) $section->course)
+        );
     }
 
     /**
@@ -217,7 +228,12 @@ class image_generation_service {
             (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course($courseid)
+        );
     }
 
     /**
@@ -261,7 +277,12 @@ class image_generation_service {
             (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course((int) $section->course)
+        );
     }
 
     /**

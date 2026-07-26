@@ -79,4 +79,107 @@ final class credit_usage_sync_service_test extends \advanced_testcase {
         $this->assertSame(1, $count);
         $this->assertSame(1, $DB->count_records(credit_usage_repository::TABLE));
     }
+
+    /**
+     * Local job moduletype is used when the API transaction omits it.
+     */
+    public function test_sync_uses_local_job_moduletype_when_api_omits_it(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+
+        $metadata = new \local_dixeo\dto\job_binding_metadata(moduletype: 'page');
+        $jobrepo = new job_repository();
+        $jobrepo->register(
+            'job-local-type',
+            (int) $course->id,
+            (int) $user->id,
+            'default',
+            'module_generate',
+            'block_dixeo_modulegen',
+            $metadata
+        );
+
+        $creditservice = $this->createMock(credit_service::class);
+        $creditservice->method('is_configured')->willReturn(true);
+        $creditservice->method('get_transactions')->willReturn([
+            'transactions' => [
+                (new credit_transaction(
+                    id: 'tx-local-type',
+                    type: credit_transaction::TYPE_DEDUCTION,
+                    amount: -8,
+                    balanceafter: 92,
+                    createdat: strtotime('2026-01-16T10:00:00+00:00'),
+                    jobid: 'job-local-type',
+                    jobtype: 'generate_module',
+                ))->to_array(),
+            ],
+            'pagination' => ['hasMore' => false],
+        ]);
+
+        $sync = new credit_usage_sync_service($creditservice);
+        $sync->sync_recent(true);
+
+        $record = $DB->get_record(credit_usage_repository::TABLE, ['transactionid' => 'tx-local-type'], '*', MUST_EXIST);
+        $this->assertSame('page', $record->moduletype);
+    }
+
+    /**
+     * Post-create metadata enrichment updates synced usage rows.
+     */
+    public function test_resync_for_job_updates_context_fields(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $modulecontext = \context_module::instance($page->cmid);
+
+        $jobrepo = new job_repository();
+        $jobrepo->register(
+            'job-enrich',
+            (int) $course->id,
+            (int) $user->id,
+            'default',
+            'module_fill',
+            'block_dixeo_designer',
+            new \local_dixeo\dto\job_binding_metadata(moduletype: 'page')
+        );
+
+        $usagerepo = new credit_usage_repository();
+        $usagerepo->upsert_from_transaction(
+            new credit_transaction(
+                id: 'tx-enrich',
+                type: credit_transaction::TYPE_DEDUCTION,
+                amount: -4,
+                balanceafter: 96,
+                createdat: time(),
+                jobid: 'job-enrich',
+                jobtype: 'fill_module',
+            ),
+            $jobrepo->get_by_jobid('job-enrich')
+        );
+
+        $jobrepo->update_metadata(
+            'job-enrich',
+            new \local_dixeo\dto\job_binding_metadata(
+                moduletype: 'page',
+                contextid: (int) $modulecontext->id,
+                cmid: (int) $page->cmid
+            )
+        );
+
+        $sync = new credit_usage_sync_service();
+        $updated = $sync->resync_for_job('job-enrich');
+
+        $this->assertSame(1, $updated);
+        $record = $DB->get_record(credit_usage_repository::TABLE, ['transactionid' => 'tx-enrich'], '*', MUST_EXIST);
+        $this->assertSame((int) $page->cmid, (int) $record->cmid);
+        $this->assertSame((int) $modulecontext->id, (int) $record->contextid);
+    }
 }

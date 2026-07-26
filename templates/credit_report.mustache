@@ -279,6 +279,7 @@
                                 <th>{{#str}}credit_report_column_credits, local_dixeo{{/str}}</th>
                                 <th>{{#str}}credit_report_column_module, local_dixeo{{/str}}</th>
                                 <th>{{#str}}credit_report_column_action, local_dixeo{{/str}}</th>
+                                <th>{{#str}}credit_report_filter_moduletype, local_dixeo{{/str}}</th>
                                 <th>{{#str}}credit_report_column_date, local_dixeo{{/str}}</th>
                                 <th>{{#str}}credit_report_column_user, local_dixeo{{/str}}</th>
                                 <th>{{#str}}credit_report_column_course, local_dixeo{{/str}}</th>
@@ -290,14 +291,20 @@
                                     <td>{{creditsformatted}}</td>
                                     <td>{{componentlabel}}</td>
                                     <td>{{actionlabel}}</td>
+                                    <td>{{moduletypelabel}}</td>
                                     <td><span class="text-nowrap">{{dateformatted}}</span></td>
                                     <td>
                                         {{#userurl}}<a href="{{userurl}}">{{userlabel}}</a>{{/userurl}}
                                         {{^userurl}}{{userlabel}}{{/userurl}}
                                     </td>
                                     <td>
-                                        {{#courseurl}}<a href="{{courseurl}}">{{courselabel}}</a>{{/courseurl}}
-                                        {{^courseurl}}{{courselabel}}{{/courseurl}}
+                                        {{#hasactivitycontext}}
+                                            <a href="{{courseurl}}">{{courselabel}}</a>: <a href="{{activityurl}}">{{activitylabel}}</a>
+                                        {{/hasactivitycontext}}
+                                        {{^hasactivitycontext}}
+                                            {{#courseurl}}<a href="{{courseurl}}">{{courselabel}}</a>{{/courseurl}}
+                                            {{^courseurl}}{{courselabel}}{{/courseurl}}
+                                        {{/hasactivitycontext}}
                                     </td>
                                 </tr>
                             {{/rows}}

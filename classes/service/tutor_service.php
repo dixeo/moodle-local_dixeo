@@ -31,6 +31,7 @@ namespace local_dixeo\service;
 use local_dixeo\api\client;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\context_builder_factory;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 use local_dixeo\external\service_factory;
 
@@ -90,7 +91,12 @@ class tutor_service {
             $payload['pageContext'] = $pagecontext;
         }
 
-        return $this->jobservice->submit_job('/v1/tutor/messages', $payload, 'block_dixeo_tutor');
+        return $this->jobservice->submit_job(
+            '/v1/tutor/messages',
+            $payload,
+            'block_dixeo_tutor',
+            job_binding_metadata::for_course($courseid)
+        );
     }
 
     /**
