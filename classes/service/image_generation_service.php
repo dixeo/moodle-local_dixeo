@@ -295,7 +295,7 @@ class image_generation_service {
             courseid: (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
     }
 
     /**
@@ -338,7 +338,7 @@ class image_generation_service {
             (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
     }
 
     /**

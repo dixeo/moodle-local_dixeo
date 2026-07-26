@@ -275,7 +275,7 @@ final class editor_image_codec {
 
         file_service::create_stub($location, $userid);
 
-        $imageservice = $this->imageservice ?? service_factory::get_image_generation_service();
+        $imageservice = $this->imageservice ?? service_factory::get_image_generation_service('local_dixeo_editor');
         $title = $this->resolve_title($ctx);
 
         try {
