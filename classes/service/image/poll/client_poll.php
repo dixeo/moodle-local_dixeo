@@ -64,7 +64,15 @@ final class client_poll {
 
         $result = engine::normalise_result($jobstatus->result);
 
+        $originaluser = null;
         try {
+            global $USER;
+            if ((int) ($USER->id ?? 0) !== $userid) {
+                $originaluser = $USER;
+                $USER = \core_user::get_user($userid, '*', MUST_EXIST);
+                \core\session\manager::set_user($USER);
+            }
+
             $job = job_repository::get_by_target($target);
             apply_registry::apply($target, $result, $userid, 'generated', $job);
             if ($job) {
@@ -80,7 +88,16 @@ final class client_poll {
         } catch (\Throwable $e) {
             debugging('Dixeo image apply failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             $message = get_string('dixeo_image_job_failed', 'local_dixeo');
+            $job = job_repository::get_by_target($target);
+            if ($job) {
+                job_repository::mark_failed((int) $job->id, $message);
+            }
+
             return ['status' => 'failed', 'errormessage' => $message];
+        } finally {
+            if ($originaluser !== null) {
+                \core\session\manager::set_user($originaluser);
+            }
         }
     }
 }
