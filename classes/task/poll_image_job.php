@@ -66,12 +66,13 @@ class poll_image_job extends \core\task\adhoc_task {
         }
 
         $job = job_repository::get_by_target($target);
-        if ($job) {
-            if ($job->status === job_repository::STATUS_APPLIED || $job->status === job_repository::STATUS_FAILED) {
-                return;
-            }
-            job_repository::update_status((int) $job->id, job_repository::STATUS_PROCESSING);
+        if (!$job) {
+            return;
         }
+        if ($job->status === job_repository::STATUS_APPLIED || $job->status === job_repository::STATUS_FAILED) {
+            return;
+        }
+        job_repository::update_status((int) $job->id, job_repository::STATUS_PROCESSING);
 
         $outcome = poll_engine::poll_once($jobid);
 

@@ -80,8 +80,13 @@ final class content_handler {
      * @return void
      */
     public static function apply_failure(content_target $target, int $userid, ?\stdClass $jobrow): void {
+        $shouldreplacefile = $jobrow !== null
+            && ($jobrow->origin ?? '') !== job_repository::ORIGIN_MODAL
+            && !job_repository::is_editor_draft_job($jobrow);
         $location = $target->get_location();
-        file_service::apply_failed_placeholder($location, $userid);
+        if ($shouldreplacefile) {
+            file_service::apply_failed_placeholder($location, $userid);
+        }
 
         if (job_repository::is_editor_draft_job($jobrow)) {
             return;

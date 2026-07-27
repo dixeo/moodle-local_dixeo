@@ -21,6 +21,8 @@ use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\content\url_helper;
 use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\image_target;
+use local_dixeo\service\image\poll\manager as poll_manager;
+use local_dixeo\service\image\target_factory;
 
 /**
  * CRUD and status for unified image jobs (content + structure).
@@ -346,6 +348,7 @@ final class job_repository {
         }
 
         if ($acknowledged && $job->status === self::STATUS_APPLIED) {
+            poll_manager::delete_queued(target_factory::from_job_record($job));
             self::delete_job((int) $job->id);
         }
 
