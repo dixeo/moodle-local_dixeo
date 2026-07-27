@@ -241,9 +241,8 @@ final class job_repository {
 
         if ($existing) {
             $record->id = $existing->id;
-            if (!isset($record->timecreated)) {
-                $record->timecreated = $existing->timecreated;
-            }
+            // Fresh submission: reset the lock window so stale rows are not instantly timed out.
+            $record->timecreated = $now;
             $DB->update_record(self::TABLE, $record);
             return $DB->get_record(self::TABLE, ['id' => $record->id], '*', MUST_EXIST);
         }

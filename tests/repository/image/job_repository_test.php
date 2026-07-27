@@ -86,4 +86,45 @@ final class job_repository_test extends \advanced_testcase {
             'userid' => (int) $USER->id,
         ]));
     }
+
+    /**
+     * Re-queued jobs must reset timecreated so get_active_job() does not instantly time out.
+     */
+    public function test_reupsert_resets_timecreated_after_stale_lock(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $location = new location(3, 'mod_page', 'content', 0, '/', 'pic.png', 2);
+        $record = job_repository::upsert_job(array_merge($location->to_record_fields(), [
+            'jobid' => 'job-stale',
+            'status' => job_repository::STATUS_PENDING,
+            'origin' => job_repository::ORIGIN_MODAL,
+            'userid' => (int) $USER->id,
+        ]));
+
+        $DB->set_field(
+            job_repository::TABLE,
+            'timecreated',
+            time() - job_repository::TIMEOUT_SECONDS - 120,
+            ['id' => $record->id]
+        );
+
+        $before = job_repository::get_active_job_for_location($location);
+        $this->assertSame(job_repository::STATUS_FAILED, $before->status);
+
+        $refreshed = job_repository::upsert_job(array_merge($location->to_record_fields(), [
+            'jobid' => 'job-fresh',
+            'status' => job_repository::STATUS_PENDING,
+            'origin' => job_repository::ORIGIN_MODAL,
+            'userid' => (int) $USER->id,
+        ]));
+
+        $this->assertGreaterThan(time() - 10, (int) $refreshed->timecreated);
+        $active = job_repository::get_active_job_for_location($location);
+        $this->assertSame(job_repository::STATUS_PENDING, $active->status);
+        $status = job_repository::get_location_status($location);
+        $this->assertSame(job_repository::STATUS_PENDING, $status['status']);
+    }
 }
