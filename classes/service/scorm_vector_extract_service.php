@@ -183,8 +183,6 @@ class scorm_vector_extract_service {
      * @return file_upload_part|null
      */
     public function try_build_upload_part(\cm_info $cm): ?file_upload_part {
-        global $CFG;
-
         if ($cm->modname !== 'scorm' || !$cm->visible) {
             return null;
         }
@@ -207,7 +205,8 @@ class scorm_vector_extract_service {
             return null;
         }
 
-        $zippath = $CFG->tempdir . '/dixeo_scorm_pkg_' . $cm->id . '_' . uniqid('', true) . '.zip';
+        $requestdir = make_request_directory();
+        $zippath = $requestdir . '/dixeo_scorm_pkg_' . $cm->id . '_' . uniqid('', true) . '.zip';
         try {
             $package->copy_content_to($zippath);
             $text = $this->extract_sco_text_from_zip_path($zippath);
@@ -232,7 +231,7 @@ class scorm_vector_extract_service {
 
         $text = $this->prepend_moodle_activity_context($cm, $text);
 
-        $txtpath = $CFG->tempdir . '/' . self::UPLOAD_FILENAME_PREFIX . $cm->id . '_' . uniqid('', true) . '.txt';
+        $txtpath = $requestdir . '/' . self::UPLOAD_FILENAME_PREFIX . $cm->id . '_' . uniqid('', true) . '.txt';
         if (file_put_contents($txtpath, $text) === false) {
             debugging(
                 "local_dixeo file sync: SCORM cmid={$cm->id} failed to write temp extract file.",

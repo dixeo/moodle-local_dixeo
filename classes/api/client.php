@@ -429,13 +429,14 @@ class client {
         }
 
         // Add files to the request (sequential multipart field names).
+        $requestdir = make_request_directory();
         $tempfiles = [];
         $payloadbytes = 0;
         $partindex = 0;
         foreach ($files as $file) {
             if ($file instanceof \stored_file) {
                 // Create temp file for upload since curl needs a file path.
-                $temppath = $CFG->tempdir . '/dixeo_upload_' . uniqid() . '_' . $file->get_filename();
+                $temppath = $requestdir . '/dixeo_upload_' . uniqid() . '_' . $file->get_filename();
                 $file->copy_content_to($temppath);
                 $tempfiles[] = $temppath;
 
