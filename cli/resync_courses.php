@@ -119,7 +119,7 @@ if (!in_array($selector, ['activity', 'modified', 'created'], true)) {
     cli_error("Invalid --selector '{$selector}'. Use: activity, modified or created.");
 }
 
-$courseids = dixeo_resync_select_courses($options, $selector);
+$courseids = local_dixeo_resync_select_courses($options, $selector);
 
 if ($courseids === []) {
     cli_writeln('No courses matched the selection. Nothing to do.');
@@ -213,7 +213,7 @@ exit($errorcount > 0 ? 1 : 0);
  * @param string $selector One of activity|modified|created.
  * @return int[] Candidate course ids (unfiltered for existence).
  */
-function dixeo_resync_select_courses(array $options, string $selector): array {
+function local_dixeo_resync_select_courses(array $options, string $selector): array {
     global $DB;
 
     $explicit = trim((string) $options['courseids']);
@@ -222,7 +222,7 @@ function dixeo_resync_select_courses(array $options, string $selector): array {
         return array_values(array_unique($ids));
     }
 
-    $since = dixeo_resync_resolve_since((string) $options['since']);
+    $since = local_dixeo_resync_resolve_since((string) $options['since']);
 
     if ($selector === 'activity') {
         if (!$DB->get_manager()->table_exists('logstore_standard_log')) {
@@ -250,7 +250,7 @@ function dixeo_resync_select_courses(array $options, string $selector): array {
  * @param string $value Raw option value.
  * @return int Epoch timestamp; events at or after it are in scope.
  */
-function dixeo_resync_resolve_since(string $value): int {
+function local_dixeo_resync_resolve_since(string $value): int {
     $value = trim($value);
 
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
