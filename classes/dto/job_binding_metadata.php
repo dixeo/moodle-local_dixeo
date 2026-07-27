@@ -123,6 +123,33 @@ class job_binding_metadata {
     }
 
     /**
+     * Build metadata from a stored file's Moodle context.
+     *
+     * @param \stored_file $file
+     * @return self|null
+     */
+    public static function for_stored_file(\stored_file $file): ?self {
+        $context = \context::instance_by_id($file->get_contextid(), IGNORE_MISSING);
+        if (!$context) {
+            return null;
+        }
+
+        if ($context->contextlevel === CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id(null, $context->instanceid, 0, false, IGNORE_MISSING);
+            if ($cm) {
+                return self::for_module($cm->modname, (int) $cm->id);
+            }
+        }
+
+        $courseid = \local_dixeo\service\image\pluginfile_helper::resolve_course_id_for_file($file);
+        if ($courseid > 0) {
+            return self::for_course($courseid);
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve metadata for a job submission from payload, course, and overrides.
      *
      * @param array $payload API request payload.
