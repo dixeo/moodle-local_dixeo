@@ -28,13 +28,12 @@ namespace local_dixeo;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\location;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
+ * Tests for unified content image job repository helpers.
+ *
  * @covers \local_dixeo\repository\image\job_repository
  */
 final class image_job_repository_test extends \advanced_testcase {
-
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
