@@ -30,6 +30,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 
 /**
@@ -87,7 +88,12 @@ class course_structure_service {
     ): operation_result {
         $payload = $this->build_payload($instructions, $templateid, $courseid);
 
-        return $this->jobservice->submit_job(self::ENDPOINT, $payload, 'block_dixeo_designer');
+        return $this->jobservice->submit_job(
+            self::ENDPOINT,
+            $payload,
+            'block_dixeo_designer',
+            $this->metadata_for_payload($payload)
+        );
     }
 
     /**
@@ -110,7 +116,13 @@ class course_structure_service {
     ): operation_result {
         $payload = $this->build_payload($instructions, $templateid, $courseid);
 
-        return $this->jobservice->submit_and_wait(self::ENDPOINT, $payload, self::JOB_TYPE, 'block_dixeo_designer');
+        return $this->jobservice->submit_and_wait(
+            self::ENDPOINT,
+            $payload,
+            self::JOB_TYPE,
+            'block_dixeo_designer',
+            $this->metadata_for_payload($payload)
+        );
     }
 
     /**
@@ -141,6 +153,21 @@ class course_structure_service {
      */
     public function get_job_service(): job_service {
         return $this->jobservice;
+    }
+
+    /**
+     * Resolve course context metadata from a structure generation payload.
+     *
+     * @param array $payload Request payload.
+     * @return job_binding_metadata|null
+     */
+    private function metadata_for_payload(array $payload): ?job_binding_metadata {
+        $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
+        if ($courseid <= 0) {
+            return null;
+        }
+
+        return job_binding_metadata::for_course($courseid);
     }
 
     /**
