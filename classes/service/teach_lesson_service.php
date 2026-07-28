@@ -57,7 +57,8 @@ class teach_lesson_service {
         ?module_generation_service $modulegeneration = null,
         ?job_service $jobservice = null
     ) {
-        $this->modulegeneration = $modulegeneration ?? new module_generation_service();
+        $this->modulegeneration = $modulegeneration
+            ?? (new module_generation_service())->set_component('block_dixeo_tutor');
         $this->jobservice = $jobservice ?? new job_service();
     }
 
