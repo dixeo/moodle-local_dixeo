@@ -31,6 +31,7 @@ namespace local_dixeo\service;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\context\course_context_builder;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 
 /**
@@ -64,18 +65,49 @@ class module_generation_service {
     /** @var string|null The namespace for API requests. */
     private ?string $namespace;
 
+    /** @var string|null Originating frankenstyle component. */
+    private ?string $component;
+
+    /** @var job_binding_metadata|null Optional metadata override for job bindings. */
+    private ?job_binding_metadata $jobmetadata = null;
+
     /**
      * Constructor.
      *
      * @param job_service|null $jobservice Optional job service.
      * @param string|null $namespace Optional namespace override.
+     * @param string|null $component Optional originating component.
      */
     public function __construct(
         ?job_service $jobservice = null,
-        ?string $namespace = null
+        ?string $namespace = null,
+        ?string $component = null
     ) {
         $this->jobservice = $jobservice ?? new job_service();
         $this->namespace = $namespace ?? $this->get_configured_namespace();
+        $this->component = $component;
+    }
+
+    /**
+     * Set the originating component for subsequent job submissions.
+     *
+     * @param string|null $component Frankenstyle component name.
+     * @return self
+     */
+    public function set_component(?string $component): self {
+        $this->component = $component;
+        return $this;
+    }
+
+    /**
+     * Set optional metadata merged into subsequent job bindings.
+     *
+     * @param job_binding_metadata|null $metadata Activity/context metadata.
+     * @return self
+     */
+    public function set_job_metadata(?job_binding_metadata $metadata): self {
+        $this->jobmetadata = $metadata;
+        return $this;
     }
 
     /**
@@ -125,7 +157,12 @@ class module_generation_service {
     ): operation_result {
         $payload = $this->build_payload($moduletype, $instructions, $context, $courseid);
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+        );
     }
 
     /**
@@ -184,7 +221,12 @@ class module_generation_service {
     ): operation_result {
         $payload = $this->build_payload($moduletype, $instructions, $context, $courseid);
 
-        return $this->jobservice->submit_job(self::FILL_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::FILL_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+        );
     }
 
     /**
@@ -210,7 +252,9 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::GENERATE_ENDPOINT,
             $payload,
-            self::JOB_TYPE_GENERATE
+            self::JOB_TYPE_GENERATE,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
         );
     }
 
@@ -238,7 +282,9 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::FILL_ENDPOINT,
             $payload,
-            self::JOB_TYPE_FILL
+            self::JOB_TYPE_FILL,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
         );
     }
 
@@ -259,7 +305,13 @@ class module_generation_service {
             $courseid = (int) $cm->course;
             $context = context_builder_factory::buildmoduleeditcontext($cmid);
 
-            return $this->fill_module($moduletype, $instructions, $context, $courseid);
+            $previousmetadata = $this->jobmetadata;
+            $this->set_job_metadata(job_binding_metadata::for_module($moduletype, $cmid));
+            try {
+                return $this->fill_module($moduletype, $instructions, $context, $courseid);
+            } finally {
+                $this->set_job_metadata($previousmetadata);
+            }
         } catch (api_exception $e) {
             return operation_result::failed($e->getMessage(), 'api_error');
         } catch (\dml_exception $e) {
@@ -299,7 +351,9 @@ class module_generation_service {
         return $this->jobservice->submit_and_wait(
             self::EDIT_ENDPOINT,
             $payload,
-            self::JOB_TYPE_EDIT
+            self::JOB_TYPE_EDIT,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
         );
     }
 
@@ -324,12 +378,18 @@ class module_generation_service {
             $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
             $context = context_builder_factory::build_edit_context($cmid, $subid);
 
-            return $this->edit_module_content(
-                $cm->modname,
-                $instructions,
-                $context,
-                (int) $cm->course
-            );
+            $previousmetadata = $this->jobmetadata;
+            $this->set_job_metadata(job_binding_metadata::for_module($cm->modname, $cmid));
+            try {
+                return $this->edit_module_content(
+                    $cm->modname,
+                    $instructions,
+                    $context,
+                    (int) $cm->course
+                );
+            } finally {
+                $this->set_job_metadata($previousmetadata);
+            }
         } catch (api_exception $e) {
             return operation_result::failed($e->getMessage(), 'api_error');
         } catch (\dml_exception $e) {
@@ -357,10 +417,18 @@ class module_generation_service {
      * @throws api_exception If an API error occurs.
      */
     public function edit_module_content_with_payload(array $payload): operation_result {
-        return $this->jobService->submit_and_wait(
+        $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
+
+        return $this->jobservice->submit_and_wait(
             self::EDIT_ENDPOINT,
             $payload,
-            self::JOB_TYPE_EDIT
+            self::JOB_TYPE_EDIT,
+            $this->component,
+            job_binding_metadata::resolve_for_submit(
+                $payload,
+                $courseid > 0 ? $courseid : null,
+                $this->jobmetadata
+            )
         );
     }
 
@@ -374,7 +442,18 @@ class module_generation_service {
      * @throws api_exception If the API request fails.
      */
     public function submit_edit_job(array $payload): operation_result {
-        return $this->jobService->submit_job(self::EDIT_ENDPOINT, $payload);
+        $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
+
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit(
+                $payload,
+                $courseid > 0 ? $courseid : null,
+                $this->jobmetadata
+            )
+        );
     }
 
     /**

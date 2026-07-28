@@ -30,6 +30,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 use local_dixeo\service\image\policy;
 
@@ -64,21 +65,27 @@ class image_generation_service {
     /** @var string|null Namespace for API requests. */
     private ?string $namespace;
 
+    /** @var string|null Originating frankenstyle component. */
+    private ?string $component;
+
     /**
      * Constructor.
      *
      * @param job_service|null $jobservice Optional job service.
      * @param html_helper|null $htmlhelper Optional HTML helper.
      * @param string|null $namespace Optional namespace override.
+     * @param string|null $component Optional originating component.
      */
     public function __construct(
         ?job_service $jobservice = null,
         ?html_helper $htmlhelper = null,
-        ?string $namespace = null
+        ?string $namespace = null,
+        ?string $component = null
     ) {
         $this->jobservice = $jobservice ?? new job_service();
         $this->htmlhelper = $htmlhelper ?? new html_helper();
         $this->namespace = $namespace ?? $this->get_configured_namespace();
+        $this->component = $component;
     }
 
     /**
@@ -125,7 +132,12 @@ class image_generation_service {
             courseid: (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course($courseid)
+        );
     }
 
     /**
@@ -167,7 +179,12 @@ class image_generation_service {
             courseid: (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course((int) $section->course)
+        );
     }
 
     /**
@@ -211,7 +228,12 @@ class image_generation_service {
             (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course($courseid)
+        );
     }
 
     /**
@@ -255,7 +277,12 @@ class image_generation_service {
             (string) $section->course,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload);
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::for_course((int) $section->course)
+        );
     }
 
     /**
@@ -268,6 +295,7 @@ class image_generation_service {
      * @param string $summary User prompt mapped to API summary.
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
+     * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
      * @return operation_result
      */
     public function submit_content_image_generate_job(
@@ -275,7 +303,8 @@ class image_generation_service {
         string $title,
         string $summary,
         string $size = self::DEFAULT_SIZE,
-        string $quality = self::DEFAULT_QUALITY
+        string $quality = self::DEFAULT_QUALITY,
+        ?job_binding_metadata $metadata = null
     ): operation_result {
         global $DB;
 
@@ -295,7 +324,12 @@ class image_generation_service {
             courseid: (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::GENERATE_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
+        );
     }
 
     /**
@@ -306,6 +340,7 @@ class image_generation_service {
      * @param string $instructions Change to apply (required).
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
+     * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
      * @return operation_result
      */
     public function submit_content_image_edit_job(
@@ -313,7 +348,8 @@ class image_generation_service {
         array $imagesbase64,
         string $instructions,
         string $size = self::DEFAULT_SIZE,
-        string $quality = self::DEFAULT_QUALITY
+        string $quality = self::DEFAULT_QUALITY,
+        ?job_binding_metadata $metadata = null
     ): operation_result {
         if ($imagesbase64 === []) {
             throw new \invalid_parameter_exception('At least one source image is required for editing');
@@ -338,7 +374,12 @@ class image_generation_service {
             (string) $courseid,
         );
 
-        return $this->jobservice->submit_job(self::EDIT_ENDPOINT, $payload, $this->component);
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
+        );
     }
 
     /**

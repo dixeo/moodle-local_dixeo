@@ -18,6 +18,7 @@ namespace local_dixeo\service\image\content;
 
 
 use local_dixeo\external\service_factory;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\job_orchestrator;
@@ -322,7 +323,8 @@ PROMPT;
                 $title,
                 $spec['prompt'],
                 $spec['size'],
-                $spec['quality']
+                $spec['quality'],
+                $this->metadata_for_field_target($htmlfieldtarget)
             );
 
             $jobid = trim((string) $result->jobid);
@@ -356,5 +358,28 @@ PROMPT;
         $url = s($location->get_pluginfile_token_src());
         return '<img src="' . $url . '" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="' .
             s($placeholderid) . '" alt="" />';
+    }
+
+    /**
+     * Resolve job binding metadata for a shortcode HTML field target.
+     *
+     * @param html_field_target $htmlfieldtarget Field target with module context.
+     * @return job_binding_metadata|null
+     */
+    private function metadata_for_field_target(html_field_target $htmlfieldtarget): ?job_binding_metadata {
+        if ($htmlfieldtarget->cmid !== null && $htmlfieldtarget->cmid > 0) {
+            return job_binding_metadata::for_module($htmlfieldtarget->modname, $htmlfieldtarget->cmid);
+        }
+        if ($htmlfieldtarget->contextid > 0) {
+            return new job_binding_metadata(
+                moduletype: $htmlfieldtarget->modname,
+                contextid: $htmlfieldtarget->contextid
+            );
+        }
+        if ($htmlfieldtarget->courseid > 0) {
+            return job_binding_metadata::for_course($htmlfieldtarget->courseid, $htmlfieldtarget->modname);
+        }
+
+        return null;
     }
 }

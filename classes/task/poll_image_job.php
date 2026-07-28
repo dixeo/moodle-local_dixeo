@@ -17,6 +17,8 @@
 namespace local_dixeo\task;
 
 
+use local_dixeo\external\service_factory;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\apply\registry as apply_registry;
@@ -88,6 +90,7 @@ class poll_image_job extends \core\task\adhoc_task {
                 if ($job) {
                     job_repository::update_status((int) $job->id, job_repository::STATUS_APPLIED);
                 }
+                $this->maybe_backfill_job_metadata($job);
             } catch (\Throwable $e) {
                 $this->mark_failed($target, $job, $userid, $e->getMessage());
             }
@@ -112,6 +115,34 @@ class poll_image_job extends \core\task\adhoc_task {
 
         // Still pending: requeue a delayed poll instead of blocking the cron worker.
         poll_manager::queue_poll_task($target, $jobid, $userid, $chainseq + 1, $source, poll_engine::POLL_INTERVAL_SECONDS);
+    }
+
+    /**
+     * Backfill remote job binding metadata from the local image job row when submit missed it.
+     *
+     * @param \stdClass|null $job Local image job row.
+     * @return void
+     */
+    private function maybe_backfill_job_metadata(?\stdClass $job): void {
+        if ($job === null) {
+            return;
+        }
+
+        $remotejobid = trim((string) ($job->jobid ?? ''));
+        $cmid = (int) ($job->cmid ?? 0);
+        if ($remotejobid === '' || $cmid <= 0) {
+            return;
+        }
+
+        $cm = get_coursemodule_from_id(null, $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return;
+        }
+
+        service_factory::get_job_service()->enrich_job_metadata(
+            $remotejobid,
+            job_binding_metadata::for_module($cm->modname, $cmid)
+        );
     }
 
     /**

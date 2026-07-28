@@ -18,6 +18,7 @@ namespace local_dixeo\service\image\content;
 
 
 use local_dixeo\external\service_factory;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\job_orchestrator;
@@ -284,7 +285,8 @@ final class editor_image_codec {
                 $title,
                 (string) $spec['prompt'],
                 (string) $spec['size'],
-                (string) $spec['quality']
+                (string) $spec['quality'],
+                job_binding_metadata::for_module($ctx->modname, $ctx->cmid)
             );
 
             $jobid = trim((string) $result->jobid);
