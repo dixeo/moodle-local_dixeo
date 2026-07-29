@@ -266,7 +266,7 @@ class tutor_service {
     private function resolve_wire_message(tutor_message $message): string {
         $text = $message->message;
         if ($message->role === tutor_message::ROLE_SYSTEM && trim($text) === '') {
-            $instructions = $message->instructions ?? '';
+            $instructions = $message->instructions ?? '.';
         }
 
         return $text;
