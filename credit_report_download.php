@@ -50,7 +50,7 @@ $recordids = $service->get_export_record_ids($filters);
 credit_report_exported::create_for_request($request, count($recordids), $dataformat)->trigger();
 
 \core\dataformat::download_data(
-    clean_filename(get_string('credit_report', 'local_dixeo')),
+    clean_filename(get_string('credit_usage_report_nav', 'local_dixeo')),
     $dataformat,
     $columns,
     $recordids,

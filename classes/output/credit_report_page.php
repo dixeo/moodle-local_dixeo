@@ -67,7 +67,7 @@ class credit_report_page implements renderable, templatable {
 
         try {
             (new credit_usage_sync_service($creditservice))->sync_recent();
-            return $this->build_template_data($creditservice, $output);
+            return $this->build_template_data($output);
         } catch (\Exception $e) {
             return [
                 'configured' => true,
@@ -79,11 +79,10 @@ class credit_report_page implements renderable, templatable {
     /**
      * Build template data.
      *
-     * @param credit_service $creditservice Credit service.
      * @param renderer_base $output The renderer.
      * @return array
      */
-    protected function build_template_data(credit_service $creditservice, renderer_base $output): array {
+    protected function build_template_data(renderer_base $output): array {
         $reportservice = new credit_usage_report_service();
         $view = $this->params['view'] ?? credit_usage_report_service::VIEW_WEEK;
         $period = $reportservice->resolve_period(
@@ -117,7 +116,6 @@ class credit_report_page implements renderable, templatable {
         $histogram = $reportservice->get_histogram($filters);
         $breakdown = $reportservice->get_breakdown($filters);
         $filteroptions = $reportservice->get_filter_options($periodfilters);
-        $balance = $creditservice->get_balance();
 
         $baseparams = $this->base_url_params($view, $period);
         $totalpages = $perpage > 0 ? (int) ceil($rowsresult['total'] / $perpage) : 1;
@@ -143,14 +141,6 @@ class credit_report_page implements renderable, templatable {
         return [
             'configured' => true,
             'error' => null,
-            'balance' => [
-                'formatted' => $balance->get_formatted_balance(),
-                'state' => $balance->state,
-                'stateclass' => $this->get_state_class($balance->state),
-                'statedescription' => $balance->get_state_description(),
-                'isfrozen' => $balance->is_frozen(),
-                'issuspended' => $balance->is_suspended(),
-            ],
             'period' => [
                 'label' => $period['label'],
                 'view' => $view,
@@ -372,20 +362,5 @@ class credit_report_page implements renderable, templatable {
             ];
         }
         return $options;
-    }
-
-    /**
-     * Get CSS class for account state.
-     *
-     * @param string $state Account state.
-     * @return string
-     */
-    protected function get_state_class(string $state): string {
-        return match ($state) {
-            'active' => 'success',
-            'frozen' => 'warning',
-            'suspended' => 'danger',
-            default => 'secondary',
-        };
     }
 }

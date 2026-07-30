@@ -34,8 +34,8 @@ admin_externalpage_setup('local_dixeo_credit_usage', '', $request->to_page_url_p
 
 $context = context_system::instance();
 $PAGE->set_context($context);
-$PAGE->set_title(get_string('credit_report', 'local_dixeo'));
-$PAGE->set_heading(get_string('credit_report', 'local_dixeo'));
+$PAGE->set_title(get_string('credit_usage_report_nav', 'local_dixeo'));
+$PAGE->set_heading(get_string('credit_usage_report_nav', 'local_dixeo'));
 $PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
 $PAGE->requires->js_call_amd('local_dixeo/credit_report', 'init');
 

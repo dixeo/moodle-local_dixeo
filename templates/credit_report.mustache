@@ -17,12 +17,11 @@
 {{!
     @template local_dixeo/credit_report
 
-    Credit usage report with balance, filters, KPIs, charts, and table.
+    Credit usage report with filters, KPIs, charts, and table.
 
     Context variables required for this template:
     * configured - bool - Whether the API is configured.
     * error - string|null - Error message if any.
-    * balance - object - Credit balance information.
     * period - object - Active period label and navigation URLs.
     * views - array - Period view toggle links.
     * filters - object - Filter form values and options.
@@ -41,14 +40,6 @@
     {
         "configured": true,
         "error": false,
-        "balance": {
-            "formatted": "1,500",
-            "state": "active",
-            "stateclass": "success",
-            "statedescription": "Active",
-            "isfrozen": false,
-            "issuspended": false
-        },
         "period": {
             "label": "14 Jul – 20 Jul 2026",
             "view": "week",
@@ -139,24 +130,6 @@
 
 {{^error}}
 <div class="local-dixeo-credit-report-page">
-    <div class="card mb-4">
-        <div class="card-header">
-            <h4 class="mb-0">{{#str}}current_balance, local_dixeo{{/str}}</h4>
-        </div>
-        <div class="card-body">
-            <div class="d-flex align-items-center" style="gap: 1rem;">
-                <span class="h2 mb-0">{{balance.formatted}}</span>
-                <span class="badge bg-{{balance.stateclass}} dixeo-credit-balance-badge">{{balance.statedescription}}</span>
-            </div>
-            {{#balance.isfrozen}}
-                <div class="alert alert-warning mt-3 mb-0">{{#str}}account_frozen_warning, local_dixeo{{/str}}</div>
-            {{/balance.isfrozen}}
-            {{#balance.issuspended}}
-                <div class="alert alert-danger mt-3 mb-0">{{#str}}account_suspended_warning, local_dixeo{{/str}}</div>
-            {{/balance.issuspended}}
-        </div>
-    </div>
-
     <div class="card mb-4 local-dixeo-credit-report">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h4 class="mb-0">{{#str}}credit_report_filters, local_dixeo{{/str}}</h4>
