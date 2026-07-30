@@ -21,13 +21,12 @@ use templatable;
 use renderer_base;
 use core\output\paging_bar;
 use core\plugin_manager;
-use local_dixeo\dto\credit_transaction;
 use local_dixeo\event\credit_report_viewed;
-use local_dixeo\output\credit_report_request;
 use local_dixeo\service\credit_service;
 use local_dixeo\service\credit_usage_report_service;
 use local_dixeo\service\credit_usage_sync_service;
 use local_dixeo\util\credit_component_mapper;
+use local_dixeo\util\credit_moduletype_mapper;
 
 /**
  * Renderable for the credit report page.
@@ -37,8 +36,8 @@ use local_dixeo\util\credit_component_mapper;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class credit_report_page implements renderable, templatable {
-    /** @var array Request parameters. */
-    protected array $params;
+    /** @var credit_report_request Parsed request. */
+    protected credit_report_request $request;
 
     /**
      * Constructor.
@@ -46,7 +45,7 @@ class credit_report_page implements renderable, templatable {
      * @param array $params Report request parameters.
      */
     public function __construct(array $params) {
-        $this->params = $params;
+        $this->request = credit_report_request::from_renderable_params($params);
     }
 
     /**
@@ -84,38 +83,26 @@ class credit_report_page implements renderable, templatable {
      */
     protected function build_template_data(renderer_base $output): array {
         $reportservice = new credit_usage_report_service();
-        $view = $this->params['view'] ?? credit_usage_report_service::VIEW_WEEK;
+        $request = $this->request;
+        $filters = $request->filters;
+        $view = $request->view;
         $period = $reportservice->resolve_period(
             $view,
-            $this->params['anchor'] ?? null,
-            !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : null,
-            !empty($this->params['dateto']) ? (int) $this->params['dateto'] : null
+            $request->anchor ?: null,
+            $request->datefrom ?: null,
+            $request->dateto ?: null
         );
 
-        $filters = [
-            'type' => credit_transaction::TYPE_DEDUCTION,
-            'timestart' => $period['timestart'],
-            'timeend' => $period['timeend'],
-            'components' => $this->params['components'] ?? [],
-            'jobtypes' => $this->params['jobtypes'] ?? [],
-            'moduletypes' => $this->params['moduletypes'] ?? [],
-            'userids' => $this->params['userids'] ?? [],
-            'courseids' => $this->params['courseids'] ?? [],
-        ];
+        $servicefilters = $filters->to_service_filters($period);
+        $filteroptions = $reportservice->get_filter_options($filters->to_period_filters($period));
+        $entityoptions = $filters->get_applied_entity_options($reportservice);
 
-        $periodfilters = [
-            'type' => credit_transaction::TYPE_DEDUCTION,
-            'timestart' => $period['timestart'],
-            'timeend' => $period['timeend'],
-        ];
-
-        $page = max(0, (int) ($this->params['page'] ?? 0));
-        $perpage = max(1, (int) ($this->params['perpage'] ?? 50));
-        $rowsresult = $reportservice->get_rows($filters, $page, $perpage);
-        $kpis = $reportservice->get_kpis($filters);
-        $histogram = $reportservice->get_histogram($filters);
-        $breakdown = $reportservice->get_breakdown($filters);
-        $filteroptions = $reportservice->get_filter_options($periodfilters);
+        $page = max(0, $request->page);
+        $perpage = max(1, $request->perpage);
+        $rowsresult = $reportservice->get_rows($servicefilters, $page, $perpage);
+        $kpis = $reportservice->get_kpis($servicefilters);
+        $histogram = $reportservice->get_histogram($servicefilters);
+        $breakdown = $reportservice->get_breakdown($servicefilters);
 
         $baseparams = $this->base_url_params($view, $period);
         $totalpages = $perpage > 0 ? (int) ceil($rowsresult['total'] / $perpage) : 1;
@@ -133,7 +120,6 @@ class credit_report_page implements renderable, templatable {
             ));
         }
 
-        $request = credit_report_request::from_renderable_params($this->params);
         $exportselector = $this->build_export_selector($output, $request);
 
         credit_report_viewed::create_for_request($request, (int) $rowsresult['total'])->trigger();
@@ -150,9 +136,11 @@ class credit_report_page implements renderable, templatable {
                 'prevurl' => $period['prevanchor']
                     ? $this->report_url(array_merge($baseparams, ['anchor' => $period['prevanchor']]))
                     : null,
+                'prevanchor' => $period['prevanchor'] ?? null,
                 'nexturl' => $period['nextanchor']
                     ? $this->report_url(array_merge($baseparams, ['anchor' => $period['nextanchor']]))
                     : null,
+                'nextanchor' => $period['nextanchor'] ?? null,
                 'hasprev' => !empty($period['prevanchor']),
                 'hasnext' => !empty($period['nextanchor']),
             ],
@@ -160,57 +148,71 @@ class credit_report_page implements renderable, templatable {
                 [
                     'id' => credit_usage_report_service::VIEW_WEEK,
                     'label' => get_string('credit_report_view_week', 'local_dixeo'),
-                    'url' => $this->report_url(['view' => credit_usage_report_service::VIEW_WEEK]),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_WEEK,
+                            $period
+                        )
+                    )),
                     'active' => $view === credit_usage_report_service::VIEW_WEEK,
                 ],
                 [
                     'id' => credit_usage_report_service::VIEW_MONTH,
                     'label' => get_string('credit_report_view_month', 'local_dixeo'),
-                    'url' => $this->report_url(['view' => credit_usage_report_service::VIEW_MONTH]),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_MONTH,
+                            $period
+                        )
+                    )),
                     'active' => $view === credit_usage_report_service::VIEW_MONTH,
                 ],
                 [
                     'id' => credit_usage_report_service::VIEW_CUSTOM,
                     'label' => get_string('credit_report_view_custom', 'local_dixeo'),
-                    'url' => $this->report_url(['view' => credit_usage_report_service::VIEW_CUSTOM]),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_CUSTOM,
+                            $period
+                        )
+                    )),
                     'active' => $view === credit_usage_report_service::VIEW_CUSTOM,
                 ],
             ],
             'filters' => [
                 'action' => $this->report_url([]),
-                'datefrom' => !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart'],
-                'dateto' => !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend'],
+                'datefrom' => $request->datefrom ?: $period['timestart'],
+                'dateto' => $request->dateto ?: $period['timeend'],
                 'datefromformatted' => credit_usage_report_service::format_date_param(
-                    !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart']
+                    $request->datefrom ?: $period['timestart']
                 ),
                 'datetoformatted' => credit_usage_report_service::format_date_param(
-                    !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend']
+                    $request->dateto ?: $period['timeend']
                 ),
+                'timestart' => (int) $period['timestart'],
+                'timeend' => (int) $period['timeend'],
                 'view' => $view,
-                'anchor' => $this->params['anchor'] ?? '',
+                'anchor' => $request->anchor,
                 'components' => $this->build_filter_options(
                     $filteroptions['components'],
-                    $this->params['components'] ?? [],
+                    $filters->components,
                     'credit_component_'
                 ),
                 'jobtypes' => $this->build_filter_options(
                     $filteroptions['jobtypes'],
-                    $this->params['jobtypes'] ?? [],
+                    $filters->jobtypes,
                     'credit_action_'
                 ),
                 'moduletypes' => $this->build_filter_options(
                     $filteroptions['moduletypes'],
-                    $this->params['moduletypes'] ?? [],
+                    $filters->moduletypes,
                     'credit_moduletype_'
                 ),
-                'users' => $this->build_named_filter_options(
-                    $filteroptions['users'],
-                    $this->params['userids'] ?? []
-                ),
-                'courses' => $this->build_named_filter_options(
-                    $filteroptions['courses'],
-                    $this->params['courseids'] ?? []
-                ),
+                'users' => $entityoptions['users'],
+                'courses' => $entityoptions['courses'],
             ],
             'kpis' => [
                 'credits' => credit_service::format_credits($kpis['totalcredits']),
@@ -232,8 +234,6 @@ class credit_report_page implements renderable, templatable {
 
     /**
      * Build a credit report page URL.
-     *
-     * moodle_url rejects array parameter values, so multi-value filters are appended manually.
      *
      * @param array $params URL parameters.
      * @return string Rendered URL.
@@ -279,39 +279,30 @@ class credit_report_page implements renderable, templatable {
      * @return array
      */
     protected function base_url_params(string $view, array $period): array {
-        $params = [
-            'view' => $view,
-            'perpage' => (int) ($this->params['perpage'] ?? 50),
-        ];
+        $params = array_merge(
+            [
+                'view' => $view,
+                'perpage' => $this->request->perpage,
+            ],
+            $this->request->filters->to_query_params()
+        );
 
         if ($view === credit_usage_report_service::VIEW_CUSTOM) {
             $params['datefrom'] = credit_usage_report_service::format_date_param(
-                !empty($this->params['datefrom']) ? (int) $this->params['datefrom'] : $period['timestart']
+                $this->request->datefrom ?: $period['timestart']
             );
             $params['dateto'] = credit_usage_report_service::format_date_param(
-                !empty($this->params['dateto']) ? (int) $this->params['dateto'] : $period['timeend']
+                $this->request->dateto ?: $period['timeend']
             );
-        } else if (!empty($this->params['anchor'])) {
-            $params['anchor'] = $this->params['anchor'];
-        }
-
-        foreach (['userids' => 'userid', 'courseids' => 'courseid'] as $source => $param) {
-            foreach ($this->params[$source] ?? [] as $value) {
-                $params[$param][] = $value;
-            }
-        }
-
-        foreach (['components' => 'component', 'jobtypes' => 'jobtype', 'moduletypes' => 'moduletype'] as $source => $param) {
-            foreach ($this->params[$source] ?? [] as $value) {
-                $params[$param][] = $value;
-            }
+        } else if ($this->request->anchor !== '') {
+            $params['anchor'] = $this->request->anchor;
         }
 
         return $params;
     }
 
     /**
-     * Build select options for filters.
+     * Build select options for enum filters.
      *
      * @param array $values Available values.
      * @param array $selected Selected values.
@@ -319,10 +310,20 @@ class credit_report_page implements renderable, templatable {
      * @return array
      */
     protected function build_filter_options(array $values, array $selected, ?string $stringprefix): array {
+        if ($stringprefix === 'credit_action_') {
+            $values = credit_component_mapper::normalize_action_list($values);
+            $selected = credit_component_mapper::normalize_action_list($selected);
+        }
+
+        $values = array_values(array_unique(array_merge($values, $selected)));
+        sort($values);
+
         $options = [];
         foreach ($values as $value) {
             if ($stringprefix === 'credit_component_') {
                 $label = credit_component_mapper::get_label($value);
+            } else if ($stringprefix === 'credit_moduletype_') {
+                $label = credit_moduletype_mapper::get_label($value);
             } else if ($stringprefix) {
                 $key = $stringprefix . $value;
                 $label = get_string($key, 'local_dixeo');
@@ -336,29 +337,6 @@ class credit_report_page implements renderable, templatable {
                 'value' => $value,
                 'label' => $label,
                 'selected' => in_array($value, $selected, true),
-            ];
-        }
-        return $options;
-    }
-
-    /**
-     * Build select options from pre-labelled value rows.
-     *
-     * @param array $items Rows with value and label keys.
-     * @param array $selected Selected values.
-     * @return array
-     */
-    protected function build_named_filter_options(array $items, array $selected): array {
-        $options = [];
-        foreach ($items as $item) {
-            $value = (string) ($item['value'] ?? '');
-            if ($value === '') {
-                continue;
-            }
-            $options[] = [
-                'value' => $value,
-                'label' => (string) ($item['label'] ?? $value),
-                'selected' => in_array((int) $value, array_map('intval', $selected), true),
             ];
         }
         return $options;

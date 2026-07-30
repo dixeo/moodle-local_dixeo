@@ -171,12 +171,35 @@ final class hub_events_test extends \advanced_testcase {
      * Credit report view and export events must record metadata without PII.
      */
     public function test_credit_report_events_record_metadata_only(): void {
+        $this->resetAfterTest();
         $this->setAdminUser();
+
+        $userone = $this->getDataGenerator()->create_user();
+        $usertwo = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $repo = new \local_dixeo\repository\credit_usage_repository();
+        foreach ([$userone, $usertwo] as $index => $user) {
+            $repo->upsert_from_transaction(
+                \local_dixeo\dto\credit_transaction::from_array([
+                    'id' => 'tx-event-user-' . $index,
+                    'type' => \local_dixeo\dto\credit_transaction::TYPE_DEDUCTION,
+                    'amount' => -1,
+                    'balanceAfter' => 99,
+                    'createdAt' => gmdate('c'),
+                ]),
+                (object) [
+                    'userid' => (int) $user->id,
+                    'courseid' => (int) $course->id,
+                    'operation' => 'module_generate',
+                    'component' => 'block_dixeo_modulegen',
+                ]
+            );
+        }
 
         $request = credit_report_request::from_renderable_params([
             'view' => credit_usage_report_service::VIEW_MONTH,
-            'userids' => [3, 7],
-            'courseids' => [2],
+            'userids' => [(int) $userone->id, (int) $usertwo->id],
+            'courseids' => [(int) $course->id],
             'components' => ['block_dixeo_modulegen'],
         ]);
 

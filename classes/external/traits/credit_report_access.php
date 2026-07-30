@@ -14,19 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace local_dixeo\external\traits;
+
 /**
- * Plugin version and dependencies.
+ * Trait for credit report access checks in external APIs.
  *
  * @package    local_dixeo
- * @copyright  2025 Edunao SAS (contact@edunao.com)
- * @author     Pierre FACQ <pierre.facq@edunao.com>
+ * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-
-defined('MOODLE_INTERNAL') || die();
-$plugin->version   = 2026072805;        // The current plugin version (Date: YYYYMMDDXX).
-$plugin->requires  = 2024100700;        // Requires Moodle 4.5+.
-$plugin->component = 'local_dixeo';     // Full name of the plugin.
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.7.4';
+trait credit_report_access {
+    /**
+     * Validate system context and credit report capabilities.
+     *
+     * @return \context_system
+     */
+    protected static function validate_credit_report_access(): \context_system {
+        $context = \context_system::instance();
+        self::validate_context($context);
+        if (
+            !has_capability('local/dixeo:manage', $context)
+            && !has_capability('local/dixeo:viewusage', $context)
+        ) {
+            require_capability('local/dixeo:manage', $context);
+        }
+        return $context;
+    }
+}

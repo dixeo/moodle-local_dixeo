@@ -20,6 +20,8 @@ use local_dixeo\output\credit_report_request;
 use local_dixeo\dto\credit_transaction;
 use local_dixeo\repository\credit_usage_repository;
 use local_dixeo\service\credit_usage_report_service;
+use local_dixeo\util\credit_component_mapper;
+use local_dixeo\util\credit_moduletype_mapper;
 
 /**
  * Tests for credit usage report service.
@@ -91,9 +93,9 @@ final class credit_usage_report_service_test extends \advanced_testcase {
     }
 
     /**
-     * Filter options are scoped to the active period.
+     * Filter options merge canonical lists with period-scoped database values.
      */
-    public function test_get_filter_options_scoped_to_period(): void {
+    public function test_get_filter_options_merges_canonical_and_database_values(): void {
         $this->resetAfterTest();
 
         $user = $this->getDataGenerator()->create_user(['firstname' => 'Alice', 'lastname' => 'Report']);
@@ -128,9 +130,291 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         $this->assertContains('block_dixeo_modulegen', $options['components']);
         $this->assertContains('generate_module', $options['jobtypes']);
         $this->assertContains('page', $options['moduletypes']);
-        $this->assertSame((int) $user->id, $options['users'][0]['value']);
-        $this->assertSame(fullname($user), $options['users'][0]['label']);
-        $this->assertSame((int) $course->id, $options['courses'][0]['value']);
+        foreach (credit_component_mapper::get_known_components() as $component) {
+            $this->assertContains($component, $options['components']);
+        }
+        foreach (credit_component_mapper::get_known_actions() as $action) {
+            $this->assertContains($action, $options['jobtypes']);
+        }
+        foreach (credit_moduletype_mapper::get_known_moduletypes() as $moduletype) {
+            $this->assertContains($moduletype, $options['moduletypes']);
+        }
+        $this->assertArrayNotHasKey('users', $options);
+        $this->assertArrayNotHasKey('courses', $options);
+    }
+
+    /**
+     * Database-only filter values are merged into canonical option lists.
+     */
+    public function test_get_filter_options_includes_database_only_values(): void {
+        $this->resetAfterTest();
+
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-custom-moduletype',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -4,
+                'balanceAfter' => 96,
+                'createdAt' => gmdate('c', $now),
+                'jobType' => 'custom_action',
+                'moduleType' => 'custommod',
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => 0,
+                'operation' => 'custom_action',
+                'component' => 'custom_component',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $options = $service->get_filter_options([
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $now - DAYSECS,
+            'timeend' => $now + DAYSECS,
+        ]);
+
+        $this->assertContains('custom_component', $options['components']);
+        $this->assertContains('custom_action', $options['jobtypes']);
+        $this->assertContains('custommod', $options['moduletypes']);
+    }
+
+    /**
+     * Canonical filter values are present even when the period has no usage rows.
+     */
+    public function test_get_filter_options_includes_canonical_values_without_rows(): void {
+        $this->resetAfterTest();
+
+        $service = new credit_usage_report_service();
+        $options = $service->get_filter_options([
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => time() + (10 * YEARSECS),
+            'timeend' => time() + (10 * YEARSECS) + DAYSECS,
+        ]);
+
+        $this->assertSame(credit_component_mapper::get_known_components(), $options['components']);
+        $this->assertSame(credit_component_mapper::get_known_actions(), $options['jobtypes']);
+        $this->assertSame(credit_moduletype_mapper::get_known_moduletypes(), $options['moduletypes']);
+        $this->assertArrayNotHasKey('users', $options);
+        $this->assertArrayNotHasKey('courses', $options);
+    }
+
+    /**
+     * Canonical action codes must not produce duplicate human-readable labels.
+     */
+    public function test_get_known_actions_has_unique_labels(): void {
+        $labels = [];
+        foreach (credit_component_mapper::get_known_actions() as $action) {
+            $label = get_string('credit_action_' . $action, 'local_dixeo');
+            $this->assertNotContains($label, $labels, "Duplicate action label for {$action}");
+            $labels[] = $label;
+        }
+    }
+
+    /**
+     * Operation aliases stored in usage rows are normalized in filter options.
+     */
+    public function test_get_filter_options_normalizes_operation_aliases(): void {
+        $this->resetAfterTest();
+
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-operation-only',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -3,
+                'balanceAfter' => 97,
+                'createdAt' => gmdate('c', $now),
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => 0,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $options = $service->get_filter_options([
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $now - DAYSECS,
+            'timeend' => $now + DAYSECS,
+        ]);
+
+        $this->assertContains('generate_module', $options['jobtypes']);
+        $this->assertNotContains('module_generate', $options['jobtypes']);
+    }
+
+    /**
+     * Action filter by canonical action codes matches stored operation aliases.
+     */
+    public function test_action_filter_matches_operation_aliases(): void {
+        $this->resetAfterTest();
+
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-alias-filter',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -6,
+                'balanceAfter' => 94,
+                'createdAt' => gmdate('c', $now),
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => 0,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $filters = [
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $now - DAYSECS,
+            'timeend' => $now + DAYSECS,
+            'jobtypes' => ['generate_module'],
+        ];
+
+        $rows = $service->get_rows($filters, 0, 10);
+        $this->assertSame(1, $rows['total']);
+    }
+
+    /**
+     * User and course filter IDs must exist in credit usage data.
+     */
+    public function test_filter_valid_entity_ids_require_usage_rows(): void {
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $otheruser = $this->getDataGenerator()->create_user();
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-valid-user',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -2,
+                'balanceAfter' => 98,
+                'createdAt' => gmdate('c', $now),
+            ]),
+            (object) [
+                'userid' => (int) $user->id,
+                'courseid' => (int) $course->id,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $this->assertSame([(int) $user->id], $service->filter_valid_user_ids([(int) $user->id, (int) $otheruser->id, 99999]));
+        $this->assertSame([(int) $course->id], $service->filter_valid_course_ids([(int) $course->id, 99999]));
+    }
+
+    /**
+     * Period-scoped user search returns matching users with usage in the period.
+     */
+    public function test_search_filter_users_is_period_scoped(): void {
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user(['firstname' => 'Searchable', 'lastname' => 'User']);
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-search-user-service',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -1,
+                'balanceAfter' => 99,
+                'createdAt' => gmdate('c', $now),
+            ]),
+            (object) [
+                'userid' => (int) $user->id,
+                'courseid' => 0,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $results = $service->search_filter_users('Searchable', $now - DAYSECS, $now + DAYSECS);
+        $this->assertCount(1, $results);
+        $this->assertSame((int) $user->id, $results[0]['id']);
+        $this->assertSame(fullname($user), $results[0]['label']);
+
+        $empty = $service->search_filter_users('Searchable', $now + YEARSECS, $now + YEARSECS + DAYSECS);
+        $this->assertSame([], $empty);
+    }
+
+    /**
+     * Period-scoped course search returns matching courses with usage in the period.
+     */
+    public function test_search_filter_courses_is_period_scoped(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Searchable Course']);
+        $now = time();
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-search-course-service',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -1,
+                'balanceAfter' => 99,
+                'createdAt' => gmdate('c', $now),
+            ]),
+            (object) [
+                'userid' => 0,
+                'courseid' => (int) $course->id,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $results = $service->search_filter_courses('Searchable', $now - DAYSECS, $now + DAYSECS);
+        $this->assertCount(1, $results);
+        $this->assertSame((int) $course->id, $results[0]['id']);
+
+        $empty = $service->search_filter_courses('Searchable', $now + YEARSECS, $now + YEARSECS + DAYSECS);
+        $this->assertSame([], $empty);
+    }
+
+    /**
+     * Entity labels load applied user and course IDs in a single query per type.
+     */
+    public function test_get_entity_labels_returns_applied_entities(): void {
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user(['firstname' => 'Label', 'lastname' => 'User']);
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Label Course']);
+        $repo = new credit_usage_repository();
+        $repo->upsert_from_transaction(
+            credit_transaction::from_array([
+                'id' => 'tx-entity-labels',
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -1,
+                'balanceAfter' => 99,
+                'createdAt' => gmdate('c'),
+            ]),
+            (object) [
+                'userid' => (int) $user->id,
+                'courseid' => (int) $course->id,
+                'operation' => 'module_generate',
+                'component' => 'block_dixeo_modulegen',
+            ]
+        );
+
+        $service = new credit_usage_report_service();
+        $labels = $service->get_entity_labels([(int) $user->id], [(int) $course->id]);
+
+        $this->assertSame(fullname($user), $labels['users'][(int) $user->id]);
+        $this->assertSame('Label Course', $labels['courses'][(int) $course->id]);
     }
 
     /**
@@ -167,7 +451,7 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         ];
 
         $options = $service->get_filter_options($filters);
-        $this->assertSame([], $options['courses']);
+        $this->assertArrayNotHasKey('courses', $options);
 
         $rows = $service->get_rows($filters, 0, 10);
         $this->assertSame(1, $rows['total']);
@@ -319,6 +603,86 @@ final class credit_usage_report_service_test extends \advanced_testcase {
 
         $this->assertSame('2026-01-12', date('Y-m-d', $period['timestart']));
         $this->assertSame('2026-01-18', date('Y-m-d', $period['timeend']));
+    }
+
+    /**
+     * View switches use the current period start as anchor for week/month.
+     */
+    public function test_build_view_switch_params_week_to_month_uses_period_start(): void {
+        $service = new credit_usage_report_service();
+        $period = $service->resolve_period(credit_usage_report_service::VIEW_WEEK, '2026-07-27');
+
+        $this->assertSame('2026-07-27', date('Y-m-d', $period['timestart']));
+        $params = credit_usage_report_service::build_view_switch_params(
+            credit_usage_report_service::VIEW_MONTH,
+            $period
+        );
+
+        $this->assertSame(credit_usage_report_service::VIEW_MONTH, $params['view']);
+        $this->assertSame('2026-07-27', $params['anchor']);
+        $this->assertArrayNotHasKey('datefrom', $params);
+    }
+
+    /**
+     * A later week in the month anchors the month view to that month.
+     */
+    public function test_build_view_switch_params_august_week_to_month(): void {
+        $service = new credit_usage_report_service();
+        $period = $service->resolve_period(credit_usage_report_service::VIEW_WEEK, '2026-08-03');
+
+        $params = credit_usage_report_service::build_view_switch_params(
+            credit_usage_report_service::VIEW_MONTH,
+            $period
+        );
+
+        $this->assertSame('2026-08-03', $params['anchor']);
+        $month = $service->resolve_period(credit_usage_report_service::VIEW_MONTH, $params['anchor']);
+        $this->assertSame('2026-08-01', date('Y-m-d', $month['timestart']));
+    }
+
+    /**
+     * Switching to custom carries the full active period range.
+     */
+    public function test_build_view_switch_params_week_to_custom_uses_period_range(): void {
+        $service = new credit_usage_report_service();
+        $period = $service->resolve_period(credit_usage_report_service::VIEW_WEEK, '2026-07-27');
+
+        $params = credit_usage_report_service::build_view_switch_params(
+            credit_usage_report_service::VIEW_CUSTOM,
+            $period
+        );
+
+        $this->assertSame(credit_usage_report_service::VIEW_CUSTOM, $params['view']);
+        $this->assertSame('2026-07-27', $params['datefrom']);
+        $this->assertSame('2026-08-02', $params['dateto']);
+        $this->assertArrayNotHasKey('anchor', $params);
+    }
+
+    /**
+     * Custom range switches to week/month using the range start date.
+     */
+    public function test_build_view_switch_params_custom_to_week_uses_range_start(): void {
+        $service = new credit_usage_report_service();
+        $datefrom = credit_usage_report_service::parse_date_from_param('2026-06-08');
+        $dateto = credit_usage_report_service::parse_date_to_param('2026-08-29');
+        $period = $service->resolve_period(
+            credit_usage_report_service::VIEW_CUSTOM,
+            null,
+            $datefrom,
+            $dateto
+        );
+
+        $weekparams = credit_usage_report_service::build_view_switch_params(
+            credit_usage_report_service::VIEW_WEEK,
+            $period
+        );
+        $monthparams = credit_usage_report_service::build_view_switch_params(
+            credit_usage_report_service::VIEW_MONTH,
+            $period
+        );
+
+        $this->assertSame('2026-06-08', $weekparams['anchor']);
+        $this->assertSame('2026-06-08', $monthparams['anchor']);
     }
 
     /**

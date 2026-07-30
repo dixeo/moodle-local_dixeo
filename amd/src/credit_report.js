@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Credit report charts.
+ * Credit report charts and filters.
  *
  * @module     local_dixeo/credit_report
  * @copyright  2026 Edunao SAS
@@ -29,12 +29,23 @@ define([
 ], function(Chart, AutoComplete, Notification, Str) {
     const getStrings = Str.get_strings;
 
-    const FILTER_SELECTORS = [
+    const ENUM_FILTER_SELECTORS = [
         '#component',
         '#jobtype',
         '#moduletype',
-        '#userid',
-        '#courseid',
+    ];
+
+    const ENTITY_FILTER_CONFIG = [
+        {
+            selector: '#userid',
+            ajax: 'local_dixeo/form_credit_report_user_selector',
+            placeholderKey: 'credit_report_filter_user_placeholder',
+        },
+        {
+            selector: '#courseid',
+            ajax: 'local_dixeo/form_credit_report_course_selector',
+            placeholderKey: 'credit_report_filter_course_placeholder',
+        },
     ];
 
     const palette = [
@@ -47,10 +58,10 @@ define([
     ];
 
     /**
-     * Enhance filter dropdowns with Moodle autocomplete widgets.
+     * Enhance bounded enum filter dropdowns.
      */
-    const initFilters = async() => {
-        const selects = FILTER_SELECTORS
+    const initEnumFilters = async() => {
+        const selects = ENUM_FILTER_SELECTORS
             .map((selector) => document.querySelector(selector))
             .filter((node) => node !== null);
 
@@ -77,10 +88,54 @@ define([
     };
 
     /**
+     * Enhance user and course filters with period-scoped AJAX search.
+     */
+    const initEntityFilters = async() => {
+        const configs = ENTITY_FILTER_CONFIG.filter((config) => document.querySelector(config.selector) !== null);
+        if (configs.length === 0) {
+            return;
+        }
+
+        const placeholders = await getStrings(configs.map((config) => ({
+            key: config.placeholderKey,
+            component: 'local_dixeo',
+        }))).catch(() => configs.map(() => ''));
+
+        await Promise.all(configs.map((config, index) => AutoComplete.enhance(
+            config.selector,
+            false,
+            config.ajax,
+            placeholders[index],
+            false,
+            true,
+            '',
+            true,
+        ))).catch(Notification.exception);
+    };
+
+    /**
+     * Wire period prev/next controls to submit the filter form with updated anchor.
+     */
+    const initPeriodNav = () => {
+        const anchorInput = document.getElementById('credit-report-anchor');
+        if (!anchorInput) {
+            return;
+        }
+
+        document.querySelectorAll('[data-credit-report-anchor]').forEach((button) => {
+            button.addEventListener('click', () => {
+                anchorInput.value = button.getAttribute('data-credit-report-anchor') || '';
+            });
+        });
+    };
+
+    /**
      * Initialize credit report charts.
      */
     const init = () => {
-        initFilters();
+        initEnumFilters();
+        initEntityFilters();
+        initPeriodNav();
 
         const histogramNode = document.getElementById('credit-report-histogram-data');
         const breakdownNode = document.getElementById('credit-report-breakdown-data');

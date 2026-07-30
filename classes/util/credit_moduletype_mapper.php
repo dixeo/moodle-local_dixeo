@@ -25,6 +25,23 @@ namespace local_dixeo\util;
  */
 class credit_moduletype_mapper {
     /**
+     * Canonical activity type codes for credit report filters.
+     *
+     * @return string[]
+     */
+    public static function get_known_moduletypes(): array {
+        return [
+            'glossary',
+            'h5pactivity',
+            'label',
+            'page',
+            'quiz',
+            'simplequiz2',
+            'slideshow',
+        ];
+    }
+
+    /**
      * Resolve a human-readable label for a stored module type code.
      *
      * @param string|null $moduletype Stored activity type code.

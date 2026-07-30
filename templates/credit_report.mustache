@@ -140,17 +140,27 @@
             </div>
         </div>
         <div class="card-body">
-            {{^period.iscustom}}
-                <div class="d-flex flex-wrap justify-content-center align-items-center mb-3">
-                    <a href="{{period.prevurl}}" class="btn btn-outline-secondary btn-sm me-4 {{^period.hasprev}}disabled{{/period.hasprev}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</a>
-                    <p class="h5 mb-0 mx-2">{{period.label}}</p>
-                    <a href="{{period.nexturl}}" class="btn btn-outline-secondary btn-sm ms-4 {{^period.hasnext}}disabled{{/period.hasnext}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</a>
-                </div>
-            {{/period.iscustom}}
-
             <form method="get" action="{{filters.action}}" class="row g-3">
                 <input type="hidden" name="view" value="{{filters.view}}">
-                {{#filters.anchor}}<input type="hidden" name="anchor" value="{{filters.anchor}}">{{/filters.anchor}}
+                <input type="hidden" name="anchor" id="credit-report-anchor" value="{{filters.anchor}}">
+
+                {{^period.iscustom}}
+                    <div class="d-flex flex-wrap justify-content-center align-items-center mb-3 col-12">
+                        {{#period.hasprev}}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm me-4" data-credit-report-anchor="{{period.prevanchor}}" aria-label="{{#str}}credit_report_prev_period, local_dixeo{{/str}}">&larr;</button>
+                        {{/period.hasprev}}
+                        {{^period.hasprev}}
+                            <span class="btn btn-outline-secondary btn-sm me-4 disabled" aria-hidden="true">&larr;</span>
+                        {{/period.hasprev}}
+                        <p class="h5 mb-0 mx-2">{{period.label}}</p>
+                        {{#period.hasnext}}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm ms-4" data-credit-report-anchor="{{period.nextanchor}}" aria-label="{{#str}}credit_report_next_period, local_dixeo{{/str}}">&rarr;</button>
+                        {{/period.hasnext}}
+                        {{^period.hasnext}}
+                            <span class="btn btn-outline-secondary btn-sm ms-4 disabled" aria-hidden="true">&rarr;</span>
+                        {{/period.hasnext}}
+                    </div>
+                {{/period.iscustom}}
 
                 {{#period.iscustom}}
                     <div class="col-12 mb-4">
@@ -193,7 +203,8 @@
                 </div>
                 <div class="col-md-3">
                     <label class="dixeo-credit-report-filter-label" for="userid">{{#str}}credit_report_filter_user, local_dixeo{{/str}}</label>
-                    <select class="form-control dixeo-credit-report-filter-select" id="userid" name="userid[]" multiple size="5">
+                    <select class="form-control dixeo-credit-report-filter-select dixeo-credit-report-entity-filter" id="userid" name="userid[]" multiple
+                        data-timestart="{{filters.timestart}}" data-timeend="{{filters.timeend}}">
                         {{#filters.users}}
                             <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                         {{/filters.users}}
@@ -201,7 +212,8 @@
                 </div>
                 <div class="col-md-3">
                     <label class="dixeo-credit-report-filter-label" for="courseid">{{#str}}credit_report_filter_course, local_dixeo{{/str}}</label>
-                    <select class="form-control dixeo-credit-report-filter-select" id="courseid" name="courseid[]" multiple size="5">
+                    <select class="form-control dixeo-credit-report-filter-select dixeo-credit-report-entity-filter" id="courseid" name="courseid[]" multiple
+                        data-timestart="{{filters.timestart}}" data-timeend="{{filters.timeend}}">
                         {{#filters.courses}}
                             <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                         {{/filters.courses}}

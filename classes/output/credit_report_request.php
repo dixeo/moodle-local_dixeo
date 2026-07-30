@@ -16,7 +16,6 @@
 
 namespace local_dixeo\output;
 
-use local_dixeo\dto\credit_transaction;
 use local_dixeo\service\credit_usage_report_service;
 
 /**
@@ -45,20 +44,8 @@ final class credit_report_request {
     /** @var int Rows per page. */
     public int $perpage;
 
-    /** @var int[] Selected user IDs. */
-    public array $userids;
-
-    /** @var int[] Selected course IDs. */
-    public array $courseids;
-
-    /** @var string[] Selected components. */
-    public array $components;
-
-    /** @var string[] Selected job types. */
-    public array $jobtypes;
-
-    /** @var string[] Selected module types. */
-    public array $moduletypes;
+    /** @var credit_report_filters Validated filter state. */
+    public credit_report_filters $filters;
 
     /**
      * Require report access capability.
@@ -90,11 +77,13 @@ final class credit_report_request {
         );
         $request->page = optional_param('page', 0, PARAM_INT);
         $request->perpage = optional_param('perpage', 50, PARAM_INT);
-        $request->userids = array_values(array_filter(optional_param_array('userid', [], PARAM_INT)));
-        $request->courseids = array_values(array_filter(optional_param_array('courseid', [], PARAM_INT)));
-        $request->components = optional_param_array('component', [], PARAM_ALPHANUMEXT);
-        $request->jobtypes = optional_param_array('jobtype', [], PARAM_ALPHANUMEXT);
-        $request->moduletypes = optional_param_array('moduletype', [], PARAM_ALPHANUMEXT);
+        $request->filters = credit_report_filters::from_raw([
+            'components' => optional_param_array('component', [], PARAM_ALPHANUMEXT),
+            'jobtypes' => optional_param_array('jobtype', [], PARAM_ALPHANUMEXT),
+            'moduletypes' => optional_param_array('moduletype', [], PARAM_ALPHANUMEXT),
+            'userids' => array_values(array_filter(optional_param_array('userid', [], PARAM_INT))),
+            'courseids' => array_values(array_filter(optional_param_array('courseid', [], PARAM_INT))),
+        ]);
         return $request;
     }
 
@@ -112,11 +101,13 @@ final class credit_report_request {
         $request->dateto = (int) ($params['dateto'] ?? 0);
         $request->page = (int) ($params['page'] ?? 0);
         $request->perpage = (int) ($params['perpage'] ?? 50);
-        $request->userids = $params['userids'] ?? [];
-        $request->courseids = $params['courseids'] ?? [];
-        $request->components = $params['components'] ?? [];
-        $request->jobtypes = $params['jobtypes'] ?? [];
-        $request->moduletypes = $params['moduletypes'] ?? [];
+        $request->filters = credit_report_filters::from_raw([
+            'components' => $params['components'] ?? [],
+            'jobtypes' => $params['jobtypes'] ?? [],
+            'moduletypes' => $params['moduletypes'] ?? [],
+            'userids' => $params['userids'] ?? [],
+            'courseids' => $params['courseids'] ?? [],
+        ]);
         return $request;
     }
 
@@ -133,11 +124,11 @@ final class credit_report_request {
             'dateto' => $this->dateto,
             'page' => $this->page,
             'perpage' => $this->perpage,
-            'userids' => $this->userids,
-            'courseids' => $this->courseids,
-            'components' => $this->components,
-            'jobtypes' => $this->jobtypes,
-            'moduletypes' => $this->moduletypes,
+            'components' => $this->filters->components,
+            'jobtypes' => $this->filters->jobtypes,
+            'moduletypes' => $this->filters->moduletypes,
+            'userids' => $this->filters->userids,
+            'courseids' => $this->filters->courseids,
         ];
     }
 
@@ -175,16 +166,7 @@ final class credit_report_request {
             $this->dateto ?: null
         );
 
-        return [
-            'type' => credit_transaction::TYPE_DEDUCTION,
-            'timestart' => $period['timestart'],
-            'timeend' => $period['timeend'],
-            'components' => $this->components,
-            'jobtypes' => $this->jobtypes,
-            'moduletypes' => $this->moduletypes,
-            'userids' => $this->userids,
-            'courseids' => $this->courseids,
-        ];
+        return $this->filters->to_service_filters($period);
     }
 
     /**
@@ -193,14 +175,12 @@ final class credit_report_request {
      * @return array<int, array{name: string, value: string}>
      */
     public function to_export_hidden_params(): array {
-        $params = [
-            'view' => $this->view,
-            'userid' => $this->userids,
-            'courseid' => $this->courseids,
-            'component' => $this->components,
-            'jobtype' => $this->jobtypes,
-            'moduletype' => $this->moduletypes,
-        ];
+        $params = array_merge(
+            [
+                'view' => $this->view,
+            ],
+            $this->filters->to_query_params()
+        );
 
         if ($this->anchor !== '') {
             $params['anchor'] = $this->anchor;
@@ -251,11 +231,11 @@ final class credit_report_request {
             'view' => $this->view,
             'rowcount' => $rowcount,
             'page' => $this->page,
-            'filtercomponents' => count($this->components),
-            'filterjobtypes' => count($this->jobtypes),
-            'filtermoduletypes' => count($this->moduletypes),
-            'filterusers' => count($this->userids),
-            'filtercourses' => count($this->courseids),
+            'filtercomponents' => count($this->filters->components),
+            'filterjobtypes' => count($this->filters->jobtypes),
+            'filtermoduletypes' => count($this->filters->moduletypes),
+            'filterusers' => count($this->filters->userids),
+            'filtercourses' => count($this->filters->courseids),
         ];
 
         if ($dataformat !== null && $dataformat !== '') {

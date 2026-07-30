@@ -139,4 +139,217 @@ class credit_usage_repository {
         global $DB;
         $DB->delete_records(self::TABLE, ['userid' => $userid]);
     }
+
+    /**
+     * Return user IDs that have at least one credit usage row.
+     *
+     * @param int[] $userids Candidate user IDs.
+     * @return int[]
+     */
+    public function filter_user_ids_with_usage(array $userids): array {
+        global $DB;
+
+        $userids = array_values(array_unique(array_filter(array_map('intval', $userids))));
+        if ($userids === []) {
+            return [];
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'uid');
+        $found = $DB->get_fieldset_sql(
+            "SELECT DISTINCT userid
+               FROM {" . self::TABLE . "}
+              WHERE userid {$insql}
+                AND userid > 0",
+            $params
+        );
+
+        return array_map('intval', $found);
+    }
+
+    /**
+     * Return course IDs that have at least one credit usage row.
+     *
+     * @param int[] $courseids Candidate course IDs.
+     * @return int[]
+     */
+    public function filter_course_ids_with_usage(array $courseids): array {
+        global $DB;
+
+        $courseids = array_values(array_unique(array_filter(array_map('intval', $courseids))));
+        if ($courseids === []) {
+            return [];
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'cid');
+        $found = $DB->get_fieldset_sql(
+            "SELECT DISTINCT courseid
+               FROM {" . self::TABLE . "}
+              WHERE courseid {$insql}
+                AND courseid > 0",
+            $params
+        );
+
+        return array_map('intval', $found);
+    }
+
+    /**
+     * Search users with credit usage in a period.
+     *
+     * @param string $query Search query.
+     * @param int $timestart Period start timestamp.
+     * @param int $timeend Period end timestamp.
+     * @param int $limit Maximum results.
+     * @return array<int, array{id: int, label: string}>
+     */
+    public function search_users_with_usage(string $query, int $timestart, int $timeend, int $limit = 20): array {
+        global $DB;
+
+        $params = [
+            'type' => \local_dixeo\dto\credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $timestart,
+            'timeend' => $timeend,
+        ];
+        $conditions = [
+            'cu.type = :type',
+            'cu.timecreated >= :timestart',
+            'cu.timecreated <= :timeend',
+            'cu.userid > 0',
+            'u.deleted = 0',
+        ];
+
+        $query = trim($query);
+        if ($query !== '') {
+            if (ctype_digit($query)) {
+                $conditions[] = 'u.id = :exactid';
+                $params['exactid'] = (int) $query;
+            } else {
+                $like = '%' . $DB->sql_like_escape($query) . '%';
+                $conditions[] = '(' . $DB->sql_like('u.firstname', ':firstname', false) .
+                    ' OR ' . $DB->sql_like('u.lastname', ':lastname', false) .
+                    ' OR ' . $DB->sql_like('u.email', ':email', false) . ')';
+                $params['firstname'] = $like;
+                $params['lastname'] = $like;
+                $params['email'] = $like;
+            }
+        }
+
+        $sql = "SELECT DISTINCT u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic,
+                       u.middlename, u.alternatename
+                  FROM {" . self::TABLE . "} cu
+                  JOIN {user} u ON u.id = cu.userid
+                 WHERE " . implode(' AND ', $conditions) . "
+              ORDER BY u.lastname ASC, u.firstname ASC";
+
+        $records = $DB->get_records_sql($sql, $params, 0, $limit);
+        $results = [];
+        foreach ($records as $record) {
+            $results[(int) $record->id] = [
+                'id' => (int) $record->id,
+                'label' => fullname($record),
+            ];
+        }
+
+        return array_values($results);
+    }
+
+    /**
+     * Search courses with credit usage in a period.
+     *
+     * @param string $query Search query.
+     * @param int $timestart Period start timestamp.
+     * @param int $timeend Period end timestamp.
+     * @param int $limit Maximum results.
+     * @return array<int, array{id: int, label: string}>
+     */
+    public function search_courses_with_usage(string $query, int $timestart, int $timeend, int $limit = 20): array {
+        global $DB;
+
+        $params = [
+            'type' => \local_dixeo\dto\credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $timestart,
+            'timeend' => $timeend,
+        ];
+        $conditions = [
+            'cu.type = :type',
+            'cu.timecreated >= :timestart',
+            'cu.timecreated <= :timeend',
+            'cu.courseid > 0',
+        ];
+
+        $query = trim($query);
+        if ($query !== '') {
+            if (ctype_digit($query)) {
+                $conditions[] = 'c.id = :exactid';
+                $params['exactid'] = (int) $query;
+            } else {
+                $like = '%' . $DB->sql_like_escape($query) . '%';
+                $conditions[] = $DB->sql_like('c.fullname', ':fullname', false);
+                $params['fullname'] = $like;
+            }
+        }
+
+        $sql = "SELECT DISTINCT c.id, c.fullname
+                  FROM {" . self::TABLE . "} cu
+                  JOIN {course} c ON c.id = cu.courseid
+                 WHERE " . implode(' AND ', $conditions) . "
+              ORDER BY c.fullname ASC";
+
+        $records = $DB->get_records_sql($sql, $params, 0, $limit);
+        $results = [];
+        foreach ($records as $record) {
+            $results[(int) $record->id] = [
+                'id' => (int) $record->id,
+                'label' => format_string($record->fullname),
+            ];
+        }
+
+        return array_values($results);
+    }
+
+    /**
+     * Load labels for applied user and course filters.
+     *
+     * @param int[] $userids User IDs.
+     * @param int[] $courseids Course IDs.
+     * @return array{users: array<int, string>, courses: array<int, string>}
+     */
+    public function get_entity_labels(array $userids, array $courseids): array {
+        global $DB;
+
+        $users = [];
+        $userids = array_values(array_unique(array_filter(array_map('intval', $userids))));
+        if ($userids !== []) {
+            [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'uid');
+            $records = $DB->get_records_sql(
+                "SELECT id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename
+                   FROM {user}
+                  WHERE id {$insql}
+                    AND deleted = 0",
+                $params
+            );
+            foreach ($records as $record) {
+                $users[(int) $record->id] = fullname($record);
+            }
+        }
+
+        $courses = [];
+        $courseids = array_values(array_unique(array_filter(array_map('intval', $courseids))));
+        if ($courseids !== []) {
+            [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'cid');
+            $records = $DB->get_records_sql(
+                "SELECT id, fullname
+                   FROM {course}
+                  WHERE id {$insql}",
+                $params
+            );
+            foreach ($records as $record) {
+                $courses[(int) $record->id] = format_string($record->fullname);
+            }
+        }
+
+        return [
+            'users' => $users,
+            'courses' => $courses,
+        ];
+    }
 }

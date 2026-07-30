@@ -160,7 +160,8 @@ class credit_usage_report_service {
         }
 
         if (!empty($filters['jobtypes']) && is_array($filters['jobtypes'])) {
-            [$insql, $inparams] = $DB->get_in_or_equal($filters['jobtypes'], SQL_PARAMS_NAMED, 'jt');
+            $jobtypes = credit_component_mapper::expand_action_filter($filters['jobtypes']);
+            [$insql, $inparams] = $DB->get_in_or_equal($jobtypes, SQL_PARAMS_NAMED, 'jt');
             $conditions[] = "COALESCE(NULLIF(cu.jobtype, ''), NULLIF(cu.operation, '')) {$insql}";
             $params = array_merge($params, $inparams);
         }
@@ -192,6 +193,87 @@ class credit_usage_report_service {
         return [
             'sql' => implode(' AND ', $conditions),
             'params' => $params,
+        ];
+    }
+
+    /**
+     * Keep only user IDs that appear in synced credit usage data.
+     *
+     * @param int[] $userids Candidate user IDs from request parameters.
+     * @return int[]
+     */
+    public function filter_valid_user_ids(array $userids): array {
+        return (new credit_usage_repository())->filter_user_ids_with_usage($userids);
+    }
+
+    /**
+     * Keep only course IDs that appear in synced credit usage data.
+     *
+     * @param int[] $courseids Candidate course IDs from request parameters.
+     * @return int[]
+     */
+    public function filter_valid_course_ids(array $courseids): array {
+        return (new credit_usage_repository())->filter_course_ids_with_usage($courseids);
+    }
+
+    /**
+     * Search users with credit usage in the active period.
+     *
+     * @param string $query Search query.
+     * @param int $timestart Period start timestamp.
+     * @param int $timeend Period end timestamp.
+     * @param int $limit Maximum results.
+     * @return array<int, array{id: int, label: string}>
+     */
+    public function search_filter_users(string $query, int $timestart, int $timeend, int $limit = 20): array {
+        return (new credit_usage_repository())->search_users_with_usage($query, $timestart, $timeend, $limit);
+    }
+
+    /**
+     * Search courses with credit usage in the active period.
+     *
+     * @param string $query Search query.
+     * @param int $timestart Period start timestamp.
+     * @param int $timeend Period end timestamp.
+     * @param int $limit Maximum results.
+     * @return array<int, array{id: int, label: string}>
+     */
+    public function search_filter_courses(string $query, int $timestart, int $timeend, int $limit = 20): array {
+        return (new credit_usage_repository())->search_courses_with_usage($query, $timestart, $timeend, $limit);
+    }
+
+    /**
+     * Load labels for applied user and course filters.
+     *
+     * @param int[] $userids User IDs.
+     * @param int[] $courseids Course IDs.
+     * @return array{users: array<int, string>, courses: array<int, string>}
+     */
+    public function get_entity_labels(array $userids, array $courseids): array {
+        return (new credit_usage_repository())->get_entity_labels($userids, $courseids);
+    }
+
+    /**
+     * Build URL parameters when switching period view modes.
+     *
+     * Week/month targets use the current period start as anchor. Custom uses the full period range.
+     *
+     * @param string $targetview Target view mode.
+     * @param array $period Resolved current period data.
+     * @return array
+     */
+    public static function build_view_switch_params(string $targetview, array $period): array {
+        if ($targetview === self::VIEW_CUSTOM) {
+            return [
+                'view' => self::VIEW_CUSTOM,
+                'datefrom' => self::format_date_param((int) $period['timestart']),
+                'dateto' => self::format_date_param((int) $period['timeend']),
+            ];
+        }
+
+        return [
+            'view' => $targetview,
+            'anchor' => self::format_date_param((int) $period['timestart']),
         ];
     }
 
@@ -364,7 +446,7 @@ class credit_usage_report_service {
      * Get distinct filter option values scoped to the active period.
      *
      * @param array $filters Period-scoped filters (type, timestart, timeend).
-     * @return array{components: array, jobtypes: array, moduletypes: array, users: array, courses: array}
+     * @return array{components: array, jobtypes: array, moduletypes: array}
      */
     public function get_filter_options(array $filters): array {
         global $DB;
@@ -401,58 +483,28 @@ class credit_usage_report_service {
             $built['params']
         );
 
-        $userrecords = $DB->get_records_sql(
-            "SELECT DISTINCT cu.userid
-               FROM {" . credit_usage_repository::TABLE . "} cu
-              WHERE {$built['sql']}
-                AND cu.userid > 0
-           ORDER BY cu.userid ASC",
-            $built['params']
-        );
+        $components = array_values(array_unique(array_merge(
+            credit_component_mapper::get_known_components(),
+            array_values(array_filter($components))
+        )));
+        sort($components);
 
-        $users = [];
-        foreach ($userrecords as $record) {
-            $user = \core_user::get_user((int) $record->userid, '*', IGNORE_MISSING);
-            if (!$user) {
-                continue;
-            }
-            $users[] = [
-                'value' => (int) $user->id,
-                'label' => fullname($user),
-            ];
-        }
+        $jobtypes = array_values(array_unique(array_merge(
+            credit_component_mapper::get_known_actions(),
+            credit_component_mapper::normalize_action_list(array_values(array_filter($jobtypes)))
+        )));
+        sort($jobtypes);
 
-        usort($users, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
-
-        $courserecords = $DB->get_records_sql(
-            "SELECT DISTINCT cu.courseid
-               FROM {" . credit_usage_repository::TABLE . "} cu
-              WHERE {$built['sql']}
-                AND cu.courseid > 0
-           ORDER BY cu.courseid ASC",
-            $built['params']
-        );
-
-        $courses = [];
-        foreach ($courserecords as $record) {
-            $course = $DB->get_record('course', ['id' => (int) $record->courseid], '*', IGNORE_MISSING);
-            if (!$course) {
-                continue;
-            }
-            $courses[] = [
-                'value' => (int) $course->id,
-                'label' => format_string($course->fullname),
-            ];
-        }
-
-        usort($courses, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
+        $moduletypes = array_values(array_unique(array_merge(
+            credit_moduletype_mapper::get_known_moduletypes(),
+            array_values(array_filter($moduletypes))
+        )));
+        sort($moduletypes);
 
         return [
-            'components' => array_values(array_filter($components)),
-            'jobtypes' => array_values(array_filter($jobtypes)),
-            'moduletypes' => array_values(array_filter($moduletypes)),
-            'users' => $users,
-            'courses' => $courses,
+            'components' => $components,
+            'jobtypes' => $jobtypes,
+            'moduletypes' => $moduletypes,
         ];
     }
 
