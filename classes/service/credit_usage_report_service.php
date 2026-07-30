@@ -606,7 +606,7 @@ class credit_usage_report_service {
 
         return [
             'credits' => (int) $record->credits,
-            'creditsformatted' => credit_service::format_credits((int) $record->credits),
+            'creditsformatted' => number_format((int) $record->credits),
             'component' => (string) $record->component,
             'componentlabel' => credit_component_mapper::get_label($record->component),
             'actioncode' => (string) ($record->jobtype ?: $record->operation),
