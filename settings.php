@@ -121,7 +121,7 @@ if ($hassiteconfig) {
         $reporturl = new moodle_url('/local/dixeo/credit_report.php');
         $settings->add(new admin_setting_description(
             'local_dixeo/credit_report_link',
-            get_string('credit_report', 'local_dixeo'),
+            '',
             html_writer::div(
                 html_writer::link(
                     $reporturl,
@@ -135,6 +135,13 @@ if ($hassiteconfig) {
 
     // Add to admin tree.
     $ADMIN->add('localplugins', $settings);
+
+    $ADMIN->add('reports', new admin_externalpage(
+        'local_dixeo_credit_usage',
+        get_string('credit_usage_report_nav', 'local_dixeo'),
+        new moodle_url('/local/dixeo/credit_report.php'),
+        ['local/dixeo:manage', 'local/dixeo:viewusage']
+    ));
 
     // Conditionally add the Dixeo Course Designer link if the block is installed.
     if (\local_dixeo\service\plugin_installation_service::is_component_installed('block_dixeo_designer')) {
