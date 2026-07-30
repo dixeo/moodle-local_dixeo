@@ -436,14 +436,14 @@ h2:has(.dixeo-sync-indicator),
     box-shadow: none;
 }
 
-#page-local-dixeo-credit_report .badge.bg-success,
-#page-local-dixeo-credit_report .badge.bg-warning,
-#page-local-dixeo-credit_report .badge.bg-danger {
+.dixeo-credit-balance-badge.badge.bg-success,
+.dixeo-credit-balance-badge.badge.bg-warning,
+.dixeo-credit-balance-badge.badge.bg-danger {
     color: #fff;
 }
 
-#page-local-dixeo-credit_report #creditUsageHistogram,
-#page-local-dixeo-credit_report #creditUsageBreakdown {
+.local-dixeo-credit-report-page #creditUsageHistogram,
+.local-dixeo-credit-report-page #creditUsageBreakdown {
     min-height: 240px;
 }
 

@@ -138,6 +138,7 @@
 {{/error}}
 
 {{^error}}
+<div class="local-dixeo-credit-report-page">
     <div class="card mb-4">
         <div class="card-header">
             <h4 class="mb-0">{{#str}}current_balance, local_dixeo{{/str}}</h4>
@@ -145,7 +146,7 @@
         <div class="card-body">
             <div class="d-flex align-items-center" style="gap: 1rem;">
                 <span class="h2 mb-0">{{balance.formatted}}</span>
-                <span class="badge bg-{{balance.stateclass}}">{{balance.statedescription}}</span>
+                <span class="badge bg-{{balance.stateclass}} dixeo-credit-balance-badge">{{balance.statedescription}}</span>
             </div>
             {{#balance.isfrozen}}
                 <div class="alert alert-warning mt-3 mb-0">{{#str}}account_frozen_warning, local_dixeo{{/str}}</div>
@@ -327,4 +328,5 @@
         <script type="application/json" id="credit-report-histogram-data">{{{histogramdata}}}</script>
         <script type="application/json" id="credit-report-breakdown-data">{{{breakdowndata}}}</script>
     {{/haschartdata}}
+</div>
 {{/error}}

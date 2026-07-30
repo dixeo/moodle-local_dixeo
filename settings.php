@@ -157,3 +157,8 @@ if ($hassiteconfig) {
         );
     }
 }
+
+global $PAGE;
+if (!empty($PAGE->pagetype) && $PAGE->pagetype === 'admin-setting-local_dixeo') {
+    $PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
+}
