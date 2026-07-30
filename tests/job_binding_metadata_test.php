@@ -14,15 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * Tests for job_binding_metadata.
- *
- * @package    local_dixeo
- * @category   test
- * @copyright  2026 Dixeo
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 namespace local_dixeo;
 
 use local_dixeo\dto\job_binding_metadata;
@@ -33,10 +24,15 @@ global $CFG;
 require_once($CFG->dirroot . '/mod/page/lib.php');
 
 /**
- * @covers \local_dixeo\dto\job_binding_metadata
+ * Tests for job_binding_metadata.
+ *
+ * @package    local_dixeo
+ * @category   test
+ * @copyright  2026 Dixeo
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @covers     \local_dixeo\dto\job_binding_metadata
  */
 final class job_binding_metadata_test extends \advanced_testcase {
-
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);

@@ -141,9 +141,13 @@ class job_binding_metadata {
             }
         }
 
-        $courseid = \local_dixeo\service\image\pluginfile_helper::resolve_course_id_for_file($file);
-        if ($courseid > 0) {
-            return self::for_course($courseid);
+        if ($context->contextlevel === CONTEXT_COURSE) {
+            return self::for_course((int) $context->instanceid);
+        }
+
+        $coursecontext = $context->get_course_context(false);
+        if ($coursecontext) {
+            return self::for_course((int) $coursecontext->instanceid);
         }
 
         return null;
