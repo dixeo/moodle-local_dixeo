@@ -215,29 +215,74 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_credits, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.credits}}</div></div></div></div>
-        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_users, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.users}}</div></div></div></div>
-        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_courses, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.courses}}</div></div></div></div>
-        <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">{{#str}}credit_report_kpi_rows, local_dixeo{{/str}}</div><div class="h4 mb-0">{{kpis.rows}}</div></div></div></div>
-    </div>
-
-    {{#haschartdata}}
-        <div class="row mb-4">
-            <div class="col-lg-8">
-                <div class="card h-100">
-                    <div class="card-header"><h5 class="mb-0">{{#str}}credit_report_histogram, local_dixeo{{/str}}</h5></div>
-                    <div class="card-body"><canvas id="creditUsageHistogram" height="240"></canvas></div>
-                </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="card h-100">
-                    <div class="card-header"><h5 class="mb-0">{{#str}}credit_report_breakdown, local_dixeo{{/str}}</h5></div>
-                    <div class="card-body"><canvas id="creditUsageBreakdown" height="240"></canvas></div>
-                </div>
-            </div>
+    <div class="card mb-4 local-dixeo-credit-report-summary">
+        <div class="card-header">
+            <h4 class="mb-0">{{#str}}credit_report_summary, local_dixeo{{/str}}</h4>
         </div>
-    {{/haschartdata}}
+        <div class="card-body">
+            <p class="h5 mb-4">{{period.label}}</p>
+
+            <div class="row mb-4 g-3">
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}credit_report_kpi_credits, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-0">{{kpis.credits}}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}credit_report_kpi_users, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-0">{{kpis.users}}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}credit_report_kpi_courses, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-0">{{kpis.courses}}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}credit_report_kpi_rows, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-0">{{kpis.rows}}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{#haschartdata}}
+                <div class="row g-3">
+                    <div class="col-lg-8">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="dixeo-credit-report-chart-title">{{#str}}credit_report_histogram, local_dixeo{{/str}}</h5>
+                                <div class="dixeo-credit-report-chart-container">
+                                    <canvas id="creditUsageHistogram"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="dixeo-credit-report-chart-title">{{#str}}credit_report_breakdown, local_dixeo{{/str}}</h5>
+                                <div class="dixeo-credit-report-chart-container">
+                                    <canvas id="creditUsageBreakdown"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{/haschartdata}}
+        </div>
+    </div>
 
     <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">

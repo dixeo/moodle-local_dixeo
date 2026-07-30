@@ -442,9 +442,13 @@ h2:has(.dixeo-sync-indicator),
     color: #fff;
 }
 
-.local-dixeo-credit-report-page #creditUsageHistogram,
-.local-dixeo-credit-report-page #creditUsageBreakdown {
-    min-height: 240px;
+.local-dixeo-credit-report-summary .dixeo-credit-report-chart-container {
+    position: relative;
+    height: 240px;
+}
+
+.local-dixeo-credit-report-summary .dixeo-credit-report-chart-title {
+    margin-bottom: 1rem;
 }
 
 .local-dixeo-credit-report .dixeo-credit-report-export .dataformatselector {
