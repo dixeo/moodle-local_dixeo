@@ -90,6 +90,7 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
         $names = array_map(static fn($item) => $item->get_name(), $items);
         $this->assertContains('local_dixeo_course_ai', $names);
         $this->assertContains('local_dixeo_jobs', $names);
+        $this->assertContains('local_dixeo_image_job', $names);
         $this->assertContains('dixeo_api', $names);
 
         $external = null;

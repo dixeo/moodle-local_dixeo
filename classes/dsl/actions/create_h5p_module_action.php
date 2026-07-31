@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -69,6 +69,8 @@ class create_h5p_module_action {
      * @throws dsl_exception If the action specification or context is invalid.
      */
     public function execute(array $action, value_resolver $resolver): array {
+        global $DB, $USER;
+
         $context = $resolver->get_context();
         $this->validate_context($context);
 
@@ -116,6 +118,21 @@ class create_h5p_module_action {
                 $e
             );
         }
+
+        $shortcodeservice = \local_dixeo\external\service_factory::get_content_image_shortcode_service();
+        $cmid = (int) $result['cmid'];
+        $instanceid = (int) $result['id'];
+        $modulecontext = \context_module::instance($cmid);
+        $record = $DB->get_record('h5pactivity', ['id' => $instanceid], '*', MUST_EXIST);
+        $shortcodeservice->process_and_persist(
+            'h5pactivity',
+            $instanceid,
+            $modulecontext->id,
+            (int) $context['courseid'],
+            $cmid,
+            $record,
+            (int) ($context['userid'] ?? $USER->id)
+        );
 
         return [
             'id' => $result['id'],

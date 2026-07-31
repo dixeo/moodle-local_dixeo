@@ -825,8 +825,12 @@ class file_sync_service {
      * @return \stdClass Updated status object.
      */
     public function poll_status(int $courseid): \stdClass {
-        try {
-            $apistatus = $this->client->get_files_status((string) $courseid);
+        if (!$this->client->is_configured()) {
+            return $this->get_status($courseid);
+        }
+
+        $apistatus = $this->fetch_remote_sync_status($courseid);
+        if ($apistatus !== null) {
             $apiprogress = $apistatus['progress'] ?? null;
 
             $progress = [
@@ -843,11 +847,23 @@ class file_sync_service {
 
             $status = $apistatus['status'] ?? 'none';
             $this->repository->update_sync_status($courseid, $status, $progress);
-        } catch (api_exception $e) {
-            debugging('Failed to poll sync status: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
 
         return $this->get_status($courseid);
+    }
+
+    /**
+     * Fetch remote sync status, or null when the API is unavailable.
+     *
+     * @param int $courseid The course ID.
+     * @return array|null Decoded API status payload.
+     */
+    private function fetch_remote_sync_status(int $courseid): ?array {
+        try {
+            return $this->client->get_files_status((string) $courseid);
+        } catch (api_exception $e) {
+            return null;
+        }
     }
 
     /**
