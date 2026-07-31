@@ -128,7 +128,7 @@ class admin_setting_credit_balance extends \admin_setting {
             $html .= \html_writer::tag(
                 'span',
                 $balance->get_state_description(),
-                ['class' => "badge bg-{$stateclass}", 'style' => 'font-size: 0.75rem;']
+                ['class' => "badge bg-{$stateclass} dixeo-credit-balance-badge", 'style' => 'font-size: 0.75rem;']
             );
 
             $html .= \html_writer::end_div();

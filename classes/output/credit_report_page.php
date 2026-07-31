@@ -19,46 +19,33 @@ namespace local_dixeo\output;
 use renderable;
 use templatable;
 use renderer_base;
+use core\output\paging_bar;
+use core\plugin_manager;
+use local_dixeo\event\credit_report_viewed;
 use local_dixeo\service\credit_service;
-use local_dixeo\dto\credit_balance;
+use local_dixeo\service\credit_usage_report_service;
+use local_dixeo\service\credit_usage_sync_service;
+use local_dixeo\util\credit_component_mapper;
+use local_dixeo\util\credit_moduletype_mapper;
 
 /**
  * Renderable for the credit report page.
  *
- * Prepares data for the credit report template, including balance,
- * usage statistics (current week view), and transaction history.
- *
  * @package    local_dixeo
- * @copyright  2025 Edunao SAS (contact@edunao.com)
- * @author     Pierre FACQ <pierre.facq@edunao.com>
+ * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class credit_report_page implements renderable, templatable {
-    /** @var credit_service The credit service. */
-    protected credit_service $creditservice;
-
-    /** @var int Pagination limit. */
-    protected int $limit;
-
-    /** @var int Pagination offset. */
-    protected int $offset;
-
-    /** @var credit_balance|null Cached balance. */
-    protected ?credit_balance $balance = null;
-
-    /** @var string|null Error message if API call fails. */
-    protected ?string $error = null;
+    /** @var credit_report_request Parsed request. */
+    protected credit_report_request $request;
 
     /**
      * Constructor.
      *
-     * @param int $limit Pagination limit for transactions.
-     * @param int $offset Pagination offset for transactions.
+     * @param array $params Report request parameters.
      */
-    public function __construct(int $limit = 50, int $offset = 0) {
-        $this->creditservice = new credit_service();
-        $this->limit = $limit;
-        $this->offset = $offset;
+    public function __construct(array $params) {
+        $this->request = credit_report_request::from_renderable_params($params);
     }
 
     /**
@@ -68,7 +55,8 @@ class credit_report_page implements renderable, templatable {
      * @return array The template data.
      */
     public function export_for_template(renderer_base $output): array {
-        if (!$this->creditservice->is_configured()) {
+        $creditservice = new credit_service();
+        if (!$creditservice->is_configured()) {
             return [
                 'configured' => false,
                 'error' => get_string('api_key_not_configured', 'local_dixeo'),
@@ -77,7 +65,8 @@ class credit_report_page implements renderable, templatable {
         }
 
         try {
-            return $this->build_template_data();
+            (new credit_usage_sync_service($creditservice))->sync_recent();
+            return $this->build_template_data($output);
         } catch (\Exception $e) {
             return [
                 'configured' => true,
@@ -87,273 +76,269 @@ class credit_report_page implements renderable, templatable {
     }
 
     /**
-     * Build the template data from API responses.
+     * Build template data.
      *
-     * @return array The template data.
+     * @param renderer_base $output The renderer.
+     * @return array
      */
-    protected function build_template_data(): array {
-        // Get balance.
-        $balance = $this->creditservice->get_balance();
-
-        // Get current week date range (Monday to Sunday).
-        $weekdates = $this->get_current_week_dates();
-
-        // Get usage stats for the current week.
-        $usagestats = $this->creditservice->get_usage_stats(
-            'day',
-            $weekdates['start'],
-            $weekdates['end']
+    protected function build_template_data(renderer_base $output): array {
+        $reportservice = new credit_usage_report_service();
+        $request = $this->request;
+        $filters = $request->filters;
+        $view = $request->view;
+        $period = $reportservice->resolve_period(
+            $view,
+            $request->anchor ?: null,
+            $request->datefrom ?: null,
+            $request->dateto ?: null
         );
 
-        // Build weekly chart data.
-        $chartdata = $this->build_weekly_chart_data($usagestats['stats'], $weekdates);
+        $servicefilters = $filters->to_service_filters($period);
+        $filteroptions = $reportservice->get_filter_options($filters->to_period_filters($period));
+        $entityoptions = $filters->get_applied_entity_options($reportservice);
 
-        // Calculate week totals.
-        $weektotal = array_sum($chartdata['values']);
+        $page = max(0, $request->page);
+        $perpage = max(1, $request->perpage);
+        $rowsresult = $reportservice->get_rows($servicefilters, $page, $perpage);
+        $kpis = $reportservice->get_kpis($servicefilters);
+        $histogram = $reportservice->get_histogram($servicefilters);
+        $breakdown = $reportservice->get_breakdown($servicefilters);
 
-        // Get transactions.
-        $transactionsresult = $this->creditservice->get_transactions(null, $this->limit, $this->offset);
+        $baseparams = $this->base_url_params($view, $period);
+        $totalpages = $perpage > 0 ? (int) ceil($rowsresult['total'] / $perpage) : 1;
+        $haspagination = $totalpages > 1;
 
-        // Format transactions for display with improved descriptions.
-        $transactions = array_map(function ($tx) {
-            return $this->format_transaction($tx);
-        }, $transactionsresult['transactions']);
+        $paginationbar = '';
+        if ($haspagination) {
+            $baseurl = new \moodle_url($this->report_url($baseparams));
+            $baseurl->remove_params('page');
+            $paginationbar = $output->render(new paging_bar(
+                $rowsresult['total'],
+                $page,
+                $perpage,
+                $baseurl
+            ));
+        }
 
-        // Build pagination data.
-        $pagination = $this->build_pagination($transactionsresult['pagination']);
+        $exportselector = $this->build_export_selector($output, $request);
+
+        credit_report_viewed::create_for_request($request, (int) $rowsresult['total'])->trigger();
 
         return [
             'configured' => true,
             'error' => null,
-
-            // Balance section.
-            'balance' => [
-                'credits' => $balance->credits,
-                'formatted' => $balance->get_formatted_balance(),
-                'state' => $balance->state,
-                'statedescription' => $balance->get_state_description(),
-                'stateclass' => $this->get_state_class($balance->state),
-                'isactive' => $balance->is_active(),
-                'isfrozen' => $balance->is_frozen(),
-                'issuspended' => $balance->is_suspended(),
+            'period' => [
+                'label' => $period['label'],
+                'view' => $view,
+                'isweek' => $view === credit_usage_report_service::VIEW_WEEK,
+                'ismonth' => $view === credit_usage_report_service::VIEW_MONTH,
+                'iscustom' => $view === credit_usage_report_service::VIEW_CUSTOM,
+                'prevurl' => $period['prevanchor']
+                    ? $this->report_url(array_merge($baseparams, ['anchor' => $period['prevanchor']]))
+                    : null,
+                'prevanchor' => $period['prevanchor'] ?? null,
+                'nexturl' => $period['nextanchor']
+                    ? $this->report_url(array_merge($baseparams, ['anchor' => $period['nextanchor']]))
+                    : null,
+                'nextanchor' => $period['nextanchor'] ?? null,
+                'hasprev' => !empty($period['prevanchor']),
+                'hasnext' => !empty($period['nextanchor']),
             ],
-
-            // Usage section - weekly view.
-            'usage' => [
-                'weektotal' => $weektotal,
-                'weektotalformatted' => credit_service::format_credits($weektotal),
-                'weekrange' => $this->format_week_range($weekdates),
+            'views' => [
+                [
+                    'id' => credit_usage_report_service::VIEW_WEEK,
+                    'label' => get_string('credit_report_view_week', 'local_dixeo'),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_WEEK,
+                            $period
+                        )
+                    )),
+                    'active' => $view === credit_usage_report_service::VIEW_WEEK,
+                ],
+                [
+                    'id' => credit_usage_report_service::VIEW_MONTH,
+                    'label' => get_string('credit_report_view_month', 'local_dixeo'),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_MONTH,
+                            $period
+                        )
+                    )),
+                    'active' => $view === credit_usage_report_service::VIEW_MONTH,
+                ],
+                [
+                    'id' => credit_usage_report_service::VIEW_CUSTOM,
+                    'label' => get_string('credit_report_view_custom', 'local_dixeo'),
+                    'url' => $this->report_url(array_merge(
+                        $filters->to_query_params(),
+                        credit_usage_report_service::build_view_switch_params(
+                            credit_usage_report_service::VIEW_CUSTOM,
+                            $period
+                        )
+                    )),
+                    'active' => $view === credit_usage_report_service::VIEW_CUSTOM,
+                ],
             ],
-
-            // Chart data for JavaScript.
-            'chartdata' => json_encode($chartdata),
-            'haschartdata' => true, // Always show the week chart.
-
-            // Transactions table.
-            'transactions' => $transactions,
-            'hastransactions' => !empty($transactions),
-
-            // Pagination.
-            'pagination' => $pagination,
-            'haspagination' => $pagination['totalpages'] > 1,
-
-            // URLs.
-            'reporturl' => (new \moodle_url('/local/dixeo/credit_report.php'))->out(false),
+            'filters' => [
+                'action' => $this->report_url([]),
+                'datefrom' => $request->datefrom ?: $period['timestart'],
+                'dateto' => $request->dateto ?: $period['timeend'],
+                'datefromformatted' => credit_usage_report_service::format_date_param(
+                    $request->datefrom ?: $period['timestart']
+                ),
+                'datetoformatted' => credit_usage_report_service::format_date_param(
+                    $request->dateto ?: $period['timeend']
+                ),
+                'timestart' => (int) $period['timestart'],
+                'timeend' => (int) $period['timeend'],
+                'view' => $view,
+                'anchor' => $request->anchor,
+                'components' => $this->build_filter_options(
+                    $filteroptions['components'],
+                    $filters->components,
+                    'credit_component_'
+                ),
+                'jobtypes' => $this->build_filter_options(
+                    $filteroptions['jobtypes'],
+                    $filters->jobtypes,
+                    'credit_action_'
+                ),
+                'moduletypes' => $this->build_filter_options(
+                    $filteroptions['moduletypes'],
+                    $filters->moduletypes,
+                    'credit_moduletype_'
+                ),
+                'users' => $entityoptions['users'],
+                'courses' => $entityoptions['courses'],
+            ],
+            'kpis' => [
+                'credits' => credit_service::format_credits($kpis['totalcredits']),
+                'users' => number_format($kpis['totalusers']),
+                'courses' => number_format($kpis['totalcourses']),
+                'rows' => number_format($kpis['totalrows']),
+            ],
+            'histogramdata' => json_encode($histogram),
+            'breakdowndata' => json_encode($breakdown),
+            'haschartdata' => !empty($histogram['values']) || !empty($breakdown['values']),
+            'rows' => $rowsresult['rows'],
+            'hasrows' => !empty($rowsresult['rows']),
+            'paginationbar' => $paginationbar,
+            'haspagination' => $haspagination,
+            'exportselector' => $exportselector,
+            'reseturl' => $this->report_url([]),
         ];
     }
 
     /**
-     * Get the current week's date range (Monday to Sunday).
+     * Build a credit report page URL.
      *
-     * @return array Array with 'start' and 'end' dates in Y-m-d format, plus 'dates' array.
+     * @param array $params URL parameters.
+     * @return string Rendered URL.
      */
-    protected function get_current_week_dates(): array {
-        $now = new \DateTime();
-        $dayofweek = (int) $now->format('N'); // 1 = Monday, 7 = Sunday.
+    protected function report_url(array $params): string {
+        return credit_usage_report_service::build_report_url($params);
+    }
 
-        // Calculate Monday of this week.
-        $monday = clone $now;
-        $monday->modify('-' . ($dayofweek - 1) . ' days');
-
-        // Calculate Sunday of this week.
-        $sunday = clone $monday;
-        $sunday->modify('+6 days');
-
-        // Generate all dates in the week.
-        $dates = [];
-        $current = clone $monday;
-        for ($i = 0; $i < 7; $i++) {
-            $dates[] = $current->format('Y-m-d');
-            $current->modify('+1 day');
+    /**
+     * Build the Moodle dataformat export selector for the current report filters.
+     *
+     * @param renderer_base $output Renderer.
+     * @param credit_report_request $request Current report request.
+     * @return string Rendered HTML.
+     */
+    protected function build_export_selector(renderer_base $output, credit_report_request $request): string {
+        $options = [];
+        foreach (plugin_manager::instance()->get_plugins_of_type('dataformat') as $format) {
+            if ($format->is_enabled()) {
+                $options[] = [
+                    'value' => $format->name,
+                    'label' => get_string('dataformat', $format->component),
+                ];
+            }
         }
 
-        return [
-            'start' => $monday->format('Y-m-d'),
-            'end' => $sunday->format('Y-m-d'),
-            'dates' => $dates,
-            'today' => $now->format('Y-m-d'),
-        ];
+        return $output->render_from_template('core/dataformat_selector', [
+            'label' => get_string('downloadas', 'table'),
+            'base' => (new \moodle_url('/local/dixeo/credit_report_download.php'))->out(false),
+            'name' => 'dataformat',
+            'params' => $request->to_export_hidden_params(),
+            'options' => $options,
+            'sesskey' => sesskey(),
+            'submit' => get_string('download'),
+        ]);
     }
 
     /**
-     * Build chart data for the weekly view.
+     * Build base URL params preserving active filters.
      *
-     * @param array $stats The usage statistics from API.
-     * @param array $weekdates The week date information.
-     * @return array The chart data with labels, values, and highlighting info.
+     * @param string $view View mode.
+     * @param array $period Period data.
+     * @return array
      */
-    protected function build_weekly_chart_data(array $stats, array $weekdates): array {
-        // Map API stats by date for quick lookup.
-        $statsbydate = [];
-        foreach ($stats as $stat) {
-            $date = $stat['period'] ?? '';
-            $statsbydate[$date] = $stat['creditsUsed'] ?? 0;
+    protected function base_url_params(string $view, array $period): array {
+        $params = array_merge(
+            [
+                'view' => $view,
+                'perpage' => $this->request->perpage,
+            ],
+            $this->request->filters->to_query_params()
+        );
+
+        if ($view === credit_usage_report_service::VIEW_CUSTOM) {
+            $params['datefrom'] = credit_usage_report_service::format_date_param(
+                $this->request->datefrom ?: $period['timestart']
+            );
+            $params['dateto'] = credit_usage_report_service::format_date_param(
+                $this->request->dateto ?: $period['timeend']
+            );
+        } else if ($this->request->anchor !== '') {
+            $params['anchor'] = $this->request->anchor;
         }
 
-        // Short day names for chart labels.
-        $daynames = [
-            get_string('day_mon', 'local_dixeo'),
-            get_string('day_tue', 'local_dixeo'),
-            get_string('day_wed', 'local_dixeo'),
-            get_string('day_thu', 'local_dixeo'),
-            get_string('day_fri', 'local_dixeo'),
-            get_string('day_sat', 'local_dixeo'),
-            get_string('day_sun', 'local_dixeo'),
-        ];
+        return $params;
+    }
 
-        // Full day names for tooltips.
-        $fulldaynames = [
-            get_string('day_monday', 'local_dixeo'),
-            get_string('day_tuesday', 'local_dixeo'),
-            get_string('day_wednesday', 'local_dixeo'),
-            get_string('day_thursday', 'local_dixeo'),
-            get_string('day_friday', 'local_dixeo'),
-            get_string('day_saturday', 'local_dixeo'),
-            get_string('day_sunday', 'local_dixeo'),
-        ];
-
-        $labels = [];
-        $fulllabels = [];
-        $values = [];
-        $istoday = [];
-
-        foreach ($weekdates['dates'] as $index => $date) {
-            $labels[] = $daynames[$index];
-            $fulllabels[] = $fulldaynames[$index];
-            $values[] = $statsbydate[$date] ?? 0;
-            $istoday[] = ($date === $weekdates['today']);
+    /**
+     * Build select options for enum filters.
+     *
+     * @param array $values Available values.
+     * @param array $selected Selected values.
+     * @param string|null $stringprefix Lang string prefix without trailing code.
+     * @return array
+     */
+    protected function build_filter_options(array $values, array $selected, ?string $stringprefix): array {
+        if ($stringprefix === 'credit_action_') {
+            $values = credit_component_mapper::normalize_action_list($values);
+            $selected = credit_component_mapper::normalize_action_list($selected);
         }
 
-        return [
-            'labels' => $labels,
-            'fulllabels' => $fulllabels,
-            'values' => $values,
-            'istoday' => $istoday,
-            'todayindex' => array_search(true, $istoday),
-            'label' => get_string('usage_chart_label', 'local_dixeo'),
-        ];
-    }
+        $values = array_values(array_unique(array_merge($values, $selected)));
+        sort($values);
 
-    /**
-     * Format the week range for display.
-     *
-     * @param array $weekdates The week date information.
-     * @return string Formatted string like "Dec 16 - Dec 22, 2025".
-     */
-    protected function format_week_range(array $weekdates): string {
-        $start = new \DateTime($weekdates['start']);
-        $end = new \DateTime($weekdates['end']);
-
-        return userdate($start->getTimestamp(), '%b %d') . ' - ' . userdate($end->getTimestamp(), '%b %d, %Y');
-    }
-
-    /**
-     * Format a transaction for display.
-     *
-     * @param array $tx The transaction data.
-     * @return array The formatted transaction.
-     */
-    protected function format_transaction(array $tx): array {
-        $amount = $tx['amount'] ?? 0;
-        $type = $tx['type'] ?? 'unknown';
-
-        return [
-            'id' => $tx['id'] ?? '',
-            'type' => $type,
-            'typelabel' => get_string('transaction_type_' . $type, 'local_dixeo'),
-            'typeclass' => $this->get_transaction_type_class($type),
-            'amount' => $amount,
-            'amountformatted' => credit_service::format_credits(abs($amount)),
-            'amountsign' => $amount >= 0 ? '+' : '-',
-            'description' => clean_param((string) ($tx['description'] ?? ''), PARAM_TEXT),
-            'createdat' => isset($tx['createdAt']) ? strtotime($tx['createdAt']) : 0,
-            'createdatformatted' => userdate(
-                isset($tx['createdAt']) ? strtotime($tx['createdAt']) : 0,
-                get_string('strftimedatetime', 'langconfig')
-            ),
-            'balanceafter' => $tx['balanceAfter'] ?? null,
-            'balanceafterformatted' => isset($tx['balanceAfter'])
-                ? credit_service::format_credits($tx['balanceAfter'])
-                : null,
-        ];
-    }
-
-    /**
-     * Build pagination data.
-     *
-     * @param array $apipagination The pagination from API.
-     * @return array The pagination data for template.
-     */
-    protected function build_pagination(array $apipagination): array {
-        $total = $apipagination['total'] ?? 0;
-        $limit = $apipagination['limit'] ?? $this->limit;
-        $offset = $apipagination['offset'] ?? $this->offset;
-        $hasmore = $apipagination['hasMore'] ?? false;
-
-        $totalpages = $limit > 0 ? (int) ceil($total / $limit) : 1;
-        $currentpage = $limit > 0 ? (int) floor($offset / $limit) + 1 : 1;
-
-        return [
-            'total' => $total,
-            'limit' => $limit,
-            'offset' => $offset,
-            'hasmore' => $hasmore,
-            'totalpages' => $totalpages,
-            'currentpage' => $currentpage,
-            'hasprev' => $offset > 0,
-            'hasnext' => $hasmore,
-            'prevoffset' => max(0, $offset - $limit),
-            'nextoffset' => $offset + $limit,
-        ];
-    }
-
-    /**
-     * Get CSS class for account state.
-     *
-     * @param string $state The account state.
-     * @return string The CSS class.
-     */
-    protected function get_state_class(string $state): string {
-        return match ($state) {
-            'active' => 'success',
-            'frozen' => 'warning',
-            'suspended' => 'danger',
-            default => 'secondary',
-        };
-    }
-
-    /**
-     * Get CSS class for transaction type.
-     *
-     * @param string $type The transaction type.
-     * @return string The CSS class.
-     */
-    protected function get_transaction_type_class(string $type): string {
-        return match ($type) {
-            'purchase', 'reset' => 'success',
-            'deduction' => 'danger',
-            'refund' => 'info',
-            default => 'secondary',
-        };
+        $options = [];
+        foreach ($values as $value) {
+            if ($stringprefix === 'credit_component_') {
+                $label = credit_component_mapper::get_label($value);
+            } else if ($stringprefix === 'credit_moduletype_') {
+                $label = credit_moduletype_mapper::get_label($value);
+            } else if ($stringprefix) {
+                $key = $stringprefix . $value;
+                $label = get_string($key, 'local_dixeo');
+                if ($label === "[[$key]]") {
+                    $label = ucwords(str_replace('_', ' ', $value));
+                }
+            } else {
+                $label = $value;
+            }
+            $options[] = [
+                'value' => $value,
+                'label' => $label,
+                'selected' => in_array($value, $selected, true),
+            ];
+        }
+        return $options;
     }
 }

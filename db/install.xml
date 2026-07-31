@@ -42,6 +42,10 @@
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="User who initiated the job"/>
         <FIELD NAME="namespace" TYPE="char" LENGTH="100" NOTNULL="true" DEFAULT="default" SEQUENCE="false" COMMENT="Dixeo API namespace"/>
         <FIELD NAME="operation" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="unknown" SEQUENCE="false" COMMENT="Logical operation type"/>
+        <FIELD NAME="component" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="Frankenstyle component that initiated the job"/>
+        <FIELD NAME="moduletype" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="Moodle/API activity type when known"/>
+        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course or module Moodle context id"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course module id when known"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Unix timestamp when the binding was created"/>
       </FIELDS>
       <KEYS>
@@ -51,6 +55,35 @@
         <INDEX NAME="idx_jobid" UNIQUE="true" FIELDS="jobid" COMMENT="Unique remote job UUID"/>
         <INDEX NAME="idx_courseid" UNIQUE="false" FIELDS="courseid" COMMENT="Lookup by course"/>
         <INDEX NAME="idx_userid" UNIQUE="false" FIELDS="userid" COMMENT="Lookup by user"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_credit_usage" COMMENT="Synced Dixeo credit transactions enriched with Moodle context">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="transactionid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="Remote Dixeo transaction UUID"/>
+        <FIELD NAME="jobid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="Associated remote job UUID"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="Transaction type: deduction, refund, purchase, reset"/>
+        <FIELD NAME="amount" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Signed API amount in mills"/>
+        <FIELD NAME="credits" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Normalized positive usage credits for display"/>
+        <FIELD NAME="jobtype" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="API job type"/>
+        <FIELD NAME="moduletype" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="Moodle module type from API"/>
+        <FIELD NAME="component" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="Originating Dixeo component"/>
+        <FIELD NAME="operation" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="Local operation fallback"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="API transaction description"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Initiating user from job binding"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course from job binding"/>
+        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Optional Moodle context id"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course module id when known"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Transaction timestamp from API"/>
+        <FIELD NAME="timesynced" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When this row was last synced"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_transactionid" UNIQUE="true" FIELDS="transactionid" COMMENT="Unique remote transaction UUID"/>
+        <INDEX NAME="idx_jobid" UNIQUE="false" FIELDS="jobid" COMMENT="Lookup by job"/>
+        <INDEX NAME="idx_report" UNIQUE="false" FIELDS="timecreated, type, courseid, userid" COMMENT="Report filtering"/>
       </INDEXES>
     </TABLE>
   </TABLES>

@@ -34,6 +34,7 @@ use core_external\external_value;
 use local_dixeo\external\traits\capability_check;
 use local_dixeo\dsl\interpreter;
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\service\course_completion_sync_service;
 use local_dixeo\external\service_factory;
 
@@ -153,6 +154,13 @@ class create_module_from_job extends external_api {
 
             $interpreter = new interpreter();
             $cmid = $interpreter->execute($result['creation'], $data, $context);
+
+            if ($cmid > 0) {
+                $jobservice->enrich_job_metadata(
+                    $params['jobid'],
+                    job_binding_metadata::for_module($moduletype, (int) $cmid)
+                );
+            }
 
             // Add activity criteria to course completion requirements.
             $completionsync = new course_completion_sync_service();

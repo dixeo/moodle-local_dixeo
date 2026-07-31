@@ -112,19 +112,36 @@ if ($hassiteconfig) {
         get_string('current_balance_desc', 'local_dixeo')
     ));
 
-    // Reports link.
-    $reporturl = new moodle_url('/local/dixeo/credit_report.php');
-    $settings->add(new admin_setting_description(
-        'local_dixeo/credit_report_link',
-        get_string('credit_report', 'local_dixeo'),
-        html_writer::div(
-            html_writer::link($reporturl, get_string('view_credit_report', 'local_dixeo'), ['class' => 'btn btn-secondary']),
-            'mb-3'
-        )
-    ));
+    // Reports link (only when the current user may open the report).
+    $systemcontext = \context_system::instance();
+    if (
+        has_capability('local/dixeo:manage', $systemcontext)
+        || has_capability('local/dixeo:viewusage', $systemcontext)
+    ) {
+        $reporturl = new moodle_url('/local/dixeo/credit_report.php');
+        $settings->add(new admin_setting_description(
+            'local_dixeo/credit_report_link',
+            '',
+            html_writer::div(
+                html_writer::link(
+                    $reporturl,
+                    get_string('view_credit_report', 'local_dixeo'),
+                    ['class' => 'btn btn-secondary']
+                ),
+                'mb-3'
+            ) . html_writer::div(get_string('credit_report_link_desc', 'local_dixeo'), 'form-text text-muted')
+        ));
+    }
 
     // Add to admin tree.
     $ADMIN->add('localplugins', $settings);
+
+    $ADMIN->add('reports', new admin_externalpage(
+        'local_dixeo_credit_usage',
+        get_string('credit_usage_report_nav', 'local_dixeo'),
+        new moodle_url('/local/dixeo/credit_report.php'),
+        ['local/dixeo:manage', 'local/dixeo:viewusage']
+    ));
 
     // Conditionally add the Dixeo Course Designer link if the block is installed.
     if (\local_dixeo\service\plugin_installation_service::is_component_installed('block_dixeo_designer')) {
@@ -139,4 +156,9 @@ if ($hassiteconfig) {
             'restorecourse'
         );
     }
+}
+
+global $PAGE;
+if (!empty($PAGE->pagetype) && $PAGE->pagetype === 'admin-setting-local_dixeo') {
+    $PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
 }

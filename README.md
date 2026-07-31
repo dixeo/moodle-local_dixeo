@@ -75,7 +75,7 @@ In case of delay or difficulty, please contact support@dixeo.com.
 | `local/dixeo:edit` | Edit existing modules with AI | Editing Teacher, Manager |
 | `local/dixeo:create` | Create courses using Dixeo Course Designer | Manager, Course Creator |
 | `local/dixeo:talktotutor` | Interact with the AI Tutor | Manager, Editing Teacher, Non-Editing Teacher, Student |
-| `local/dixeo:viewusage` | View credit usage reports | Manager |
+| `local/dixeo:viewusage` | View site-wide credit usage (overview, detailed report, and export). Exposes user and course names across the whole site. Assign only to trusted roles; managers receive it by default. Users with `local/dixeo:manage` can also access the report. | Manager |
 
 # Support
 

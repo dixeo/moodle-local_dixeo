@@ -19,6 +19,7 @@ namespace local_dixeo\service;
 use local_dixeo\api\client;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\credit_balance;
+use local_dixeo\dto\credit_transaction;
 
 /**
  * Service for credit balance and usage operations.
@@ -78,13 +79,16 @@ class credit_service {
 
         $response = $this->client->get('/v1/credits/transactions', $params);
 
-        $transactions = is_array($response) ? array_values($response) : [];
+        $rawtransactions = is_array($response) ? array_values($response) : [];
+        $transactions = [];
+        foreach ($rawtransactions as $raw) {
+            $transactions[] = credit_transaction::from_array($raw)->to_array();
+        }
         $count = count($transactions);
 
         return [
             'transactions' => $transactions,
             'pagination' => [
-                'total' => $count,
                 'limit' => $limit,
                 'offset' => $offset,
                 'hasMore' => $count >= $limit,

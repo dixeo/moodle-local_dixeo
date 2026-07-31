@@ -24,6 +24,8 @@
 
 namespace local_dixeo\repository;
 
+use local_dixeo\dto\job_binding_metadata;
+
 /**
  * CRUD helpers for {@see local_dixeo_jobs}.
  */
@@ -41,6 +43,8 @@ class job_repository {
      * @param int $userid User who initiated the job.
      * @param string $namespace API namespace.
      * @param string $operation Logical operation name (e.g. module_generate).
+     * @param string|null $component Originating frankenstyle component.
+     * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @return \stdClass The stored record.
      */
     public function register(
@@ -48,7 +52,9 @@ class job_repository {
         int $courseid,
         int $userid,
         string $namespace,
-        string $operation
+        string $operation,
+        ?string $component = null,
+        ?job_binding_metadata $metadata = null
     ): \stdClass {
         global $DB;
 
@@ -56,6 +62,8 @@ class job_repository {
         if ($jobid === '') {
             throw new \invalid_parameter_exception('Job ID is required');
         }
+
+        $fields = $this->metadata_to_fields($metadata);
 
         $existing = $DB->get_record(self::TABLE, ['jobid' => $jobid]);
         if ($existing) {
@@ -65,7 +73,13 @@ class job_repository {
                 'userid' => $userid,
                 'namespace' => $namespace,
                 'operation' => $operation,
+                'component' => $component,
             ];
+            foreach ($fields as $key => $value) {
+                if ($value !== null && $value !== '' && $value !== 0) {
+                    $update->{$key} = $value;
+                }
+            }
             $DB->update_record(self::TABLE, $update);
             return $DB->get_record(self::TABLE, ['id' => $existing->id], '*', MUST_EXIST);
         }
@@ -76,11 +90,56 @@ class job_repository {
             'userid' => $userid,
             'namespace' => $namespace,
             'operation' => $operation,
+            'component' => $component,
+            'moduletype' => $fields['moduletype'],
+            'contextid' => $fields['contextid'],
+            'cmid' => $fields['cmid'],
             'timecreated' => time(),
         ];
         $record->id = $DB->insert_record(self::TABLE, $record);
 
         return $record;
+    }
+
+    /**
+     * Update activity/context metadata on an existing job binding.
+     *
+     * @param string $jobid Remote job UUID.
+     * @param job_binding_metadata $metadata Metadata to merge.
+     * @return \stdClass|null Updated record or null when missing.
+     */
+    public function update_metadata(string $jobid, job_binding_metadata $metadata): ?\stdClass {
+        global $DB;
+
+        $jobid = trim($jobid);
+        if ($jobid === '') {
+            return null;
+        }
+
+        $existing = $DB->get_record(self::TABLE, ['jobid' => $jobid]);
+        if (!$existing) {
+            return null;
+        }
+
+        $fields = $this->metadata_to_fields($metadata);
+        $update = (object) ['id' => $existing->id];
+        $changed = false;
+
+        foreach ($fields as $key => $value) {
+            if ($value === null || $value === '' || $value === 0) {
+                continue;
+            }
+            if (($existing->{$key} ?? null) != $value) {
+                $update->{$key} = $value;
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $DB->update_record(self::TABLE, $update);
+        }
+
+        return $DB->get_record(self::TABLE, ['id' => $existing->id], '*', MUST_EXIST);
     }
 
     /**
@@ -113,7 +172,7 @@ class job_repository {
     }
 
     /**
-     * Whether the job is registered to the given course and user.
+     * Whether the job is registered to the given course and initiating user.
      *
      * @param string $jobid Remote job UUID.
      * @param int $courseid Expected course ID.
@@ -178,5 +237,27 @@ class job_repository {
             'timecreated < :beforeunix',
             ['beforeunix' => $beforeunix]
         );
+    }
+
+    /**
+     * Convert metadata DTO to database fields.
+     *
+     * @param job_binding_metadata|null $metadata Metadata.
+     * @return array{moduletype: ?string, contextid: int, cmid: int}
+     */
+    private function metadata_to_fields(?job_binding_metadata $metadata): array {
+        if ($metadata === null) {
+            return [
+                'moduletype' => null,
+                'contextid' => 0,
+                'cmid' => 0,
+            ];
+        }
+
+        return [
+            'moduletype' => $metadata->moduletype,
+            'contextid' => $metadata->contextid,
+            'cmid' => $metadata->cmid,
+        ];
     }
 }

@@ -97,4 +97,22 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'local/dixeo:syncfiles',
     ],
+
+    // Search credit report users with usage in a period.
+    'local_dixeo_search_credit_report_users' => [
+        'classname' => 'local_dixeo\external\search_credit_report_users',
+        'description' => 'Search users with credit usage in a report period',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/dixeo:viewusage',
+    ],
+
+    // Search credit report courses with usage in a period.
+    'local_dixeo_search_credit_report_courses' => [
+        'classname' => 'local_dixeo\external\search_credit_report_courses',
+        'description' => 'Search courses with credit usage in a report period',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/dixeo:viewusage',
+    ],
 ];

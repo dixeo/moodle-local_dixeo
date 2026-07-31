@@ -17,44 +17,30 @@
 /**
  * Credit report page for Dixeo plugin.
  *
- * Displays credit balance, usage statistics, and transaction history.
- *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
- * @author     Pierre FACQ <pierre.facq@edunao.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../config.php');
+require_once($CFG->libdir . '/adminlib.php');
 
+use local_dixeo\output\credit_report_request;
 use local_dixeo\output\credit_report_page;
 
-// Require login and admin access.
-require_login();
-require_capability('local/dixeo:manage', context_system::instance());
+$request = credit_report_request::from_globals();
 
-// Get parameters.
-$limit = optional_param('limit', 50, PARAM_INT);
-$offset = optional_param('offset', 0, PARAM_INT);
+admin_externalpage_setup('local_dixeo_credit_usage', '', $request->to_page_url_params());
 
-// Page setup.
-$PAGE->set_context(context_system::instance());
-$PAGE->set_url(new moodle_url('/local/dixeo/credit_report.php', [
-    'limit' => $limit,
-    'offset' => $offset,
-]));
-$PAGE->set_title(get_string('credit_report', 'local_dixeo'));
-$PAGE->set_heading(get_string('credit_report', 'local_dixeo'));
-$PAGE->set_pagelayout('admin');
+$context = context_system::instance();
+$PAGE->set_context($context);
+$PAGE->set_title(get_string('credit_usage_report_nav', 'local_dixeo'));
+$PAGE->set_heading(get_string('credit_usage_report_nav', 'local_dixeo'));
+$PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
+$PAGE->requires->js_call_amd('local_dixeo/credit_report', 'init');
 
-// Navigation.
-$PAGE->navbar->add(get_string('pluginname', 'local_dixeo'), new moodle_url('/admin/settings.php', ['section' => 'local_dixeo']));
-$PAGE->navbar->add(get_string('credit_report', 'local_dixeo'));
+$report = new credit_report_page($request->to_renderable_params());
 
-// Create renderable.
-$report = new credit_report_page($limit, $offset);
-
-// Output.
 $output = $PAGE->get_renderer('local_dixeo');
 echo $output->header();
 echo $output->render($report);

@@ -240,5 +240,117 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026071400, 'local', 'dixeo');
     }
 
+    // Credit usage table and component column on job bindings.
+    if ($oldversion < 2026072801) {
+        $jobstable = new xmldb_table('local_dixeo_jobs');
+        $componentfield = new xmldb_field(
+            'component',
+            XMLDB_TYPE_CHAR,
+            '100',
+            null,
+            null,
+            null,
+            null,
+            'operation'
+        );
+        if (!$dbman->field_exists($jobstable, $componentfield)) {
+            $dbman->add_field($jobstable, $componentfield);
+        }
+
+        $table = new xmldb_table('local_dixeo_credit_usage');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('transactionid', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('jobid', XMLDB_TYPE_CHAR, '64', null, null, null, null);
+        $table->add_field('type', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('amount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('credits', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('jobtype', XMLDB_TYPE_CHAR, '50', null, null, null, null);
+        $table->add_field('moduletype', XMLDB_TYPE_CHAR, '50', null, null, null, null);
+        $table->add_field('component', XMLDB_TYPE_CHAR, '100', null, null, null, null);
+        $table->add_field('operation', XMLDB_TYPE_CHAR, '50', null, null, null, null);
+        $table->add_field('description', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('contextid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timesynced', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_index('idx_transactionid', XMLDB_INDEX_UNIQUE, ['transactionid']);
+        $table->add_index('idx_jobid', XMLDB_INDEX_NOTUNIQUE, ['jobid']);
+        $table->add_index('idx_report', XMLDB_INDEX_NOTUNIQUE, ['timecreated', 'type', 'courseid', 'userid']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072801, 'local', 'dixeo');
+    }
+
+    // Job binding metadata and credit usage module context for reporting.
+    if ($oldversion < 2026072803) {
+        $jobstable = new xmldb_table('local_dixeo_jobs');
+
+        $moduletypefield = new xmldb_field(
+            'moduletype',
+            XMLDB_TYPE_CHAR,
+            '50',
+            null,
+            null,
+            null,
+            null,
+            'component'
+        );
+        if (!$dbman->field_exists($jobstable, $moduletypefield)) {
+            $dbman->add_field($jobstable, $moduletypefield);
+        }
+
+        $contextidfield = new xmldb_field(
+            'contextid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'moduletype'
+        );
+        if (!$dbman->field_exists($jobstable, $contextidfield)) {
+            $dbman->add_field($jobstable, $contextidfield);
+        }
+
+        $cmidfield = new xmldb_field(
+            'cmid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'contextid'
+        );
+        if (!$dbman->field_exists($jobstable, $cmidfield)) {
+            $dbman->add_field($jobstable, $cmidfield);
+        }
+
+        $usagetable = new xmldb_table('local_dixeo_credit_usage');
+        $usagecmidfield = new xmldb_field(
+            'cmid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'contextid'
+        );
+        if (!$dbman->field_exists($usagetable, $usagecmidfield)) {
+            $dbman->add_field($usagetable, $usagecmidfield);
+        }
+
+        upgrade_plugin_savepoint(true, 2026072803, 'local', 'dixeo');
+    }
+
     return true;
 }

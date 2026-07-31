@@ -26,18 +26,24 @@
 namespace local_dixeo;
 
 use local_dixeo\api\client;
+use local_dixeo\event\credit_report_exported;
+use local_dixeo\event\credit_report_viewed;
 use local_dixeo\event\file_sync_disabled;
 use local_dixeo\event\file_sync_enabled;
 use local_dixeo\event\file_sync_triggered;
 use local_dixeo\event\job_cancelled;
 use local_dixeo\repository\course_ai_repository;
 use local_dixeo\repository\job_repository;
+use local_dixeo\output\credit_report_request;
+use local_dixeo\service\credit_usage_report_service;
 use local_dixeo\service\file_sync_service;
 use local_dixeo\service\job_service;
 
 /**
  * Hub sensitive-operation event coverage.
  *
+ * @covers \local_dixeo\event\credit_report_viewed
+ * @covers \local_dixeo\event\credit_report_exported
  * @covers \local_dixeo\event\file_sync_enabled
  * @covers \local_dixeo\event\file_sync_disabled
  * @covers \local_dixeo\event\file_sync_triggered
@@ -159,5 +165,66 @@ final class hub_events_test extends \advanced_testcase {
         $this->assertEquals($userid, (int) $cancelled[0]->userid);
         $this->assertArrayNotHasKey('instructions', $cancelled[0]->other);
         $this->assertArrayNotHasKey('message', $cancelled[0]->other);
+    }
+
+    /**
+     * Credit report view and export events must record metadata without PII.
+     */
+    public function test_credit_report_events_record_metadata_only(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $userone = $this->getDataGenerator()->create_user();
+        $usertwo = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $repo = new \local_dixeo\repository\credit_usage_repository();
+        foreach ([$userone, $usertwo] as $index => $user) {
+            $repo->upsert_from_transaction(
+                \local_dixeo\dto\credit_transaction::from_array([
+                    'id' => 'tx-event-user-' . $index,
+                    'type' => \local_dixeo\dto\credit_transaction::TYPE_DEDUCTION,
+                    'amount' => -1,
+                    'balanceAfter' => 99,
+                    'createdAt' => gmdate('c'),
+                ]),
+                (object) [
+                    'userid' => (int) $user->id,
+                    'courseid' => (int) $course->id,
+                    'operation' => 'module_generate',
+                    'component' => 'block_dixeo_modulegen',
+                ]
+            );
+        }
+
+        $request = credit_report_request::from_renderable_params([
+            'view' => credit_usage_report_service::VIEW_MONTH,
+            'userids' => [(int) $userone->id, (int) $usertwo->id],
+            'courseids' => [(int) $course->id],
+            'components' => ['block_dixeo_modulegen'],
+        ]);
+
+        $sink = $this->redirectEvents();
+        credit_report_viewed::create_for_request($request, 42)->trigger();
+        credit_report_exported::create_for_request($request, 42, 'csv')->trigger();
+
+        $viewed = array_values(array_filter(
+            $sink->get_events(),
+            static fn($event) => $event instanceof credit_report_viewed
+        ));
+        $exported = array_values(array_filter(
+            $sink->get_events(),
+            static fn($event) => $event instanceof credit_report_exported
+        ));
+
+        $this->assertCount(1, $viewed);
+        $this->assertSame(credit_usage_report_service::VIEW_MONTH, $viewed[0]->other['view']);
+        $this->assertSame(42, (int) $viewed[0]->other['rowcount']);
+        $this->assertSame(2, (int) $viewed[0]->other['filterusers']);
+        $this->assertArrayNotHasKey('userid', $viewed[0]->other);
+        $this->assertArrayNotHasKey('courseid', $viewed[0]->other);
+
+        $this->assertCount(1, $exported);
+        $this->assertSame('csv', $exported[0]->other['dataformat']);
+        $this->assertSame(42, (int) $exported[0]->other['rowcount']);
     }
 }
