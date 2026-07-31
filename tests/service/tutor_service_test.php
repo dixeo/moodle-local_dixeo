@@ -1,4 +1,19 @@
 <?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
 /**
  * Tests for tutor conversation loading.
  *
@@ -12,17 +27,38 @@ namespace local_dixeo;
 
 use local_dixeo\api\client;
 use local_dixeo\dto\operation_result;
+use local_dixeo\external\service_factory;
+use local_dixeo\service\file_sync_service;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_service;
 use local_dixeo\dto\tutor_message;
 
-defined('MOODLE_INTERNAL') || die();
 
 /**
+ * Tests for tutor_service_test.
  * @covers \local_dixeo\service\tutor_service
  */
 final class tutor_service_test extends \advanced_testcase {
+    /**
+     * TearDown.
+     */
+    protected function tearDown(): void {
+        service_factory::reset();
+        parent::tearDown();
+    }
 
+    /**
+     * Stub the file sync service so submit() does not hit the real API.
+     */
+    private function stub_file_sync_service(): void {
+        $filesync = $this->createMock(file_sync_service::class);
+        $filesync->expects($this->once())->method('ensure_enabled_and_synchronized');
+        service_factory::set_test_file_sync_service($filesync);
+    }
+
+    /**
+     * Test get conversation initial load fetches single page.
+     */
     public function test_get_conversation_initial_load_fetches_single_page(): void {
         $page = [];
         for ($i = 1; $i <= 50; $i++) {
@@ -34,7 +70,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['limit'] === 50
                         && !isset($params['sinceId'])
                         && !isset($params['offset']);
@@ -50,6 +86,9 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame('m50', $messages[49]['id']);
     }
 
+    /**
+     * Test get conversation with sinceid fetches paged results.
+     */
     public function test_get_conversation_with_sinceid_fetches_paged_results(): void {
         $delta = [
             $this->raw_message('m99', 99),
@@ -60,7 +99,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['sinceId'] === 'm98' && $params['limit'] === 50;
                 })
             )
@@ -73,6 +112,9 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame('m99', $messages[0]['id']);
     }
 
+    /**
+     * Test get conversation with offset fetches older page.
+     */
     public function test_get_conversation_with_offset_fetches_older_page(): void {
         $older = [
             $this->raw_message('m1', 1),
@@ -84,7 +126,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['offset'] === 50 && $params['limit'] === 50;
                 })
             )
@@ -98,6 +140,9 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame('m2', $messages[1]['id']);
     }
 
+    /**
+     * Test get conversation short history returns all messages.
+     */
     public function test_get_conversation_short_history_returns_all_messages(): void {
         $mockclient = $this->createMock(client::class);
         $mockclient->method('get')->willReturn([
@@ -113,8 +158,12 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame('m2', $messages[1]['id']);
     }
 
+    /**
+     * Test submit user message includes mode instructions and context.
+     */
     public function test_submit_user_message_includes_mode_instructions_and_context(): void {
         $this->resetAfterTest();
+        $this->stub_file_sync_service();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'page', 'version' => 1, 'url' => 'https://example.test/course/view.php?id=1'];
 
@@ -123,7 +172,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('submit_job')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $payload) use ($context): bool {
+                $this->callback(function (array $payload) use ($context): bool {
                     return ($payload['role'] ?? '') === 'user'
                         && ($payload['message'] ?? '') === 'Hello'
                         && ($payload['mode'] ?? '') === tutor_message::MODE_GUIDE
@@ -143,8 +192,12 @@ final class tutor_service_test extends \advanced_testcase {
         );
     }
 
+    /**
+     * Test submit system message passes context without instructions.
+     */
     public function test_submit_system_message_passes_context_without_instructions(): void {
         $this->resetAfterTest();
+        $this->stub_file_sync_service();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'proactive', 'version' => 1, 'body' => 'Context line'];
 
@@ -153,7 +206,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('submit_job')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $payload) use ($context): bool {
+                $this->callback(function (array $payload) use ($context): bool {
                     return ($payload['role'] ?? '') === 'system'
                         && ($payload['context'] ?? null) === $context
                         && ($payload['requireResponse'] ?? null) === true
@@ -172,6 +225,9 @@ final class tutor_service_test extends \advanced_testcase {
         );
     }
 
+    /**
+     * Test get conversation maps system fields.
+     */
     public function test_get_conversation_maps_system_fields(): void {
         $mockclient = $this->createMock(client::class);
         $mockclient->method('get')->willReturn([
@@ -198,6 +254,9 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertArrayNotHasKey('requireresponse', $messages[0]);
     }
 
+    /**
+     * Test get conversation normalizes legacy string context to object.
+     */
     public function test_get_conversation_normalizes_legacy_string_context_to_object(): void {
         $mockclient = $this->createMock(client::class);
         $mockclient->method('get')->willReturn([
@@ -215,6 +274,9 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame(['body' => 'Legacy proactive line'], $messages[0]['context']);
     }
 
+    /**
+     * Test get conversation decodes json string context.
+     */
     public function test_get_conversation_decodes_json_string_context(): void {
         $mockclient = $this->createMock(client::class);
         $mockclient->method('get')->willReturn([
@@ -235,6 +297,7 @@ final class tutor_service_test extends \advanced_testcase {
     }
 
     /**
+     * Raw message.
      * @param string $id
      * @param int $index Used to build distinct timestamps.
      * @return array
