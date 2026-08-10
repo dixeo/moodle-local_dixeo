@@ -100,9 +100,9 @@ class get_job_status extends external_api {
             // RFC 7807 Problem Details format.
             'error' => new external_single_structure([
                 'type' => new external_value(PARAM_ALPHANUMEXT, 'Error type identifier', VALUE_OPTIONAL),
-                'title' => new external_value(PARAM_RAW, 'Human-readable error title', VALUE_OPTIONAL),
+                'title' => new external_value(PARAM_TEXT, 'Human-readable error title', VALUE_OPTIONAL),
                 'status' => new external_value(PARAM_INT, 'HTTP status code', VALUE_OPTIONAL),
-                'detail' => new external_value(PARAM_RAW, 'Detailed error description', VALUE_OPTIONAL),
+                'detail' => new external_value(PARAM_TEXT, 'Detailed error description', VALUE_OPTIONAL),
             ], 'Error information (RFC 7807)', VALUE_OPTIONAL),
             'processingtimeseconds' => new external_value(PARAM_FLOAT, 'Processing time in seconds', VALUE_OPTIONAL),
             'namespace' => new external_value(PARAM_RAW, 'The namespace', VALUE_OPTIONAL),
