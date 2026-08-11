@@ -27,6 +27,7 @@ namespace local_dixeo;
 
 use local_dixeo\api\client;
 use local_dixeo\dto\operation_result;
+use local_dixeo\dto\tutor_message;
 use local_dixeo\external\service_factory;
 use local_dixeo\repository\course_ai_repository;
 use local_dixeo\service\file_sync_service;
@@ -37,7 +38,7 @@ use local_dixeo\service\tutor_service;
  * Authorization for pre-tutor RAG sync.
  *
  * @covers \local_dixeo\service\file_sync_service::ensure_enabled_and_synchronized
- * @covers \local_dixeo\service\tutor_service::submit_message
+ * @covers \local_dixeo\service\tutor_service::submit
  */
 final class tutor_sync_authorization_test extends \advanced_testcase {
     protected function tearDown(): void {
@@ -137,7 +138,12 @@ final class tutor_sync_authorization_test extends \advanced_testcase {
             ->willReturn(operation_result::pending('job-tutor-1', 'pending', 0));
 
         $tutorservice = new tutor_service($jobservice);
-        $result = $tutorservice->submit_message((int) $course->id, (int) $student->id, 'Hello tutor');
+        $message = new tutor_message(
+            tutor_message::ROLE_USER,
+            'Hello tutor',
+            ['source' => 'phpunit']
+        );
+        $result = $tutorservice->submit((int) $course->id, (int) $student->id, $message);
 
         $this->assertSame('job-tutor-1', $result->jobid);
         $this->assertFalse($syncservice->is_enabled((int) $course->id));
