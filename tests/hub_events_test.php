@@ -166,7 +166,7 @@ final class hub_events_test extends \advanced_testcase {
         $service->cancel_job(
             'job-event-cancel',
             (int) $course->id,
-            \local_dixeo\job_access_mode::COURSE_SHARED
+            $userid
         );
 
         $cancelled = array_values(array_filter(

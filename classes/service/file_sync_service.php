@@ -123,12 +123,17 @@ class file_sync_service {
      * Enable file sync for a course.
      *
      * Creates the course AI record if it doesn't exist and marks it as enabled.
+     * Requires local/dixeo:syncfiles for the acting user in the course context.
      *
      * @param int $courseid The course ID.
      * @param int $userid The user enabling sync.
      * @return void
      */
     public function enable_sync(int $courseid, int $userid): void {
+        if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
+            return;
+        }
+
         $wasenabled = $this->is_enabled($courseid);
 
         if ($this->repository->get_by_courseid($courseid) === null) {
@@ -148,7 +153,8 @@ class file_sync_service {
     /**
      * Implicit opt-in when a tutor or modulegen block is added to a course.
      *
-     * Failures are logged only so block creation is never blocked.
+     * Requires local/dixeo:syncfiles. Failures are logged only so block creation
+     * is never blocked.
      *
      * @param int $courseid The course ID.
      * @param int $userid The user adding the block.
@@ -156,6 +162,10 @@ class file_sync_service {
      */
     public function opt_in_on_block_added(int $courseid, int $userid): void {
         if ($courseid <= SITEID || $userid <= 0) {
+            return;
+        }
+
+        if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
             return;
         }
 
@@ -171,7 +181,11 @@ class file_sync_service {
     }
 
     /**
-     * Enable sync, run an immediate upload, and wait until the course is indexed.
+     * Ensure course files are indexed for RAG when authorization allows.
+     *
+     * Does not reactivate disabled synchronization unless the actor holds
+     * local/dixeo:syncfiles. When sync is already enabled, refreshes and
+     * waits for a synchronized (or empty) status.
      *
      * Used before RAG-backed API jobs (tutor messages, module generation).
      *
@@ -182,7 +196,13 @@ class file_sync_service {
      * @throws \moodle_exception When sync fails or times out.
      */
     public function ensure_enabled_and_synchronized(int $courseid, int $userid, int $timeoutseconds = 120): void {
-        $this->enable_sync($courseid, $userid);
+        if (!$this->is_enabled($courseid)) {
+            if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
+                return;
+            }
+            $this->enable_sync($courseid, $userid);
+        }
+
         $this->trigger_sync($courseid);
 
         $deadline = time() + $timeoutseconds;
