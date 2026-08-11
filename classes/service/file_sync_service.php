@@ -171,7 +171,11 @@ class file_sync_service {
     }
 
     /**
-     * Enable sync, run an immediate upload, and wait until the course is indexed.
+     * Ensure course files are indexed for RAG when authorization allows.
+     *
+     * Does not reactivate disabled synchronization unless the actor holds
+     * local/dixeo:syncfiles. When sync is already enabled, refreshes and
+     * waits for a synchronized (or empty) status.
      *
      * Used before RAG-backed API jobs (tutor messages, module generation).
      *
@@ -182,7 +186,13 @@ class file_sync_service {
      * @throws \moodle_exception When sync fails or times out.
      */
     public function ensure_enabled_and_synchronized(int $courseid, int $userid, int $timeoutseconds = 120): void {
-        $this->enable_sync($courseid, $userid);
+        if (!$this->is_enabled($courseid)) {
+            if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
+                return;
+            }
+            $this->enable_sync($courseid, $userid);
+        }
+
         $this->trigger_sync($courseid);
 
         $deadline = time() + $timeoutseconds;
