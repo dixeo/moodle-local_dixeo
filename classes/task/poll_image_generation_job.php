@@ -32,9 +32,58 @@ class poll_image_generation_job extends poll_image_job {
      */
     public function execute(): void {
         $data = $this->get_custom_data();
-        if (is_object($data)) {
-            if (!isset($data->target_kind) && isset($data->scope)) {
-                $data->target_kind = (string) $data->scope;
+        if (!is_object($data)) {
+            return;
+        }
+
+        $courseid = (int) ($data->courseid ?? 0);
+        $imagejobid = trim((string) ($data->imagejobid ?? ''));
+        $userid = (int) ($data->userid ?? 0);
+        $chainseq = (int) ($data->chainseq ?? 0);
+        $scope = isset($data->scope) ? (string) $data->scope : '';
+        $objectid = (int) ($data->objectid ?? 0);
+
+        if ($courseid < 1 || $imagejobid === '' || $userid < 1) {
+            return;
+        }
+
+        if (
+            $objectid < 1 || !in_array($scope, [
+            image_poll_manager::SCOPE_COURSE_OVERVIEW,
+            image_poll_manager::SCOPE_FORMAT_SECTION,
+            ], true)
+        ) {
+            return;
+        }
+
+        $jobservice = service_factory::get_job_service();
+
+        $deadline = time() + self::POLL_WINDOW_SECONDS;
+        while (time() < $deadline) {
+            $jobstatus = $jobservice->get_job_status(
+                $imagejobid,
+                $courseid,
+                $userid
+            );
+
+            if ($jobstatus->is_completed()) {
+                $result = $jobstatus->result;
+                if (is_string($result)) {
+                    $decoded = json_decode($result, true);
+                    $result = is_array($decoded) ? $decoded : [];
+                } else if (!is_array($result)) {
+                    $result = $result !== null ? (array) $result : [];
+                }
+
+                try {
+                    course_image_writer::apply_from_job_result($scope, $objectid, $result, $userid);
+                } catch (\Throwable $e) {
+                    debugging(
+                        'poll_image_generation_job: apply failed courseid=' . $courseid . ' ' . $e->getMessage(),
+                        DEBUG_DEVELOPER
+                    );
+                }
+                return;
             }
             if (empty($data->jobid) && !empty($data->imagejobid)) {
                 $data->jobid = (string) $data->imagejobid;

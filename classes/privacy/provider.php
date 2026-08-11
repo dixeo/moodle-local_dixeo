@@ -91,6 +91,7 @@ class provider implements
                 'userid' => 'privacy:metadata:jobs:userid',
                 'namespace' => 'privacy:metadata:jobs:namespace',
                 'operation' => 'privacy:metadata:jobs:operation',
+                'accessmode' => 'privacy:metadata:jobs:accessmode',
                 'component' => 'privacy:metadata:jobs:component',
                 'moduletype' => 'privacy:metadata:jobs:moduletype',
                 'contextid' => 'privacy:metadata:jobs:contextid',
@@ -428,10 +429,34 @@ class provider implements
             return;
         }
 
-        $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => (int) $context->instanceid]);
-        $DB->delete_records(self::TABLE_JOBS, ['courseid' => (int) $context->instanceid]);
-        $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => (int) $context->instanceid]);
-        $DB->delete_records(self::TABLE_IMAGE_JOB, ['courseid' => (int) $context->instanceid]);
+        $courseid = (int) $context->instanceid;
+
+        // Best-effort remote purge before wiping local sync identity.
+        $remotedeleted = false;
+        $lasterror = '';
+        try {
+            \local_dixeo\external\service_factory::get_client()->delete_files((string) $courseid);
+            $remotedeleted = true;
+        } catch (\Throwable $e) {
+            $lasterror = $e->getMessage();
+        }
+
+        $DB->delete_records(self::TABLE_JOBS, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => $courseid]);
+
+        if ($remotedeleted) {
+            $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => $courseid]);
+            return;
+        }
+
+        // Keep a pending_deletion row so adhoc retry can finish the remote purge.
+        $repo = new \local_dixeo\repository\course_ai_repository();
+        $repo->mark_pending_deletion($courseid);
+        $repo->record_pending_deletion_error(
+            $courseid,
+            $lasterror !== '' ? $lasterror : 'Privacy purge remote deletion failed'
+        );
+        \local_dixeo\external\service_factory::get_file_sync_service()->queue_remote_deletion_retry($courseid);
     }
 
     /**

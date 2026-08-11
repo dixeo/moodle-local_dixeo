@@ -32,6 +32,7 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\job_binding_metadata;
+use local_dixeo\job_access_mode;
 use local_dixeo\dto\operation_result;
 
 /**
@@ -161,7 +162,8 @@ class module_generation_service {
             self::GENERATE_ENDPOINT,
             $payload,
             $this->component,
-            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata),
+            job_access_mode::COURSE_SHARED
         );
     }
 
@@ -225,7 +227,8 @@ class module_generation_service {
             self::FILL_ENDPOINT,
             $payload,
             $this->component,
-            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata),
+            job_access_mode::COURSE_SHARED
         );
     }
 
@@ -254,7 +257,8 @@ class module_generation_service {
             $payload,
             self::JOB_TYPE_GENERATE,
             $this->component,
-            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata),
+            job_access_mode::COURSE_SHARED
         );
     }
 
@@ -284,7 +288,8 @@ class module_generation_service {
             $payload,
             self::JOB_TYPE_FILL,
             $this->component,
-            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata)
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $this->jobmetadata),
+            job_access_mode::COURSE_SHARED
         );
     }
 

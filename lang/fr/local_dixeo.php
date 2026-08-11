@@ -188,7 +188,7 @@ $string['eventcreditreportexporteddesc'] = 'L\'utilisateur avec l\'id \'{$a->use
 $string['eventcreditreportviewed'] = 'Rapport d\'utilisation des crédits consulté';
 $string['eventcreditreportvieweddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a consulté le rapport d\'utilisation des crédits (vue={$a->view}, lignes={$a->rowcount}).';
 $string['eventfilesyncdisabled'] = 'Synchronisation des fichiers Dixeo du cours désactivée';
-$string['eventfilesyncdisableddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a désactivé la synchronisation des fichiers Dixeo pour le cours avec l\'id \'{$a->courseid}\' (removefiles={$a->removefiles}).';
+$string['eventfilesyncdisableddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a désactivé la synchronisation des fichiers Dixeo pour le cours avec l\'id \'{$a->courseid}\' (removefiles={$a->removefiles}, remotedelete={$a->remotedeletestatus}).';
 $string['eventfilesyncenabled'] = 'Synchronisation des fichiers Dixeo du cours activée';
 $string['eventfilesyncenableddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a activé la synchronisation des fichiers Dixeo pour le cours avec l\'id \'{$a->courseid}\'.';
 $string['eventfilesynctriggered'] = 'Synchronisation des fichiers Dixeo du cours déclenchée';
@@ -213,6 +213,7 @@ $string['filesync_status_error'] = 'Erreur de synchronisation';
 $string['filesync_status_none'] = 'Aucun fichier synchronisé';
 $string['filesync_status_outdated'] = 'Contenu modifié, synchronisation nécessaire';
 $string['filesync_status_paused'] = 'Synchronisation en pause';
+$string['filesync_status_pending_deletion'] = 'Suppression distante des fichiers en attente';
 $string['filesync_status_synchronized'] = 'Fichiers synchronisés';
 $string['filesync_status_syncing'] = 'Synchronisation en cours...';
 $string['filesync_timeout'] = 'La synchronisation des fichiers a expiré avant l\'indexation des fichiers du cours';
@@ -321,6 +322,7 @@ $string['privacy:metadata:image_job:timecreated'] = 'The time when the image job
 $string['privacy:metadata:image_job:timemodified'] = 'The time when the image job record was last modified.';
 $string['privacy:metadata:image_job:userid'] = 'The user who started the image job.';
 $string['privacy:metadata:jobs'] = 'Enregistrements locaux liant les tâches distantes Dixeo AI aux cours et utilisateurs Moodle.';
+$string['privacy:metadata:jobs:accessmode'] = 'Indique si la tâche est limitée à l\'initiateur ou partagée au niveau du cours pour le contrôle d\'accès.';
 $string['privacy:metadata:jobs:cmid'] = 'L\'identifiant du module de cours lorsqu\'il est connu.';
 $string['privacy:metadata:jobs:component'] = 'Le composant Dixeo d\'origine pour la tâche.';
 $string['privacy:metadata:jobs:contextid'] = 'Le contexte Moodle lorsqu\'il est connu.';
@@ -344,6 +346,7 @@ $string['task_cleanup_jobs'] = 'Nettoyer les anciens enregistrements de travaux'
 $string['task_poll_image'] = 'Interroger la tâche d\'image Dixeo';
 $string['task_poll_image_generation'] = 'Interroger la tâche de génération d\'images Dixeo';
 $string['task_process_file_sync'] = 'Traiter la synchronisation des fichiers Dixeo';
+$string['task_process_remote_file_deletion'] = 'Réessayer la suppression distante des fichiers Dixeo';
 $string['teach_lesson_default_title'] = 'Leçon personnalisée';
 $string['teach_lesson_error_invalid_result'] = 'Résultat du travail non valide.';
 $string['teach_lesson_error_job_not_completed'] = 'Le travail n\'est pas terminé. Statut : {$a->status}';

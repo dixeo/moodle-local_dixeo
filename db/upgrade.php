@@ -437,5 +437,33 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026073102, 'local', 'dixeo');
     }
 
+    // Persist job access mode (default initiator_scoped; opt-in course_shared).
+    if ($oldversion < 2026081100) {
+        $jobstable = new xmldb_table('local_dixeo_jobs');
+        $accessmodefield = new xmldb_field(
+            'accessmode',
+            XMLDB_TYPE_CHAR,
+            '20',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            'initiator_scoped',
+            'operation'
+        );
+        if (!$dbman->field_exists($jobstable, $accessmodefield)) {
+            $dbman->add_field($jobstable, $accessmodefield);
+        }
+
+        // Existing collaborative generate/fill jobs remain course-shared.
+        $DB->set_field_select(
+            'local_dixeo_jobs',
+            'accessmode',
+            'course_shared',
+            "operation IN ('module_generate', 'module_fill')"
+        );
+
+        upgrade_plugin_savepoint(true, 2026081100, 'local', 'dixeo');
+    }
+
     return true;
 }

@@ -25,6 +25,7 @@
 namespace local_dixeo\repository;
 
 use local_dixeo\dto\job_binding_metadata;
+use local_dixeo\job_access_mode;
 
 /**
  * CRUD helpers for {@see local_dixeo_jobs}.
@@ -37,6 +38,7 @@ class job_repository {
      * Persist a newly created remote job binding.
      *
      * Idempotent for the same jobid (updates course/user metadata if re-inserted).
+     * Access mode defaults to initiator_scoped; pass course_shared for collaborative jobs.
      *
      * @param string $jobid Remote job UUID.
      * @param int $courseid Course ID (0 when not yet known, e.g. pre-course structure).
@@ -45,6 +47,7 @@ class job_repository {
      * @param string $operation Logical operation name (e.g. module_generate).
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
+     * @param job_access_mode $accessmode Access policy persisted for later enforcement.
      * @return \stdClass The stored record.
      */
     public function register(
@@ -54,7 +57,8 @@ class job_repository {
         string $namespace,
         string $operation,
         ?string $component = null,
-        ?job_binding_metadata $metadata = null
+        ?job_binding_metadata $metadata = null,
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): \stdClass {
         global $DB;
 
@@ -64,6 +68,7 @@ class job_repository {
         }
 
         $fields = $this->metadata_to_fields($metadata);
+        $accessmodevalue = $accessmode->value;
 
         $existing = $DB->get_record(self::TABLE, ['jobid' => $jobid]);
         if ($existing) {
@@ -73,6 +78,7 @@ class job_repository {
                 'userid' => $userid,
                 'namespace' => $namespace,
                 'operation' => $operation,
+                'accessmode' => $accessmodevalue,
                 'component' => $component,
             ];
             foreach ($fields as $key => $value) {
@@ -90,6 +96,7 @@ class job_repository {
             'userid' => $userid,
             'namespace' => $namespace,
             'operation' => $operation,
+            'accessmode' => $accessmodevalue,
             'component' => $component,
             'moduletype' => $fields['moduletype'],
             'contextid' => $fields['contextid'],
@@ -99,6 +106,21 @@ class job_repository {
         $record->id = $DB->insert_record(self::TABLE, $record);
 
         return $record;
+    }
+
+    /**
+     * Resolve the persisted access mode for a job.
+     *
+     * @param string $jobid Remote job UUID.
+     * @return job_access_mode|null Null when the job is not registered.
+     */
+    public function get_access_mode(string $jobid): ?job_access_mode {
+        $record = $this->get_by_jobid($jobid);
+        if ($record === null) {
+            return null;
+        }
+
+        return job_access_mode::from_storage($record->accessmode ?? null);
     }
 
     /**
