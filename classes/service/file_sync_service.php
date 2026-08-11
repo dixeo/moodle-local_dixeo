@@ -123,12 +123,17 @@ class file_sync_service {
      * Enable file sync for a course.
      *
      * Creates the course AI record if it doesn't exist and marks it as enabled.
+     * Requires local/dixeo:syncfiles for the acting user in the course context.
      *
      * @param int $courseid The course ID.
      * @param int $userid The user enabling sync.
      * @return void
      */
     public function enable_sync(int $courseid, int $userid): void {
+        if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
+            return;
+        }
+
         $wasenabled = $this->is_enabled($courseid);
 
         if ($this->repository->get_by_courseid($courseid) === null) {
@@ -148,7 +153,8 @@ class file_sync_service {
     /**
      * Implicit opt-in when a tutor or modulegen block is added to a course.
      *
-     * Failures are logged only so block creation is never blocked.
+     * Requires local/dixeo:syncfiles. Failures are logged only so block creation
+     * is never blocked.
      *
      * @param int $courseid The course ID.
      * @param int $userid The user adding the block.
@@ -156,6 +162,10 @@ class file_sync_service {
      */
     public function opt_in_on_block_added(int $courseid, int $userid): void {
         if ($courseid <= SITEID || $userid <= 0) {
+            return;
+        }
+
+        if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
             return;
         }
 

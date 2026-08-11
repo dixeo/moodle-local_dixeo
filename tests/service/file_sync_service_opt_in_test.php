@@ -69,10 +69,18 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
     }
 
     public function test_enable_sync_always_sets_enabled_true(): void {
+        global $DB;
+
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
-        $user = $this->getDataGenerator()->create_user();
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $context = \context_course::instance($course->id);
+        $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
+        assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($user);
+
         $repository = new course_ai_repository();
         $service = new file_sync_service($repository);
 
@@ -84,11 +92,35 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $this->assertSame((int) $user->id, (int) $record->enabledby);
     }
 
-    public function test_opt_in_on_block_added_enables_and_queues(): void {
+    public function test_enable_sync_ignored_without_syncfiles(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
-        $user = $this->getDataGenerator()->create_user();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($student);
+
+        $repository = new course_ai_repository();
+        $service = new file_sync_service($repository);
+
+        $service->enable_sync($course->id, (int) $student->id);
+
+        $this->assertNull($repository->get_by_courseid($course->id));
+        $this->assertFalse($service->is_enabled($course->id));
+    }
+
+    public function test_opt_in_on_block_added_enables_and_queues(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $context = \context_course::instance($course->id);
+        $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
+        assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($user);
+
         $repository = new course_ai_repository();
         $service = new file_sync_service($repository);
 
@@ -108,6 +140,28 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
             }
         }
         $this->assertTrue($found);
+    }
+
+    public function test_opt_in_on_block_added_ignored_without_syncfiles(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($student);
+
+        $repository = new course_ai_repository();
+        $service = new file_sync_service($repository);
+
+        $service->opt_in_on_block_added($course->id, (int) $student->id);
+
+        $this->assertNull($repository->get_by_courseid($course->id));
+        $tasks = \core\task\manager::get_adhoc_tasks('\\local_dixeo\\task\\process_file_sync');
+        foreach ($tasks as $task) {
+            $data = $task->get_custom_data();
+            if (isset($data->courseid) && (int) $data->courseid === (int) $course->id) {
+                $this->fail('Student opt-in must not queue process_file_sync');
+            }
+        }
     }
 
     public function test_ensure_enabled_and_synchronized_waits_for_synchronized_status(): void {
