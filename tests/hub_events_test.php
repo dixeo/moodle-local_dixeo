@@ -143,7 +143,16 @@ final class hub_events_test extends \advanced_testcase {
         $userid = (int) $USER->id;
 
         $repo = new job_repository();
-        $repo->register('job-event-cancel', (int) $course->id, 9, 'default', 'module_generate');
+        $repo->register(
+            'job-event-cancel',
+            (int) $course->id,
+            9,
+            'default',
+            'module_generate',
+            null,
+            null,
+            \local_dixeo\job_access_mode::COURSE_SHARED
+        );
 
         $client = $this->createMock(client::class);
         $client->expects($this->once())
@@ -153,7 +162,7 @@ final class hub_events_test extends \advanced_testcase {
 
         $service = new job_service($client, null, $repo);
         $sink = $this->redirectEvents();
-        $service->cancel_job('job-event-cancel', (int) $course->id);
+        $service->cancel_job('job-event-cancel', (int) $course->id, $userid);
 
         $cancelled = array_values(array_filter(
             $sink->get_events(),

@@ -45,9 +45,18 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
      * @return array{0: job_service, 1: string} Job service mock and job id.
      */
     private function mock_completed_page_job_service(int $courseid, int $userid): array {
-        $jobid = 'job-page-' . random_string(8);
+        $jobid = \core\uuid::generate();
         $repo = new job_repository();
-        $repo->register($jobid, $courseid, $userid, 'default', 'module_generate');
+        $repo->register(
+            $jobid,
+            $courseid,
+            $userid,
+            'default',
+            'module_generate',
+            null,
+            null,
+            \local_dixeo\job_access_mode::COURSE_SHARED
+        );
 
         $result = [
             'moduleType' => 'page',
@@ -169,9 +178,18 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $this->setUser($teacher);
 
-        $jobid = 'job-fill-' . random_string(8);
+        $jobid = \core\uuid::generate();
         $repo = new job_repository();
-        $repo->register($jobid, (int) $course->id, (int) $teacher->id, 'default', 'module_fill');
+        $repo->register(
+            $jobid,
+            (int) $course->id,
+            (int) $teacher->id,
+            'default',
+            'module_fill',
+            null,
+            null,
+            \local_dixeo\job_access_mode::COURSE_SHARED
+        );
 
         $result = [
             'moduleType' => 'page',

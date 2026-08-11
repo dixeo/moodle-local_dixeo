@@ -78,7 +78,11 @@ class poll_image_generation_job extends \core\task\adhoc_task {
 
         $deadline = time() + self::POLL_WINDOW_SECONDS;
         while (time() < $deadline) {
-            $jobstatus = $jobservice->get_job_status($imagejobid, $courseid);
+            $jobstatus = $jobservice->get_job_status(
+                $imagejobid,
+                $courseid,
+                $userid
+            );
 
             if ($jobstatus->is_completed()) {
                 $result = $jobstatus->result;

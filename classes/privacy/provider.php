@@ -88,6 +88,7 @@ class provider implements
                 'userid' => 'privacy:metadata:jobs:userid',
                 'namespace' => 'privacy:metadata:jobs:namespace',
                 'operation' => 'privacy:metadata:jobs:operation',
+                'accessmode' => 'privacy:metadata:jobs:accessmode',
                 'component' => 'privacy:metadata:jobs:component',
                 'moduletype' => 'privacy:metadata:jobs:moduletype',
                 'contextid' => 'privacy:metadata:jobs:contextid',

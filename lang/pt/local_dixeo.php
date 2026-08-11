@@ -280,6 +280,7 @@ $string['privacy:metadata:external:title'] = 'Título do curso ou da secção us
 $string['privacy:metadata:external:userid'] = 'O ID de utilizador Moodle associado ao pedido (por exemplo conversas do tutor).';
 $string['privacy:metadata:externalpurpose'] = 'Os dados são enviados para a API Dixeo AI para geração de conteúdo, tutoria, imagens, relatórios de créditos e sincronização de ficheiros. A retenção e eliminação remotas são geridas pela Dixeo segundo o contrato institucional; este plugin não pode eliminar cópias remotas através dos fluxos de privacidade do Moodle.';
 $string['privacy:metadata:jobs'] = 'Registos locais que associam trabalhos remotos da Dixeo AI a cursos e utilizadores Moodle.';
+$string['privacy:metadata:jobs:accessmode'] = 'Se o trabalho é limitado ao iniciador ou partilhado no curso para controlo de acesso.';
 $string['privacy:metadata:jobs:cmid'] = 'O id do módulo do curso quando conhecido.';
 $string['privacy:metadata:jobs:component'] = 'O componente Dixeo de origem do trabalho.';
 $string['privacy:metadata:jobs:contextid'] = 'O contexto Moodle quando conhecido.';
