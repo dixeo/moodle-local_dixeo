@@ -261,7 +261,9 @@ class file_sync_service {
     /**
      * Disable file sync for a course.
      *
-     * Optionally removes all files from Dixeo.
+     * When $removefiles is true, marks pending_deletion and calls DELETE /v1/files.
+     * Local sync evidence is cleared only after a successful remote delete. Failures
+     * keep pending_deletion and queue an idempotent retry task.
      *
      * @param int $courseid The course ID.
      * @param int $userid The user disabling sync.
@@ -274,24 +276,92 @@ class file_sync_service {
         $objectid = $record !== null ? (int) $record->id : 0;
 
         if ($removefiles) {
-            // Always reset local state when user wants to clear data.
-            $this->repository->reset_sync_state($courseid);
+            $this->repository->set_enabled($courseid, false, $userid);
+            $this->repository->mark_pending_deletion($courseid);
 
-            // Try to delete files from API, but don't fail if it doesn't work.
+            $remotedeletestatus = 'pending';
             try {
                 $this->client->delete_files((string) $courseid);
+                $this->repository->reset_sync_state($courseid);
+                $remotedeletestatus = 'completed';
             } catch (api_exception $e) {
-                // Log but don't fail - user wants to disable regardless.
-                // Local state is already reset, API files will be orphaned but harmless.
-                debugging('Failed to delete files from Dixeo: ' . $e->getMessage(), DEBUG_DEVELOPER);
+                $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
+                $this->queue_remote_deletion_retry($courseid);
             }
+
+            $record = $this->repository->get_by_courseid($courseid);
+            $objectid = $record !== null ? (int) $record->id : $objectid;
+            if ($wasenabled && $objectid > 0) {
+                file_sync_disabled::create_for_course(
+                    $courseid,
+                    $userid,
+                    $objectid,
+                    true,
+                    $remotedeletestatus
+                )->trigger();
+            }
+            return;
         }
 
         $this->repository->set_enabled($courseid, false, $userid);
 
         if ($wasenabled && $objectid > 0) {
-            file_sync_disabled::create_for_course($courseid, $userid, $objectid, $removefiles)->trigger();
+            file_sync_disabled::create_for_course($courseid, $userid, $objectid, false, 'not_requested')->trigger();
         }
+    }
+
+    /**
+     * Retry a pending remote file deletion for a course.
+     *
+     * Idempotent: no-ops unless syncstatus is pending_deletion.
+     *
+     * @param int $courseid The course ID.
+     * @return bool True when remote deletion completed (or nothing pending).
+     */
+    public function retry_pending_deletion(int $courseid): bool {
+        $record = $this->repository->get_by_courseid($courseid);
+        if ($record === null || $record->syncstatus !== 'pending_deletion') {
+            return true;
+        }
+
+        try {
+            $this->client->delete_files((string) $courseid);
+            $this->repository->reset_sync_state($courseid);
+            return true;
+        } catch (api_exception $e) {
+            $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
+            if ($this->repository->should_retry_pending_deletion($courseid)) {
+                $this->queue_remote_deletion_retry($courseid);
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Queue an adhoc task to retry remote file deletion.
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     */
+    public function queue_remote_deletion_retry(int $courseid): void {
+        $delay = $this->repository->get_retry_delay($courseid);
+        if ($delay < 1) {
+            // First failure may not yet have an errorcount mapped delay in edge cases.
+            $delay = 60;
+        }
+
+        $classname = '\\local_dixeo\\task\\process_remote_file_deletion';
+        foreach (\core\task\manager::get_adhoc_tasks($classname) as $existing) {
+            $data = $existing->get_custom_data();
+            if (isset($data->courseid) && (int) $data->courseid === $courseid) {
+                return;
+            }
+        }
+
+        $task = new \local_dixeo\task\process_remote_file_deletion();
+        $task->set_custom_data((object) ['courseid' => $courseid]);
+        $task->set_next_run_time(time() + $delay);
+        \core\task\manager::queue_adhoc_task($task, true);
     }
 
     /**

@@ -92,7 +92,7 @@ final class hub_events_test extends \advanced_testcase {
         ));
         $this->assertCount(0, $enabledagain, 'Re-enabling an already enabled course must not re-fire');
 
-        $sink->clear();
+        $sink = $this->redirectEvents();
         $service->disable_sync((int) $course->id, $userid, true);
         $disabled = array_values(array_filter(
             $sink->get_events(),
@@ -100,6 +100,7 @@ final class hub_events_test extends \advanced_testcase {
         ));
         $this->assertCount(1, $disabled);
         $this->assertSame(1, (int) $disabled[0]->other['removefiles']);
+        $this->assertSame('completed', $disabled[0]->other['remotedeletestatus']);
     }
 
     /**
@@ -162,7 +163,11 @@ final class hub_events_test extends \advanced_testcase {
 
         $service = new job_service($client, null, $repo);
         $sink = $this->redirectEvents();
-        $service->cancel_job('job-event-cancel', (int) $course->id, $userid);
+        $service->cancel_job(
+            'job-event-cancel',
+            (int) $course->id,
+            \local_dixeo\job_access_mode::COURSE_SHARED
+        );
 
         $cancelled = array_values(array_filter(
             $sink->get_events(),

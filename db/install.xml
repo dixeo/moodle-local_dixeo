@@ -6,7 +6,7 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to course.id"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether AI file sync is enabled for this course"/>
-        <FIELD NAME="syncstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="none" SEQUENCE="false" COMMENT="Sync status: none, syncing, synchronized, error, paused"/>
+        <FIELD NAME="syncstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="none" SEQUENCE="false" COMMENT="Sync status: none, syncing, synchronized, error, paused, pending_deletion"/>
         <FIELD NAME="filestotal" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Total number of files to sync"/>
         <FIELD NAME="filescompleted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Number of files successfully synced"/>
         <FIELD NAME="progresspercent" TYPE="int" LENGTH="3" NOTNULL="false" SEQUENCE="false" COMMENT="Sync progress percentage 0-100"/>
