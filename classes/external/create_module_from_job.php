@@ -40,6 +40,8 @@ use local_dixeo\external\service_factory;
 
 /**
  * External function to create a module from a completed job.
+ *
+ * Access follows the mode persisted at job registration.
  */
 class create_module_from_job extends external_api {
     use capability_check;
@@ -85,6 +87,8 @@ class create_module_from_job extends external_api {
         ?string $name = null,
         ?string $intro = null
     ): array {
+        global $CFG, $USER;
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'jobid' => $jobid,
             'courseid' => $courseid,
@@ -96,9 +100,18 @@ class create_module_from_job extends external_api {
 
         $coursecontext = self::validate_course_capability($params['courseid'], true);
 
+        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+        if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+
         try {
             $jobservice = service_factory::get_job_service();
-            $status = $jobservice->get_job_status($params['jobid'], $params['courseid']);
+            $status = $jobservice->get_job_status(
+                $params['jobid'],
+                $params['courseid'],
+                (int) $USER->id
+            );
 
             if (!$status->is_completed()) {
                 return response_factory::module_creation_result(

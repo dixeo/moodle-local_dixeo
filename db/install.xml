@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/dixeo/db" VERSION="20260714" COMMENT="XMLDB file for Moodle local/dixeo">
+<XMLDB PATH="local/dixeo/db" VERSION="20260811" COMMENT="XMLDB file for Moodle local/dixeo">
   <TABLES>
     <TABLE NAME="local_dixeo_course_ai" COMMENT="Stores AI file sync configuration and status per course">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to course.id"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether AI file sync is enabled for this course"/>
-        <FIELD NAME="syncstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="none" SEQUENCE="false" COMMENT="Sync status: none, syncing, synchronized, error, paused"/>
+        <FIELD NAME="syncstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="none" SEQUENCE="false" COMMENT="Sync status: none, syncing, synchronized, error, paused, pending_deletion"/>
         <FIELD NAME="filestotal" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Total number of files to sync"/>
         <FIELD NAME="filescompleted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Number of files successfully synced"/>
         <FIELD NAME="progresspercent" TYPE="int" LENGTH="3" NOTNULL="false" SEQUENCE="false" COMMENT="Sync progress percentage 0-100"/>
@@ -42,6 +42,7 @@
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="User who initiated the job"/>
         <FIELD NAME="namespace" TYPE="char" LENGTH="100" NOTNULL="true" DEFAULT="default" SEQUENCE="false" COMMENT="Dixeo API namespace"/>
         <FIELD NAME="operation" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="unknown" SEQUENCE="false" COMMENT="Logical operation type"/>
+        <FIELD NAME="accessmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="initiator_scoped" SEQUENCE="false" COMMENT="Job access policy: initiator_scoped (default) or course_shared"/>
         <FIELD NAME="component" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="Frankenstyle component that initiated the job"/>
         <FIELD NAME="moduletype" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="Moodle/API activity type when known"/>
         <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course or module Moodle context id"/>

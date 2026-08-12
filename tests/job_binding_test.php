@@ -17,8 +17,8 @@
 /**
  * Tests for local Dixeo job ownership binding.
  *
- * Course-work jobs are isolated by course + capability, not by initiating user.
- * Userid is still stored for attribution and privacy export.
+ * Access mode is persisted at registration (default initiator_scoped;
+ * opt-in course_shared). Enforcement reads the stored mode.
  *
  * @package    local_dixeo
  * @category   test
@@ -38,6 +38,7 @@ use local_dixeo\service\job_service;
  *
  * @covers \local_dixeo\repository\job_repository
  * @covers \local_dixeo\service\job_service
+ * @covers \local_dixeo\job_access_mode
  */
 final class job_binding_test extends \advanced_testcase {
     protected function setUp(): void {
@@ -45,18 +46,29 @@ final class job_binding_test extends \advanced_testcase {
         $this->resetAfterTest();
     }
 
-    public function test_repository_register_and_belongs_to_course(): void {
+    public function test_repository_register_defaults_to_initiator_scoped(): void {
         $repo = new job_repository();
-        $repo->register('job-a', 10, 5, 'default', 'module_generate');
-
-        $this->assertTrue($repo->belongs_to_course('job-a', 10));
-        $this->assertFalse($repo->belongs_to_course('job-a', 99));
-        $this->assertFalse($repo->belongs_to_course('missing', 10));
+        $repo->register('job-a', 10, 5, 'default', 'module_edit');
 
         $record = $repo->get_by_jobid('job-a');
-        $this->assertNotNull($record);
-        $this->assertEquals(5, (int) $record->userid);
-        $this->assertEquals('module_generate', $record->operation);
+        $this->assertSame(job_access_mode::INITIATOR_SCOPED->value, $record->accessmode);
+        $this->assertSame(job_access_mode::INITIATOR_SCOPED, $repo->get_access_mode('job-a'));
+    }
+
+    public function test_repository_register_persists_course_shared(): void {
+        $repo = new job_repository();
+        $repo->register(
+            'job-shared',
+            10,
+            5,
+            'default',
+            'module_generate',
+            null,
+            null,
+            job_access_mode::COURSE_SHARED
+        );
+
+        $this->assertSame(job_access_mode::COURSE_SHARED, $repo->get_access_mode('job-shared'));
     }
 
     public function test_submit_job_registers_binding_from_payload(): void {
@@ -69,14 +81,20 @@ final class job_binding_test extends \advanced_testcase {
             ->willReturn(['id' => 'remote-job-123']);
 
         $service = new job_service($client, null, new job_repository());
-        $result = $service->submit_job('/v1/modules/generate', [
-            'courseId' => '42',
-            'userId' => '7',
-            'namespace' => 'ns-test',
-            'moduleType' => 'page',
-            'instructions' => 'Write something',
-            'context' => 'ctx',
-        ]);
+        $result = $service->submit_job(
+            '/v1/modules/generate',
+            [
+                'courseId' => '42',
+                'userId' => '7',
+                'namespace' => 'ns-test',
+                'moduleType' => 'page',
+                'instructions' => 'Write something',
+                'context' => 'ctx',
+            ],
+            null,
+            null,
+            job_access_mode::COURSE_SHARED
+        );
 
         $this->assertEquals('remote-job-123', $result->jobid);
         $repo = new job_repository();
@@ -85,11 +103,21 @@ final class job_binding_test extends \advanced_testcase {
         $this->assertEquals(7, (int) $record->userid);
         $this->assertEquals('ns-test', $record->namespace);
         $this->assertEquals('module_generate', $record->operation);
+        $this->assertSame(job_access_mode::COURSE_SHARED->value, $record->accessmode);
     }
 
-    public function test_get_job_status_rejects_foreign_course(): void {
+    public function test_get_job_status_rejects_foreign_course_for_shared_job(): void {
         $repo = new job_repository();
-        $repo->register('job-bound', 11, 3, 'default', 'tutor_message');
+        $repo->register(
+            'job-bound',
+            11,
+            3,
+            'default',
+            'module_generate',
+            null,
+            null,
+            job_access_mode::COURSE_SHARED
+        );
 
         $client = $this->createMock(client::class);
         $client->expects($this->never())->method('get');
@@ -97,13 +125,21 @@ final class job_binding_test extends \advanced_testcase {
         $service = new job_service($client, null, $repo);
 
         $this->expectException(\moodle_exception::class);
-        $service->get_job_status('job-bound', 99);
+        $service->get_job_status('job-bound', 99, 3);
     }
 
-    public function test_get_job_status_allows_same_course_other_user(): void {
-        // Course-work model: any caller who may operate in the course can poll a peer's job.
+    public function test_get_job_status_allows_same_course_peer_for_shared_job(): void {
         $repo = new job_repository();
-        $repo->register('job-peer', 15, 3, 'default', 'module_generate');
+        $repo->register(
+            'job-peer',
+            15,
+            3,
+            'default',
+            'module_generate',
+            null,
+            null,
+            job_access_mode::COURSE_SHARED
+        );
 
         $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
             ->disableOriginalConstructor()
@@ -121,34 +157,10 @@ final class job_binding_test extends \advanced_testcase {
             ));
 
         $service = new job_service(null, $poller, $repo);
-        $status = $service->get_job_status('job-peer', 15);
+        // Peer userid 99 may poll a course_shared job in course 15.
+        $status = $service->get_job_status('job-peer', 15, 99);
         $this->assertEquals('job-peer', $status->jobid);
         $this->assertEquals(40, $status->progress);
-    }
-
-    public function test_get_job_status_allows_matching_course(): void {
-        $repo = new job_repository();
-        $repo->register('job-ok', 15, 3, 'default', 'tutor_message');
-
-        $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['get_job_status'])
-            ->getMock();
-        $poller->expects($this->once())
-            ->method('get_job_status')
-            ->with('job-ok')
-            ->willReturn(new job_status(
-                jobid: 'job-ok',
-                type: 'tutor',
-                status: 'completed',
-                progress: 100,
-                createdat: time()
-            ));
-
-        $service = new job_service(null, $poller, $repo);
-        $status = $service->get_job_status('job-ok', 15);
-        $this->assertEquals('job-ok', $status->jobid);
-        $this->assertTrue($status->is_completed());
     }
 
     public function test_cancel_job_rejects_unregistered_job(): void {
@@ -157,12 +169,21 @@ final class job_binding_test extends \advanced_testcase {
         $service = new job_service($client, null, new job_repository());
 
         $this->expectException(\moodle_exception::class);
-        $service->cancel_job('never-registered', 5);
+        $service->cancel_job('never-registered', 5, 1);
     }
 
-    public function test_cancel_job_allows_same_course_other_user(): void {
+    public function test_cancel_job_allows_peer_for_shared_job(): void {
         $repo = new job_repository();
-        $repo->register('job-cancel', 20, 8, 'default', 'module_generate');
+        $repo->register(
+            'job-cancel',
+            20,
+            8,
+            'default',
+            'module_generate',
+            null,
+            null,
+            job_access_mode::COURSE_SHARED
+        );
 
         $client = $this->createMock(client::class);
         $client->expects($this->once())
@@ -171,21 +192,11 @@ final class job_binding_test extends \advanced_testcase {
             ->willReturn(['status' => 'cancelled']);
 
         $service = new job_service($client, null, $repo);
-        $result = $service->cancel_job('job-cancel', 20);
+        $result = $service->cancel_job('job-cancel', 20, 99);
         $this->assertEquals('cancelled', $result['status']);
     }
 
-    public function test_repository_belongs_to_user_and_course(): void {
-        $repo = new job_repository();
-        $repo->register('job-owner', 10, 5, 'default', 'module_edit');
-
-        $this->assertTrue($repo->belongs_to_user_and_course('job-owner', 10, 5));
-        $this->assertFalse($repo->belongs_to_user_and_course('job-owner', 10, 99));
-        $this->assertFalse($repo->belongs_to_user_and_course('job-owner', 99, 5));
-        $this->assertFalse($repo->belongs_to_user_and_course('missing', 10, 5));
-    }
-
-    public function test_get_job_status_rejects_same_course_other_user_when_userid_required(): void {
+    public function test_get_job_status_rejects_peer_for_initiator_scoped_job(): void {
         $repo = new job_repository();
         $repo->register('job-edit', 15, 3, 'default', 'module_edit');
 
@@ -196,7 +207,7 @@ final class job_binding_test extends \advanced_testcase {
         $service->get_job_status('job-edit', 15, 99);
     }
 
-    public function test_get_job_status_allows_owner_when_userid_required(): void {
+    public function test_get_job_status_allows_owner_for_initiator_scoped_job(): void {
         $repo = new job_repository();
         $repo->register('job-edit-ok', 15, 3, 'default', 'module_edit');
 
@@ -221,7 +232,7 @@ final class job_binding_test extends \advanced_testcase {
         $this->assertTrue($status->is_completed());
     }
 
-    public function test_cancel_job_rejects_same_course_other_user_when_userid_required(): void {
+    public function test_cancel_job_rejects_peer_for_initiator_scoped_job(): void {
         $repo = new job_repository();
         $repo->register('job-edit-cancel', 20, 8, 'default', 'module_edit');
 
@@ -231,5 +242,46 @@ final class job_binding_test extends \advanced_testcase {
 
         $this->expectException(\moodle_exception::class);
         $service->cancel_job('job-edit-cancel', 20, 99);
+    }
+
+    public function test_initiator_scoped_without_userid_fails_closed(): void {
+        $repo = new job_repository();
+        $repo->register('job-needs-user', 15, 3, 'default', 'module_edit');
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('get');
+        $service = new job_service($client, null, $repo);
+
+        $this->expectException(\moodle_exception::class);
+        $service->get_job_status('job-needs-user', 15);
+    }
+
+    public function test_submit_job_defaults_to_initiator_scoped(): void {
+        $this->setAdminUser();
+
+        $client = $this->createMock(client::class);
+        $client->method('post')->willReturn(['id' => 'job-default-mode']);
+
+        $service = new job_service($client, null, new job_repository());
+        $service->submit_job('/v1/modules/edit', [
+            'courseId' => '10',
+            'userId' => '2',
+        ]);
+
+        $repo = new job_repository();
+        $this->assertSame(
+            job_access_mode::INITIATOR_SCOPED,
+            $repo->get_access_mode('job-default-mode')
+        );
+    }
+
+    public function test_is_valid_job_uuid(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+
+        $this->assertTrue(local_dixeo_is_valid_job_uuid('550e8400-e29b-41d4-a716-446655440000'));
+        $this->assertFalse(local_dixeo_is_valid_job_uuid('job-peer'));
+        $this->assertFalse(local_dixeo_is_valid_job_uuid(''));
+        $this->assertFalse(local_dixeo_is_valid_job_uuid('<script>'));
     }
 }

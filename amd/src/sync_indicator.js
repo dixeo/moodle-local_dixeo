@@ -193,6 +193,7 @@ const loadStrings = async() => {
         {key: 'filesync_status_synchronized', component: 'local_dixeo'},
         {key: 'filesync_status_error', component: 'local_dixeo'},
         {key: 'filesync_status_paused', component: 'local_dixeo'},
+        {key: 'filesync_status_pending_deletion', component: 'local_dixeo'},
         {key: 'filesync_status_disabled', component: 'local_dixeo'},
         {key: 'filesync_status_outdated', component: 'local_dixeo'},
         {key: 'filesync_files_count', component: 'local_dixeo'},
@@ -646,6 +647,10 @@ const updateIndicatorUI = (status = null) => {
  * @returns {string} The status message.
  */
 const getStatusMessage = (status) => {
+    if (status.status === 'pending_deletion') {
+        return strings.filesync_status_pending_deletion || 'Remote file deletion pending';
+    }
+
     if (!status.enabled) {
         return strings.filesync_status_disabled || 'Sync disabled';
     }

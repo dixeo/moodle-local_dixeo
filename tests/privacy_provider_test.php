@@ -30,6 +30,8 @@ use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use local_dixeo\api\client;
+use local_dixeo\external\service_factory;
 use local_dixeo\privacy\provider;
 use local_dixeo\repository\job_repository;
 
@@ -42,6 +44,12 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
+        service_factory::reset();
+    }
+
+    public function tearDown(): void {
+        service_factory::reset();
+        parent::tearDown();
     }
 
     /**
@@ -203,6 +211,13 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
         $user = $this->getDataGenerator()->create_user();
         $course = $this->getDataGenerator()->create_course();
         $this->insert_course_ai_record((int) $course->id, (int) $user->id);
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->once())
+            ->method('delete_files')
+            ->with((string) $course->id)
+            ->willReturn([]);
+        service_factory::set_test_client($client);
 
         $coursecontext = \context_course::instance((int) $course->id);
         provider::delete_data_for_all_users_in_context($coursecontext);

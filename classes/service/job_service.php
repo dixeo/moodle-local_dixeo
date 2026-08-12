@@ -37,6 +37,7 @@ use local_dixeo\dto\operation_result;
 use local_dixeo\dto\job_status;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\event\job_cancelled;
+use local_dixeo\job_access_mode;
 use local_dixeo\repository\job_repository;
 
 /**
@@ -77,11 +78,13 @@ class job_service {
      *
      * Returns immediately with jobid. Use get_job_status() to poll.
      * Registers a local course/user binding for the returned job.
+     * Access mode defaults to initiator_scoped; pass course_shared for collaborative jobs.
      *
      * @param string $endpoint The API endpoint to submit to.
      * @param array $payload The request payload.
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
+     * @param job_access_mode $accessmode Persisted access policy for later enforcement.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
@@ -89,11 +92,12 @@ class job_service {
         string $endpoint,
         array $payload,
         ?string $component = null,
-        ?job_binding_metadata $metadata = null
+        ?job_binding_metadata $metadata = null,
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $metadata);
+        $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
 
         return operation_result::pending($jobid, 'pending', 0);
     }
@@ -109,6 +113,7 @@ class job_service {
      * @param string $jobtype The job type for polling configuration.
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
+     * @param job_access_mode $accessmode Persisted access policy for later enforcement.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
      */
@@ -117,11 +122,12 @@ class job_service {
         array $payload,
         string $jobtype,
         ?string $component = null,
-        ?job_binding_metadata $metadata = null
+        ?job_binding_metadata $metadata = null,
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): operation_result {
         $response = $this->client->post($endpoint, $payload);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $metadata);
+        $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
         $config = polling_config::for_job_type($jobtype);
 
         return $this->poller->poll($jobid, $config);
@@ -130,20 +136,23 @@ class job_service {
     /**
      * Get the status of a job.
      *
-     * When both $courseid and $userid are provided, the job must match that
-     * course and initiator (editor-style non-shared jobs). When only $courseid
-     * is provided, any caller in that course may access the job (shared course
-     * work such as modulegen). Personal surfaces may also enforce ownership
-     * in their own layer.
+     * When $courseid is set, access is enforced from the mode persisted at registration
+     * (default initiator_scoped; course_shared when opt-in at submit). Pass $userid for
+     * initiator-scoped checks (typically $USER->id). When $courseid is null, no local
+     * binding check runs.
      *
      * @param string $jobid The job UUID.
-     * @param int|null $courseid Course ID to enforce ownership for (required for AJAX paths).
-     * @param int|null $userid Optional initiating user ID for initiator-scoped jobs.
+     * @param int|null $courseid Course ID when a local binding check is required.
+     * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return job_status The current job status.
      * @throws api_exception If an API error occurs.
      * @throws \moodle_exception If the job binding check fails.
      */
-    public function get_job_status(string $jobid, ?int $courseid = null, ?int $userid = null): job_status {
+    public function get_job_status(
+        string $jobid,
+        ?int $courseid = null,
+        ?int $userid = null
+    ): job_status {
         $this->require_job_access($jobid, $courseid, $userid);
 
         $status = $this->poller->get_job_status($jobid);
@@ -158,13 +167,17 @@ class job_service {
      * Access rules match {@see get_job_status()}.
      *
      * @param string $jobid The job UUID to cancel.
-     * @param int|null $courseid Course ID to enforce ownership for (required for AJAX paths).
-     * @param int|null $userid Optional initiating user ID for initiator-scoped jobs.
+     * @param int|null $courseid Course ID when a local binding check is required.
+     * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return array The cancellation response from the API.
      * @throws api_exception If an API error occurs.
      * @throws \moodle_exception If the job binding check fails.
      */
-    public function cancel_job(string $jobid, ?int $courseid = null, ?int $userid = null): array {
+    public function cancel_job(
+        string $jobid,
+        ?int $courseid = null,
+        ?int $userid = null
+    ): array {
         global $USER;
 
         $this->require_job_access($jobid, $courseid, $userid);
@@ -193,7 +206,7 @@ class job_service {
      * @param string $jobid The job UUID.
      * @param string $jobtype The job type for polling configuration.
      * @param int|null $courseid Optional course ownership check.
-     * @param int|null $userid Optional initiating user ownership check.
+     * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return operation_result The operation result.
      * @throws api_exception If an API error occurs.
      * @throws \moodle_exception If the job binding check fails.
@@ -210,22 +223,36 @@ class job_service {
     }
 
     /**
-     * Apply course-only or course+user binding checks.
+     * Enforce access using the mode persisted on the job binding.
      *
      * @param string $jobid Remote job UUID.
      * @param int|null $courseid Course ID when binding is required.
-     * @param int|null $userid Initiating user when initiator-scoped access is required.
+     * @param int|null $userid Acting user when mode is initiator_scoped.
      * @throws \moodle_exception When the binding is missing or mismatched.
      */
-    private function require_job_access(string $jobid, ?int $courseid, ?int $userid): void {
+    private function require_job_access(
+        string $jobid,
+        ?int $courseid,
+        ?int $userid
+    ): void {
         if ($courseid === null) {
             return;
         }
-        if ($userid !== null) {
-            $this->require_job_for_user_and_course($jobid, $courseid, $userid);
+
+        $mode = $this->jobrepository->get_access_mode($jobid);
+        if ($mode === null) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+
+        if ($mode === job_access_mode::COURSE_SHARED) {
+            $this->require_job_for_course($jobid, $courseid);
             return;
         }
-        $this->require_job_for_course($jobid, $courseid);
+
+        if ($userid === null || $userid < 1) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+        $this->require_job_for_user_and_course($jobid, $courseid, $userid);
     }
 
     /**
@@ -312,13 +339,15 @@ class job_service {
      * @param array $payload Request payload.
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
+     * @param job_access_mode $accessmode Persisted access policy.
      */
     private function register_job(
         string $jobid,
         string $endpoint,
         array $payload,
         ?string $component = null,
-        ?job_binding_metadata $metadata = null
+        ?job_binding_metadata $metadata = null,
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): void {
         global $USER, $CFG;
 
@@ -345,7 +374,8 @@ class job_service {
             $namespace,
             $operation,
             $component,
-            $mergedmetadata
+            $mergedmetadata,
+            $accessmode
         );
     }
 

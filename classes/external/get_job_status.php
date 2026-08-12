@@ -34,6 +34,9 @@ use local_dixeo\api\exception\api_exception;
 
 /**
  * External function to get the status of a job.
+ *
+ * Access follows the mode persisted at job registration (course_shared for
+ * collaborative modulegen jobs; initiator_scoped by default).
  */
 class get_job_status extends external_api {
     use capability_check;
@@ -58,6 +61,9 @@ class get_job_status extends external_api {
      * @return array The job status.
      */
     public static function execute(string $jobid, int $courseid): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'jobid' => $jobid,
             'courseid' => $courseid,
@@ -65,9 +71,17 @@ class get_job_status extends external_api {
 
         self::validate_course_capability($params['courseid']);
 
+        if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+
         try {
             $service = service_factory::get_job_service();
-            $status = $service->get_job_status($params['jobid'], $params['courseid']);
+            $status = $service->get_job_status(
+                $params['jobid'],
+                $params['courseid'],
+                (int) $USER->id
+            );
 
             $data = $status->to_array();
             // Encode result as JSON since it has dynamic structure.
@@ -100,9 +114,9 @@ class get_job_status extends external_api {
             // RFC 7807 Problem Details format.
             'error' => new external_single_structure([
                 'type' => new external_value(PARAM_ALPHANUMEXT, 'Error type identifier', VALUE_OPTIONAL),
-                'title' => new external_value(PARAM_RAW, 'Human-readable error title', VALUE_OPTIONAL),
+                'title' => new external_value(PARAM_TEXT, 'Human-readable error title', VALUE_OPTIONAL),
                 'status' => new external_value(PARAM_INT, 'HTTP status code', VALUE_OPTIONAL),
-                'detail' => new external_value(PARAM_RAW, 'Detailed error description', VALUE_OPTIONAL),
+                'detail' => new external_value(PARAM_TEXT, 'Detailed error description', VALUE_OPTIONAL),
             ], 'Error information (RFC 7807)', VALUE_OPTIONAL),
             'processingtimeseconds' => new external_value(PARAM_FLOAT, 'Processing time in seconds', VALUE_OPTIONAL),
             'namespace' => new external_value(PARAM_RAW, 'The namespace', VALUE_OPTIONAL),
