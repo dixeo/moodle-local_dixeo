@@ -37,6 +37,8 @@ use local_dixeo\service\module_types_service;
 use local_dixeo\service\file_sync_service;
 use local_dixeo\service\image_generation_service;
 use local_dixeo\service\manual_upload_service;
+use local_dixeo\service\practice_quiz_service;
+use local_dixeo\service\teach_lesson_service;
 use local_dixeo\service\tutor_service;
 
 /**
@@ -72,6 +74,12 @@ class service_factory {
 
     /** @var image_generation_service|null Mock image generation service for unit testing. */
     private static ?image_generation_service $testimagegenerationservice = null;
+
+    /** @var practice_quiz_service|null Mock practice quiz service for unit testing. */
+    private static ?practice_quiz_service $testpracticequizservice = null;
+
+    /** @var teach_lesson_service|null Mock teach lesson service for unit testing. */
+    private static ?teach_lesson_service $testteachlessonservice = null;
 
     /** @var client|null Mock client instance for unit testing. */
     private static ?client $testclient = null;
@@ -207,6 +215,32 @@ class service_factory {
     }
 
     /**
+     * Get a practice_quiz_service instance.
+     *
+     * @return practice_quiz_service
+     */
+    public static function get_practice_quiz_service(): practice_quiz_service {
+        if (self::$testpracticequizservice !== null) {
+            return self::$testpracticequizservice;
+        }
+
+        return new practice_quiz_service();
+    }
+
+    /**
+     * Get a teach_lesson_service instance.
+     *
+     * @return teach_lesson_service
+     */
+    public static function get_teach_lesson_service(): teach_lesson_service {
+        if (self::$testteachlessonservice !== null) {
+            return self::$testteachlessonservice;
+        }
+
+        return new teach_lesson_service();
+    }
+
+    /**
      * Get a client instance.
      *
      * Returns a fresh instance unless a test instance has been set.
@@ -316,6 +350,24 @@ class service_factory {
     }
 
     /**
+     * Set a test practice quiz service instance.
+     *
+     * @param practice_quiz_service|null $service
+     */
+    public static function set_test_practice_quiz_service(?practice_quiz_service $service): void {
+        self::$testpracticequizservice = $service;
+    }
+
+    /**
+     * Set a test teach lesson service instance.
+     *
+     * @param teach_lesson_service|null $service
+     */
+    public static function set_test_teach_lesson_service(?teach_lesson_service $service): void {
+        self::$testteachlessonservice = $service;
+    }
+
+    /**
      * Set a test client instance.
      *
      * Use this in unit tests to inject mock clients.
@@ -341,6 +393,8 @@ class service_factory {
         self::$testfilesyncservice = null;
         self::$testmanualuploadservice = null;
         self::$testimagegenerationservice = null;
+        self::$testpracticequizservice = null;
+        self::$testteachlessonservice = null;
         self::$testclient = null;
     }
 }

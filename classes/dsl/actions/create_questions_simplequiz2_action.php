@@ -32,6 +32,7 @@ namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\value_resolver;
+use local_dixeo\service\simplequiz2_question_transformer;
 
 /**
  * Action handler for creating simplequiz2 questions.
@@ -48,7 +49,10 @@ use local_dixeo\dsl\value_resolver;
  *   "fields": {
  *     "questiontext": {"source": "$.text"},
  *     "options": {"source": "$.options"},
- *     "correct_answer": {"source": "$.answer"}
+ *     "correct_answer": {"source": "$.answer"},
+ *     "correctfeedback": {"source": "$.correctfeedback"},
+ *     "partiallycorrectfeedback": {"source": "$.partiallycorrectfeedback"},
+ *     "incorrectfeedback": {"source": "$.incorrectfeedback"}
  *   }
  * }
  *
@@ -56,12 +60,18 @@ use local_dixeo\dsl\value_resolver;
  * {
  *   "text": "What is a cell?",
  *   "options": ["Basic unit of life", "An organism", "A tissue"],
- *   "answer": 0
+ *   "answer": 0,
+ *   "correctfeedback": "Well done!",
+ *   "partiallycorrectfeedback": "Almost there.",
+ *   "incorrectfeedback": "Try again."
  * }
  *
  * SimpleQuiz format (output):
  * {
  *   "text": "What is a cell?",
+ *   "correctfeedback": "Well done!",
+ *   "partiallycorrectfeedback": "Almost there.",
+ *   "incorrectfeedback": "Try again.",
  *   "answers": [
  *     {"text": "Basic unit of life", "iscorrect": 1},
  *     {"text": "An organism", "iscorrect": 0},
@@ -130,7 +140,7 @@ class create_questions_simplequiz2_action {
             $resolvedfields = $itemresolver->resolve_fields($fieldsspec);
 
             // Transform API format to SimpleQuiz format.
-            $simplequiz2questions[$index] = $this->transform_question($resolvedfields);
+            $simplequiz2questions[$index] = simplequiz2_question_transformer::transform_api_question($resolvedfields);
         }
 
         // Update the simplequiz2 record with JSON-encoded questions.
@@ -145,53 +155,6 @@ class create_questions_simplequiz2_action {
             'updated' => true,
             'question_count' => count($simplequiz2questions),
         ];
-    }
-
-    /**
-     * Transform API question format to SimpleQuiz format.
-     *
-     * API format:
-     * - questiontext: "Question text"
-     * - options: ["Answer A", "Answer B", "Answer C"]
-     * - correct_answer: 0 (0-based index of correct answer)
-     *
-     * SimpleQuiz format:
-     * - text: "Question text"
-     * - answers: [{ text: "Answer A", iscorrect: 1 }, { text: "Answer B", iscorrect: 0 }]
-     *
-     * @param array $fields The resolved field values.
-     * @return \stdClass The question in SimpleQuiz format.
-     * @throws dsl_exception If required fields are missing.
-     */
-    protected function transform_question(array $fields): \stdClass {
-        $questiontext = $fields['questiontext'] ?? '';
-        $options = $fields['options'] ?? [];
-        $correctanswer = $fields['correct_answer'] ?? 0;
-
-        if (!is_array($options) || count($options) < 2) {
-            throw new dsl_exception(
-                'SimpleQuiz question requires at least 2 options',
-                'create_questions_simplequiz2',
-                ['options_count' => is_array($options) ? count($options) : 0]
-            );
-        }
-
-        // Ensure correct_answer is an integer.
-        $correctindex = is_numeric($correctanswer) ? (int) $correctanswer : 0;
-
-        // Build the question object.
-        $question = new \stdClass();
-        $question->text = $questiontext;
-        $question->answers = [];
-
-        foreach ($options as $index => $optiontext) {
-            $answer = new \stdClass();
-            $answer->text = is_string($optiontext) ? $optiontext : (string) $optiontext;
-            $answer->iscorrect = ($index === $correctindex) ? 1 : 0;
-            $question->answers[] = $answer;
-        }
-
-        return $question;
     }
 
     /**

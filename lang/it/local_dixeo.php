@@ -188,7 +188,9 @@ $string['eventfilesynctriggered'] = 'Sincronizzazione file Dixeo del corso avvia
 $string['eventfilesynctriggereddesc'] = 'L\'utente con id \'{$a->userid}\' ha avviato la sincronizzazione file Dixeo per il corso con id \'{$a->courseid}\'.';
 $string['eventjobcancelled'] = 'Job Dixeo annullato';
 $string['eventjobcancelleddesc'] = 'L\'utente con id \'{$a->userid}\' ha annullato il job Dixeo \'{$a->jobid}\' per il corso con id \'{$a->courseid}\'.';
-$string['feedback_correct'] = 'Corretto!';
+$string['feedback_correct'] = 'Ottimo lavoro, hai scelto la risposta giusta. Continua così!';
+$string['feedback_incorrect'] = 'Non proprio questa volta. Ripassare l\'argomento ti aiuterà a migliorare.';
+$string['feedback_partial'] = 'Sei sulla strada giusta. Ripassa il materiale e ce la farai.';
 $string['files'] = 'file';
 $string['filesync_disable_remove'] = 'Disattiva e cancella dati di sincronizzazione';
 $string['filesync_enable'] = 'Abilita sincronizzazione';
@@ -208,6 +210,7 @@ $string['filesync_status_synchronized'] = 'File sincronizzati';
 $string['filesync_status_syncing'] = 'Sincronizzazione in corso...';
 $string['filesync_timeout'] = 'Timeout della sincronizzazione file prima dell\'indicizzazione dei file del corso';
 $string['filesync_title'] = 'Sincronizzazione file Dixeo';
+$string['generation_output_language'] = 'LINGUA: Genera tutti i contenuti per gli studenti (domande, risposte, testo della lezione e titoli) in {$a->language}.';
 $string['image_generation'] = 'Generazione di immagini';
 $string['image_generation_course_mode'] = 'Immagini del corso';
 $string['image_generation_course_mode_desc'] = 'Controlla le azioni IA sulle immagini per l\'immagine di riepilogo del corso.';
@@ -233,6 +236,26 @@ $string['period_month'] = 'Mensile';
 $string['period_week'] = 'Settimanale';
 $string['pluginname'] = 'Dixeo AI';
 $string['pluginname_desc'] = 'Integrazione Dixeo AI per la generazione e modifica intelligente dei contenuti.';
+$string['practice_quiz_default_title'] = 'Quiz di esercitazione';
+$string['practice_quiz_difficulty_easy'] = 'facile (richiamo di base, concetti semplici, adatto ai principianti)';
+$string['practice_quiz_difficulty_hard'] = 'difficile (applicazione impegnativa, analisi o sintesi di concetti avanzati)';
+$string['practice_quiz_difficulty_medium'] = 'medio (profondità moderata che richiede comprensione oltre il semplice richiamo)';
+$string['practice_quiz_error_invalid_result'] = 'Risultato del lavoro non valido.';
+$string['practice_quiz_error_job_not_completed'] = 'Il lavoro non è completato. Stato: {$a->status}';
+$string['practice_quiz_error_no_questions'] = 'Nessuna domanda nel risultato del lavoro.';
+$string['practice_quiz_error_wrong_module_type'] = 'Il lavoro non è una generazione simplequiz2.';
+$string['practice_quiz_instructions'] = 'Genera un quiz di esercitazione per {$a->scopedescription}.
+
+REQUISITI OBBLIGATORI — devi seguirli esattamente:
+1. NUMERO DI DOMANDE: L\'array "questions" DEVE contenere esattamente {$a->count} domande. Non produrre {$a->count} meno uno, {$a->count} più uno o qualsiasi altro numero — esattamente {$a->count}.
+2. LIVELLO DI DIFFICOLTÀ: Ogni domanda DEVE essere di difficoltà {$a->difficultylabel}.
+3. FORMATO: Ogni domanda DEVE essere a scelta multipla con 3 o 4 opzioni di risposta ed esattamente una risposta corretta.
+
+Prima di terminare, verifica che la lunghezza dell\'array questions sia {$a->count} e che tutte le domande corrispondano al livello di difficoltà {$a->difficulty}.
+Concentrati sul contesto del corso fornito.';
+$string['practice_quiz_scope_activity_description'] = 'l\'attività «{$a->name}»';
+$string['practice_quiz_scope_course_description'] = 'l\'intero corso «{$a->name}»';
+$string['practice_quiz_scope_section_description'] = 'la sezione «{$a->name}»';
 $string['privacy:metadata'] = 'Il plugin Dixeo memorizza identificatori operativi per la sincronizzazione dei file del corso e invia contenuti del corso, messaggi del tutor, contesto di generazione e identificatori correlati all\'API Dixeo AI. La conservazione e la cancellazione dei dati presso Dixeo sono controllate da quel servizio esterno.';
 $string['privacy:metadata:course_ai'] = 'Configurazione e stato della sincronizzazione file AI per corso.';
 $string['privacy:metadata:course_ai:courseid'] = 'Il corso a cui appartiene questa configurazione di sincronizzazione.';
@@ -300,6 +323,23 @@ $string['state_suspended'] = 'Sospeso';
 $string['task_cleanup_jobs'] = 'Pulire i vecchi record dei lavori';
 $string['task_poll_image_generation'] = 'Interrogare il job di generazione immagini Dixeo';
 $string['task_process_file_sync'] = 'Elaborare la sincronizzazione file Dixeo';
+$string['teach_lesson_default_title'] = 'Lezione personalizzata';
+$string['teach_lesson_error_invalid_result'] = 'Risultato del lavoro non valido.';
+$string['teach_lesson_error_job_not_completed'] = 'Il lavoro non è completato. Stato: {$a->status}';
+$string['teach_lesson_error_no_content'] = 'Nessun contenuto nel risultato del lavoro.';
+$string['teach_lesson_error_wrong_module_type'] = 'Il lavoro non è una generazione di pagina.';
+$string['teach_lesson_instructions'] = 'Genera una lezione di modulo Page personalizzata per {$a->scopedescription}.
+
+Lo studente ha chiesto:
+"{$a->learnerrequest}"
+
+REQUISITI OBBLIGATORI — DEVI seguirli esattamente:
+1. TIPO DI MODULO: Produci un modulo Page con un nome chiaro e descrittivo, un breve riepilogo introduttivo (intro) e un contenuto principale ricco (content).
+2. STRUTTURA: Organizza la lezione con titoli chiari e sezioni logiche. Usa esempi dove utile.
+3. RICHIESTA DELLO STUDENTE: Rispondi direttamente alla richiesta dello studente — approfondisci l\'argomento o spiegalo in termini più semplici come ha chiesto.
+4. ALLINEAMENTO: Basa la lezione sul contesto del corso fornito. Non inventare fatti che contraddicono il materiale di origine.
+
+Prima di terminare, verifica che il campo content sia sostanzioso e risponda direttamente alla richiesta dello studente.';
 $string['this_week_usage'] = 'Questa settimana';
 $string['total_used'] = 'Totale utilizzato';
 $string['transaction_type_deduction'] = 'Utilizzo';
