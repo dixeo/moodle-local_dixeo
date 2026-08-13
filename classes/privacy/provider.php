@@ -59,6 +59,18 @@ class provider implements
     /** @var string Async image generation jobs. */
     public const TABLE_IMAGE_JOB = 'local_dixeo_image_job';
 
+    /** @var string Tutor usage event table. */
+    public const TABLE_TUTOR_USAGE_EVENT = 'local_dixeo_tutor_usage_event';
+
+    /** @var string Tutor usage daily rollup table. */
+    public const TABLE_TUTOR_USAGE_DAILY = 'local_dixeo_tutor_usage_daily';
+
+    /** @var string Tutor usage closed session table. */
+    public const TABLE_TUTOR_USAGE_SESSION = 'local_dixeo_tutor_usage_session';
+
+    /** @var string Tutor usage open session table. */
+    public const TABLE_TUTOR_USAGE_OPEN = 'local_dixeo_tutor_usage_open';
+
     /**
      * Describe metadata stored or transmitted by this plugin.
      *
@@ -139,6 +151,60 @@ class provider implements
             'privacy:metadata:image_job'
         );
 
+        $collection->add_database_table(
+            self::TABLE_TUTOR_USAGE_EVENT,
+            [
+                'userid' => 'privacy:metadata:tutor_usage_event:userid',
+                'courseid' => 'privacy:metadata:tutor_usage_event:courseid',
+                'cmid' => 'privacy:metadata:tutor_usage_event:cmid',
+                'mode' => 'privacy:metadata:tutor_usage_event:mode',
+                'eventtype' => 'privacy:metadata:tutor_usage_event:eventtype',
+                'timecreated' => 'privacy:metadata:tutor_usage_event:timecreated',
+            ],
+            'privacy:metadata:tutor_usage_event'
+        );
+
+        $collection->add_database_table(
+            self::TABLE_TUTOR_USAGE_DAILY,
+            [
+                'daystart' => 'privacy:metadata:tutor_usage_daily:daystart',
+                'courseid' => 'privacy:metadata:tutor_usage_daily:courseid',
+                'userid' => 'privacy:metadata:tutor_usage_daily:userid',
+                'cmid' => 'privacy:metadata:tutor_usage_daily:cmid',
+                'mode' => 'privacy:metadata:tutor_usage_daily:mode',
+                'messages' => 'privacy:metadata:tutor_usage_daily:messages',
+                'quizcreated' => 'privacy:metadata:tutor_usage_daily:quizcreated',
+                'lessoncreated' => 'privacy:metadata:tutor_usage_daily:lessoncreated',
+                'lastactive' => 'privacy:metadata:tutor_usage_daily:lastactive',
+            ],
+            'privacy:metadata:tutor_usage_daily'
+        );
+
+        $collection->add_database_table(
+            self::TABLE_TUTOR_USAGE_SESSION,
+            [
+                'userid' => 'privacy:metadata:tutor_usage_session:userid',
+                'courseid' => 'privacy:metadata:tutor_usage_session:courseid',
+                'timestart' => 'privacy:metadata:tutor_usage_session:timestart',
+                'timeend' => 'privacy:metadata:tutor_usage_session:timeend',
+                'duration' => 'privacy:metadata:tutor_usage_session:duration',
+                'messagecount' => 'privacy:metadata:tutor_usage_session:messagecount',
+            ],
+            'privacy:metadata:tutor_usage_session'
+        );
+
+        $collection->add_database_table(
+            self::TABLE_TUTOR_USAGE_OPEN,
+            [
+                'userid' => 'privacy:metadata:tutor_usage_open:userid',
+                'courseid' => 'privacy:metadata:tutor_usage_open:courseid',
+                'timestart' => 'privacy:metadata:tutor_usage_open:timestart',
+                'lastmessage' => 'privacy:metadata:tutor_usage_open:lastmessage',
+                'messagecount' => 'privacy:metadata:tutor_usage_open:messagecount',
+            ],
+            'privacy:metadata:tutor_usage_open'
+        );
+
         $collection->add_external_location_link(
             'dixeo_api',
             [
@@ -192,6 +258,14 @@ class provider implements
             );
         }
 
+        if ($DB->record_exists(self::TABLE_TUTOR_USAGE_EVENT, ['userid' => $userid])) {
+            \context_system::instance(0, MUST_EXIST, false);
+            $contextlist->add_from_sql(
+                'SELECT id FROM {context} WHERE contextlevel = :contextlevel AND instanceid = 0',
+                ['contextlevel' => CONTEXT_SYSTEM]
+            );
+        }
+
         $sql = "SELECT ctx.id
                   FROM {" . self::TABLE_COURSE_AI . "} cai
                   JOIN {context} ctx ON ctx.instanceid = cai.courseid AND ctx.contextlevel = :contextlevel
@@ -233,6 +307,16 @@ class provider implements
             'userid' => $userid,
         ]);
 
+        $sql = "SELECT ctx.id
+                  FROM {" . self::TABLE_TUTOR_USAGE_EVENT . "} tu
+                  JOIN {context} ctx ON ctx.instanceid = tu.courseid AND ctx.contextlevel = :contextlevel
+                 WHERE tu.userid = :userid AND tu.courseid > 0";
+
+        $contextlist->add_from_sql($sql, [
+            'contextlevel' => CONTEXT_COURSE,
+            'userid' => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -254,6 +338,7 @@ class provider implements
             if ($context->contextlevel === CONTEXT_SYSTEM) {
                 self::export_user_jobs($context, $userid, 0);
                 self::export_user_credit_usage($context, $userid, 0);
+                self::export_user_tutor_usage($context, $userid, 0);
                 continue;
             }
 
@@ -294,7 +379,102 @@ class provider implements
             self::export_user_jobs($context, $userid, $courseid);
             self::export_user_credit_usage($context, $userid, $courseid);
             self::export_user_image_jobs($context, $userid, $courseid);
+            self::export_user_tutor_usage($context, $userid, $courseid);
         }
+    }
+
+    /**
+     * Export image generation job rows for a user within a course.
+     *
+     * @param \context $context Export context.
+     * @param int $userid User id.
+     * @param int $courseid Course id.
+     */
+    private static function export_user_image_jobs(\context $context, int $userid, int $courseid): void {
+        global $DB;
+
+        $imagejobs = $DB->get_records(self::TABLE_IMAGE_JOB, [
+            'courseid' => $courseid,
+            'userid' => $userid,
+        ]);
+        if (!$imagejobs) {
+            return;
+        }
+
+        $exportedimagejobs = [];
+        foreach ($imagejobs as $imagejob) {
+            $exportedimagejobs[] = (object) [
+                'jobid' => (string) $imagejob->jobid,
+                'courseid' => (int) $imagejob->courseid,
+                'prompt' => (string) ($imagejob->prompt ?? ''),
+                'status' => (string) $imagejob->status,
+                'errormessage' => (string) ($imagejob->errormessage ?? ''),
+                'timecreated' => transform::datetime((int) $imagejob->timecreated),
+                'timemodified' => transform::datetime((int) $imagejob->timemodified),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:image_jobs', 'local_dixeo')],
+            (object) ['image_jobs' => $exportedimagejobs]
+        );
+    }
+
+    /**
+     * Export tutor usage rows for a user within a course or site scope.
+     *
+     * @param \context $context Export context.
+     * @param int $userid User id.
+     * @param int $courseid Course id, or 0 for site scope.
+     */
+    private static function export_user_tutor_usage(\context $context, int $userid, int $courseid): void {
+        global $DB;
+
+        $params = ['userid' => $userid];
+        $coursesql = '';
+        if ($courseid > 0) {
+            $coursesql = ' AND courseid = :courseid';
+            $params['courseid'] = $courseid;
+        }
+
+        $events = $DB->get_records_select(self::TABLE_TUTOR_USAGE_EVENT, 'userid = :userid' . $coursesql, $params);
+        $daily = $DB->get_records_select(self::TABLE_TUTOR_USAGE_DAILY, 'userid = :userid' . $coursesql, $params);
+        $sessions = $DB->get_records_select(self::TABLE_TUTOR_USAGE_SESSION, 'userid = :userid' . $coursesql, $params);
+        $open = $DB->get_records_select(self::TABLE_TUTOR_USAGE_OPEN, 'userid = :userid' . $coursesql, $params);
+
+        if (!$events && !$daily && !$sessions && !$open) {
+            return;
+        }
+
+        $exportevents = [];
+        foreach ($events as $record) {
+            $exportevents[] = (object) [
+                'courseid' => (int) $record->courseid,
+                'cmid' => (int) $record->cmid,
+                'mode' => (string) $record->mode,
+                'eventtype' => (string) $record->eventtype,
+                'timecreated' => transform::datetime((int) $record->timecreated),
+            ];
+        }
+
+        $exportsessions = [];
+        foreach ($sessions as $record) {
+            $exportsessions[] = (object) [
+                'courseid' => (int) $record->courseid,
+                'timestart' => transform::datetime((int) $record->timestart),
+                'timeend' => transform::datetime((int) $record->timeend),
+                'duration' => (int) $record->duration,
+                'messagecount' => (int) $record->messagecount,
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:tutor_usage', 'local_dixeo')],
+            (object) [
+                'events' => $exportevents,
+                'sessions' => $exportsessions,
+            ]
+        );
     }
 
     /**
@@ -375,43 +555,6 @@ class provider implements
     }
 
     /**
-     * Export image generation job rows for a user within a course.
-     *
-     * @param \context $context Export context.
-     * @param int $userid User id.
-     * @param int $courseid Course id.
-     */
-    private static function export_user_image_jobs(\context $context, int $userid, int $courseid): void {
-        global $DB;
-
-        $imagejobs = $DB->get_records(self::TABLE_IMAGE_JOB, [
-            'courseid' => $courseid,
-            'userid' => $userid,
-        ]);
-        if (!$imagejobs) {
-            return;
-        }
-
-        $exportedimagejobs = [];
-        foreach ($imagejobs as $imagejob) {
-            $exportedimagejobs[] = (object) [
-                'jobid' => (string) $imagejob->jobid,
-                'courseid' => (int) $imagejob->courseid,
-                'prompt' => (string) ($imagejob->prompt ?? ''),
-                'status' => (string) $imagejob->status,
-                'errormessage' => (string) ($imagejob->errormessage ?? ''),
-                'timecreated' => transform::datetime((int) $imagejob->timecreated),
-                'timemodified' => transform::datetime((int) $imagejob->timemodified),
-            ];
-        }
-
-        writer::with_context($context)->export_data(
-            [get_string('privacy:path:image_jobs', 'local_dixeo')],
-            (object) ['image_jobs' => $exportedimagejobs]
-        );
-    }
-
-    /**
      * Delete all plugin data for a course context (the entire sync configuration row).
      *
      * @param \context $context The context.
@@ -422,6 +565,10 @@ class provider implements
         if ($context->contextlevel === CONTEXT_SYSTEM) {
             $DB->delete_records(self::TABLE_JOBS, ['courseid' => 0]);
             $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => 0]);
+            $DB->delete_records(self::TABLE_TUTOR_USAGE_EVENT, ['courseid' => 0]);
+            $DB->delete_records(self::TABLE_TUTOR_USAGE_DAILY, ['courseid' => 0]);
+            $DB->delete_records(self::TABLE_TUTOR_USAGE_SESSION, ['courseid' => 0]);
+            $DB->delete_records(self::TABLE_TUTOR_USAGE_OPEN, ['courseid' => 0]);
             return;
         }
 
@@ -443,6 +590,10 @@ class provider implements
 
         $DB->delete_records(self::TABLE_JOBS, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_TUTOR_USAGE_EVENT, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_TUTOR_USAGE_DAILY, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_TUTOR_USAGE_SESSION, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_TUTOR_USAGE_OPEN, ['courseid' => $courseid]);
 
         if ($remotedeleted) {
             $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => $courseid]);
@@ -484,6 +635,7 @@ class provider implements
                     'userid' => $userid,
                     'courseid' => 0,
                 ]);
+                self::delete_user_tutor_usage($userid, 0);
                 continue;
             }
             if ($context->contextlevel === CONTEXT_COURSE) {
@@ -540,6 +692,32 @@ class provider implements
             "userid = :userid AND courseid {$insql5}",
             $params5
         );
+
+        foreach ($courseids as $courseid) {
+            self::delete_user_tutor_usage($userid, (int) $courseid);
+        }
+    }
+
+    /**
+     * Delete tutor usage analytics for one user in a course or site scope.
+     *
+     * @param int $userid User id.
+     * @param int $courseid Course id, or 0 for site-wide rows.
+     */
+    private static function delete_user_tutor_usage(int $userid, int $courseid): void {
+        global $DB;
+
+        $params = ['userid' => $userid];
+        $coursesql = '';
+        if ($courseid > 0) {
+            $coursesql = ' AND courseid = :courseid';
+            $params['courseid'] = $courseid;
+        }
+
+        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_EVENT, 'userid = :userid' . $coursesql, $params);
+        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_DAILY, 'userid = :userid' . $coursesql, $params);
+        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_SESSION, 'userid = :userid' . $coursesql, $params);
+        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_OPEN, 'userid = :userid' . $coursesql, $params);
     }
 
     /**
@@ -606,6 +784,14 @@ class provider implements
               WHERE ij.courseid = :courseid AND ij.userid > 0",
             $params
         );
+
+        $userlist->add_from_sql(
+            'userid',
+            "SELECT tu.userid AS userid
+               FROM {" . self::TABLE_TUTOR_USAGE_EVENT . "} tu
+              WHERE tu.courseid = :courseid AND tu.userid > 0",
+            $params
+        );
     }
 
     /**
@@ -633,6 +819,26 @@ class provider implements
             $DB->delete_records_select(
                 self::TABLE_CREDIT_USAGE,
                 "courseid = 0 AND userid {$insql}",
+                $params
+            );
+            $DB->delete_records_select(
+                self::TABLE_TUTOR_USAGE_EVENT,
+                "userid {$insql}",
+                $params
+            );
+            $DB->delete_records_select(
+                self::TABLE_TUTOR_USAGE_DAILY,
+                "userid {$insql}",
+                $params
+            );
+            $DB->delete_records_select(
+                self::TABLE_TUTOR_USAGE_SESSION,
+                "userid {$insql}",
+                $params
+            );
+            $DB->delete_records_select(
+                self::TABLE_TUTOR_USAGE_OPEN,
+                "userid {$insql}",
                 $params
             );
             return;
@@ -693,5 +899,9 @@ class provider implements
             "courseid = :courseid AND userid {$insql5}",
             $params5
         );
+
+        foreach ($userids as $targetuserid) {
+            self::delete_user_tutor_usage((int) $targetuserid, $courseid);
+        }
     }
 }

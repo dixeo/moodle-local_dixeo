@@ -469,3 +469,67 @@ h2:has(.dixeo-sync-indicator),
 .local-dixeo-credit-report .dixeo-credit-report-export .dataformatselector {
     margin: 0;
 }
+
+/* ==========================================================================
+   Tutor usage report
+   ========================================================================== */
+
+.local-dixeo-tutor-usage-report .dixeo-tutor-usage-report-filter-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    margin-top: 0.5rem;
+    font-weight: 700;
+}
+
+.local-dixeo-tutor-usage-report #rolescope {
+    max-width: 20rem;
+}
+
+.local-dixeo-tutor-usage-report-summary .dixeo-tutor-usage-report-kpi,
+.dixeo-tutor-usage-report-stat {
+    cursor: help;
+}
+
+.dixeo-tutor-usage-report-summary-table th:not(:first-child):not(:last-child),
+.dixeo-tutor-usage-report-summary-table td:not(:first-child):not(:last-child) {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.local-dixeo-tutor-usage-report-summary .dixeo-tutor-usage-report-chart-container {
+    position: relative;
+    height: 280px;
+}
+
+.local-dixeo-tutor-usage-report-summary .dixeo-tutor-usage-report-chart-title {
+    margin-bottom: 1rem;
+}
+
+.dixeo-tutor-usage-report-heatmap-wrap {
+    overflow-x: auto;
+}
+
+.dixeo-tutor-usage-report-heatmap th,
+.dixeo-tutor-usage-report-heatmap td {
+    text-align: center;
+    vertical-align: middle;
+    min-width: 2.5rem;
+    font-size: 0.85rem;
+}
+
+.dixeo-tutor-usage-report-heatmap td,
+.dixeo-tutor-usage-report-heatmap-cell {
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.dixeo-tutor-usage-report-heatmap th[scope="row"] {
+    text-align: right;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.dixeo-tutor-usage-report-export .dataformatselector {
+    margin: 0;
+}

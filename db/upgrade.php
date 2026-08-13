@@ -465,5 +465,74 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026081100, 'local', 'dixeo');
     }
 
+    // Tutor usage analytics tables for events, daily rollups, and sessions.
+    if ($oldversion < 2026081200) {
+        $eventtable = new xmldb_table('local_dixeo_tutor_usage_event');
+        $eventtable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $eventtable->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $eventtable->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $eventtable->add_field('cmid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $eventtable->add_field('mode', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'normal');
+        $eventtable->add_field('eventtype', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, null);
+        $eventtable->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $eventtable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $eventtable->add_index('idx_timecreated', XMLDB_INDEX_NOTUNIQUE, ['timecreated']);
+        $eventtable->add_index('idx_course_user_time', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'userid', 'timecreated']);
+        $eventtable->add_index('idx_course_cm_time', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'cmid', 'timecreated']);
+        if (!$dbman->table_exists($eventtable)) {
+            $dbman->create_table($eventtable);
+        }
+
+        $dailytable = new xmldb_table('local_dixeo_tutor_usage_daily');
+        $dailytable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $dailytable->add_field('daystart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $dailytable->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $dailytable->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $dailytable->add_field('cmid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dailytable->add_field('mode', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'normal');
+        $dailytable->add_field('messages', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dailytable->add_field('quizcreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dailytable->add_field('lessoncreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dailytable->add_field('lastactive', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dailytable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $dailytable->add_index('idx_daily_grain', XMLDB_INDEX_UNIQUE, ['daystart', 'courseid', 'userid', 'cmid', 'mode']);
+        $dailytable->add_index('idx_daily_course_day', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'daystart']);
+        $dailytable->add_index('idx_daily_user_day', XMLDB_INDEX_NOTUNIQUE, ['userid', 'daystart']);
+        if (!$dbman->table_exists($dailytable)) {
+            $dbman->create_table($dailytable);
+        }
+
+        $sessiontable = new xmldb_table('local_dixeo_tutor_usage_session');
+        $sessiontable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $sessiontable->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $sessiontable->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $sessiontable->add_field('timestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $sessiontable->add_field('timeend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $sessiontable->add_field('duration', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $sessiontable->add_field('messagecount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $sessiontable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $sessiontable->add_index('idx_session_user_course', XMLDB_INDEX_NOTUNIQUE, ['userid', 'courseid', 'timestart']);
+        $sessiontable->add_index('idx_session_course_time', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'timestart', 'timeend']);
+        $sessiontable->add_index('idx_session_time', XMLDB_INDEX_NOTUNIQUE, ['timestart', 'timeend']);
+        if (!$dbman->table_exists($sessiontable)) {
+            $dbman->create_table($sessiontable);
+        }
+
+        $opentable = new xmldb_table('local_dixeo_tutor_usage_open');
+        $opentable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $opentable->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $opentable->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $opentable->add_field('timestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $opentable->add_field('lastmessage', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $opentable->add_field('messagecount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $opentable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $opentable->add_index('idx_open_user_course', XMLDB_INDEX_UNIQUE, ['userid', 'courseid']);
+        if (!$dbman->table_exists($opentable)) {
+            $dbman->create_table($opentable);
+        }
+
+        upgrade_plugin_savepoint(true, 2026081200, 'local', 'dixeo');
+    }
+
     return true;
 }

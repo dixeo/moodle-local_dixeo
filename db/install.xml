@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/dixeo/db" VERSION="20260811" COMMENT="XMLDB file for Moodle local/dixeo">
+<XMLDB PATH="local/dixeo/db" VERSION="20260812" COMMENT="XMLDB file for Moodle local/dixeo">
   <TABLES>
-<TABLE NAME="local_dixeo_course_ai" COMMENT="Stores AI file sync configuration and status per course">
+    <TABLE NAME="local_dixeo_course_ai" COMMENT="Stores AI file sync configuration and status per course">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to course.id"/>
@@ -34,7 +34,7 @@
         <INDEX NAME="idx_enabled" UNIQUE="false" FIELDS="enabled" COMMENT="Index for filtering enabled courses"/>
       </INDEXES>
     </TABLE>
-<TABLE NAME="local_dixeo_jobs" COMMENT="Local binding between remote Dixeo job IDs and Moodle course/user">
+    <TABLE NAME="local_dixeo_jobs" COMMENT="Local binding between remote Dixeo job IDs and Moodle course/user">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="jobid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="Remote Dixeo job UUID"/>
@@ -87,7 +87,7 @@
         <INDEX NAME="idx_report" UNIQUE="false" FIELDS="timecreated, type, courseid, userid" COMMENT="Report filtering"/>
       </INDEXES>
     </TABLE>
-<TABLE NAME="local_dixeo_image_job" COMMENT="Unified async image jobs (content + structure)">
+    <TABLE NAME="local_dixeo_image_job" COMMENT="Unified async image jobs (content + structure)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="target_kind" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="content" SEQUENCE="false" COMMENT="content|course_overview|format_section"/>
@@ -125,6 +125,82 @@
         <INDEX NAME="status_idx" UNIQUE="false" FIELDS="status"/>
         <INDEX NAME="courseid_idx" UNIQUE="false" FIELDS="courseid"/>
         <INDEX NAME="target_kind_idx" UNIQUE="false" FIELDS="target_kind"/>
+      </INDEXES>
+    </TABLE>
+<TABLE NAME="local_dixeo_tutor_usage_event" COMMENT="Append-only tutor usage events for analytics (no message content)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="User who triggered the event"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Course context"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course module id when known (0 = course page)"/>
+        <FIELD NAME="mode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="normal" SEQUENCE="false" COMMENT="Tutor mode: normal, guide, quiz, teach"/>
+        <FIELD NAME="eventtype" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false" COMMENT="message, quiz_created, or lesson_created"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Event timestamp"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_timecreated" UNIQUE="false" FIELDS="timecreated" COMMENT="Period filtering"/>
+        <INDEX NAME="idx_course_user_time" UNIQUE="false" FIELDS="courseid, userid, timecreated" COMMENT="Course/user timeline"/>
+        <INDEX NAME="idx_course_cm_time" UNIQUE="false" FIELDS="courseid, cmid, timecreated" COMMENT="Module breakdown"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_tutor_usage_daily" COMMENT="Daily tutor usage rollups by course, user, module, and mode">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="daystart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Site-timezone midnight for the day"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="mode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="normal" SEQUENCE="false"/>
+        <FIELD NAME="messages" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="quizcreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="lessoncreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="lastactive" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_daily_grain" UNIQUE="true" FIELDS="daystart, courseid, userid, cmid, mode" COMMENT="Unique daily grain"/>
+        <INDEX NAME="idx_daily_course_day" UNIQUE="false" FIELDS="courseid, daystart" COMMENT="Course period lookup"/>
+        <INDEX NAME="idx_daily_user_day" UNIQUE="false" FIELDS="userid, daystart" COMMENT="User period lookup"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_tutor_usage_session" COMMENT="Closed tutor usage sessions">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="duration" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Session duration in seconds"/>
+        <FIELD NAME="messagecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_session_user_course" UNIQUE="false" FIELDS="userid, courseid, timestart" COMMENT="User/course sessions"/>
+        <INDEX NAME="idx_session_course_time" UNIQUE="false" FIELDS="courseid, timestart, timeend" COMMENT="Course period sessions"/>
+        <INDEX NAME="idx_session_time" UNIQUE="false" FIELDS="timestart, timeend" COMMENT="Site period sessions"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_tutor_usage_open" COMMENT="Open tutor sessions awaiting timeout or next message">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="lastmessage" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="messagecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_open_user_course" UNIQUE="true" FIELDS="userid, courseid" COMMENT="One open session per user/course"/>
       </INDEXES>
     </TABLE>
   </TABLES>

@@ -37,6 +37,33 @@ function local_dixeo_extend_settings_navigation(settings_navigation $settingsnav
 }
 
 /**
+ * Add the tutor usage report to course navigation for users with access.
+ *
+ * @param navigation_node $navigation Course navigation node.
+ * @param stdClass $course Course record.
+ * @param context_course $context Course context.
+ */
+function local_dixeo_extend_navigation_course(navigation_node $navigation, stdClass $course, context_course $context): void {
+    if (!\local_dixeo\service\tutor_usage_report_service::can_view_course((int) $course->id)) {
+        return;
+    }
+
+    $url = new moodle_url('/local/dixeo/tutor_usage_report.php', [
+        'level' => \local_dixeo\service\tutor_usage_report_service::LEVEL_COURSE,
+        'courseid' => (int) $course->id,
+    ]);
+
+    $navigation->add(
+        get_string('tutor_usage_report_nav', 'local_dixeo'),
+        $url,
+        navigation_node::TYPE_SETTING,
+        null,
+        'local_dixeo_tutor_usage',
+        new pix_icon('i/report', '')
+    );
+}
+
+/**
  * Get the default namespace for this Moodle site.
  *
  * The namespace is only needed when multiple Moodle sites share the same API key.
