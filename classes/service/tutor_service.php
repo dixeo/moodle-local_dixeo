@@ -35,6 +35,7 @@ use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 use local_dixeo\dto\tutor_message;
 use local_dixeo\external\service_factory;
+use local_dixeo\service\tutor_usage_recorder;
 
 /**
  * Service for tutor message operations.
@@ -70,6 +71,7 @@ class tutor_service {
      * @param int $userid The user ID.
      * @param tutor_message $message Unified message DTO.
      * @param string $mode Tutor interaction mode.
+     * @param int $cmid Optional course module id for usage analytics.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
@@ -77,19 +79,25 @@ class tutor_service {
         int $courseid,
         int $userid,
         tutor_message $message,
-        string $mode = tutor_message::MODE_NORMAL
+        string $mode = tutor_message::MODE_NORMAL,
+        int $cmid = 0
     ): operation_result {
         service_factory::get_file_sync_service()->ensure_enabled_and_synchronized($courseid, $userid);
         $message->validate();
 
         $payload = $this->build_submit_payload($courseid, $userid, $message, $mode);
+        $cmid = tutor_usage_recorder::sanitize_cmid($courseid, $cmid);
 
-        return $this->jobservice->submit_job(
+        $result = $this->jobservice->submit_job(
             '/v1/tutor/messages',
             $payload,
             'block_dixeo_tutor',
             job_binding_metadata::for_course($courseid)
         );
+
+        (new tutor_usage_recorder())->record_message($userid, $courseid, $mode, $cmid);
+
+        return $result;
     }
 
     /**

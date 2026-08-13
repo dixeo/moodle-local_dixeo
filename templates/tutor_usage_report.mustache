@@ -1,0 +1,494 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_dixeo/tutor_usage_report
+
+    Tutor usage report with filters, KPIs, charts, and summary table.
+
+    Context variables required for this template:
+    * error - string|false - Error message if any.
+    * hasbreadcrumbs - bool - Whether breadcrumb navigation is shown.
+    * breadcrumbs - array - Breadcrumb items with label, url, and active.
+    * period - object - Active period label and navigation anchors.
+    * views - array - Period view toggle links.
+    * filters - object - Filter form values and options.
+    * kpis - object - Summary KPI values and mode breakdown.
+    * haschange - bool - Whether period-over-period change is shown.
+    * haschartdata - bool - Whether chart JSON payloads are available.
+    * stackedbardata - string - JSON stacked bar chart data.
+    * heatmapdata - string - JSON heatmap chart data.
+    * tabletitle - string - Summary table heading.
+    * exportselector - string - Rendered Moodle dataformat export selector HTML.
+    * rows - array - Paginated summary rows.
+    * hasrows - bool - Whether table rows are available.
+    * paginationbar - string - Rendered Moodle paging bar HTML.
+    * haspagination - bool - Whether pagination should be shown.
+    * reseturl - string - URL to reset filters.
+    * issite - bool - Site-level report.
+    * iscourse - bool - Course-level report.
+    * isuser - bool - User-level report.
+
+    Example context (json):
+    {
+        "error": false,
+        "hasbreadcrumbs": false,
+        "breadcrumbs": [],
+        "issite": true,
+        "iscourse": false,
+        "isuser": false,
+        "haschange": true,
+        "period": {
+            "label": "14 Jul – 20 Jul 2026",
+            "view": "week",
+            "isweek": true,
+            "ismonth": false,
+            "iscustom": false,
+            "prevanchor": "2026-07-07",
+            "nextanchor": "2026-07-21",
+            "hasprev": true,
+            "hasnext": true
+        },
+        "views": [
+            {
+                "id": "week",
+                "label": "Week",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?view=week",
+                "active": true
+            },
+            {
+                "id": "month",
+                "label": "Month",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?view=month",
+                "active": false
+            },
+            {
+                "id": "custom",
+                "label": "Custom range",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?view=custom",
+                "active": false
+            }
+        ],
+        "filters": {
+            "action": "https://example.com/local/dixeo/tutor_usage_report.php",
+            "level": "site",
+            "courseid": 0,
+            "userid": 0,
+            "view": "week",
+            "anchor": "",
+            "datefromformatted": "2026-07-14",
+            "datetoformatted": "2026-07-20",
+            "rolescopes": [
+                {"id": "all", "name": "All users", "selected": true},
+                {"id": "teachers", "name": "Teachers only", "selected": false},
+                {"id": "students", "name": "Students only", "selected": false}
+            ]
+        },
+        "kpis": {
+            "adoption": {
+                "value": "42.5%",
+                "tooltip": "17 active / 23 inactive / 40 total",
+                "change": {"value": "+5.0% since last week", "positive": true, "negative": false}
+            },
+            "messages": {
+                "value": "120",
+                "tooltip": "Median 3.0 / Average 4.5",
+                "change": {"value": "+10.0% since last week", "positive": true, "negative": false}
+            },
+            "sessions": {
+                "value": "35",
+                "tooltip": "Median 1.0 / Average 1.5",
+                "change": {"value": "+2.0% since last week", "positive": true, "negative": false}
+            },
+            "duration": {
+                "value": "2h 15m",
+                "tooltip": "Median 12 min / Average 15 min",
+                "change": {"value": "-1.0% since last week", "positive": false, "negative": true}
+            },
+            "modes": [
+                {
+                    "mode": "normal",
+                    "label": "Standard",
+                    "value": "50",
+                    "tooltip": "Median 2.0 / Average 2.5",
+                    "hastooltip": true,
+                    "change": {"value": "+4.0% since last week", "positive": true, "negative": false}
+                },
+                {
+                    "mode": "guide",
+                    "label": "Guide",
+                    "value": "40",
+                    "tooltip": "Median 1.0 / Average 1.5",
+                    "hastooltip": true
+                },
+                {
+                    "mode": "quiz",
+                    "label": "Quiz",
+                    "value": "20",
+                    "tooltip": "Quizzes created: 3",
+                    "hastooltip": true,
+                    "isquiz": true
+                },
+                {
+                    "mode": "teach",
+                    "label": "Teach",
+                    "value": "10",
+                    "tooltip": "Lessons created: 1",
+                    "hastooltip": true,
+                    "isteach": true
+                }
+            ]
+        },
+        "haschartdata": true,
+        "stackedbardata": "{\"labels\":[\"14 Jul\",\"15 Jul\"],\"datasets\":[{\"label\":\"Standard\",\"data\":[10,12]}]}",
+        "heatmapdata": "{\"days\":[\"Mon\",\"Tue\"],\"hours\":[9,10],\"cells\":[{\"day\":0,\"hour\":0,\"count\":2,\"intensity\":0.5}]}",
+        "tabletitle": "Courses",
+        "exportselector": "<div class=\"form-inline\"><label>Download as</label></div>",
+        "reseturl": "https://example.com/local/dixeo/tutor_usage_report.php",
+        "rows": [
+            {
+                "namelabel": "Sample course",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?level=course&courseid=3",
+                "issitelevel": true,
+                "isuserlevel": false,
+                "adoptionformatted": "50.0%",
+                "adoptiontooltip": "10 out of 20 users",
+                "messagesformatted": "40",
+                "normalformatted": "20",
+                "normaltooltip": "50.0%",
+                "guideformatted": "10",
+                "guidetooltip": "25.0%",
+                "quizformatted": "5",
+                "quiztooltip": "12.5%",
+                "teachformatted": "5",
+                "teachtooltip": "12.5%",
+                "sessionsformatted": "12",
+                "sessionstooltip": "Average duration: 15 min",
+                "lastactiveformatted": "20 Jul 2026, 10:00"
+            }
+        ],
+        "hasrows": true,
+        "paginationbar": "",
+        "haspagination": false
+    }
+}}
+{{#error}}
+    <div class="alert alert-danger" role="alert">{{error}}</div>
+{{/error}}
+
+{{^error}}
+<div class="local-dixeo-tutor-usage-report-page">
+    {{#hasbreadcrumbs}}
+    <nav aria-label="{{#str}}tutor_usage_report_breadcrumb, local_dixeo{{/str}}" class="mb-3">
+        <ol class="breadcrumb mb-0">
+            {{#breadcrumbs}}
+                <li class="breadcrumb-item {{#active}}active{{/active}}">
+                    {{#url}}<a href="{{url}}">{{label}}</a>{{/url}}
+                    {{^url}}{{label}}{{/url}}
+                </li>
+            {{/breadcrumbs}}
+        </ol>
+    </nav>
+    {{/hasbreadcrumbs}}
+
+    <div class="card mb-4 local-dixeo-tutor-usage-report">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h4 class="mb-0">{{#str}}tutor_usage_report_filters, local_dixeo{{/str}}</h4>
+            <div class="btn-group" role="group" aria-label="{{#str}}tutor_usage_report_period, local_dixeo{{/str}}">
+                {{#views}}
+                    <a href="{{url}}" class="btn btn-sm {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}">{{label}}</a>
+                {{/views}}
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{filters.action}}" class="row g-3">
+                <input type="hidden" name="level" value="{{filters.level}}">
+                {{#filters.courseid}}<input type="hidden" name="courseid" value="{{filters.courseid}}">{{/filters.courseid}}
+                {{#filters.userid}}<input type="hidden" name="userid" value="{{filters.userid}}">{{/filters.userid}}
+                <input type="hidden" name="view" value="{{filters.view}}">
+                <input type="hidden" name="anchor" id="tutor-usage-report-anchor" value="{{filters.anchor}}">
+
+                {{^period.iscustom}}
+                    <div class="d-flex flex-wrap justify-content-center align-items-center mb-3 col-12">
+                        {{#period.hasprev}}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm me-4" data-tutor-usage-report-anchor="{{period.prevanchor}}" aria-label="{{#str}}tutor_usage_report_prev_period, local_dixeo{{/str}}">&larr;</button>
+                        {{/period.hasprev}}
+                        {{^period.hasprev}}
+                            <span class="btn btn-outline-secondary btn-sm me-4 disabled" aria-hidden="true">&larr;</span>
+                        {{/period.hasprev}}
+                        <p class="h5 mb-0 mx-2">{{period.label}}</p>
+                        {{#period.hasnext}}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm ms-4" data-tutor-usage-report-anchor="{{period.nextanchor}}" aria-label="{{#str}}tutor_usage_report_next_period, local_dixeo{{/str}}">&rarr;</button>
+                        {{/period.hasnext}}
+                        {{^period.hasnext}}
+                            <span class="btn btn-outline-secondary btn-sm ms-4 disabled" aria-hidden="true">&rarr;</span>
+                        {{/period.hasnext}}
+                    </div>
+                {{/period.iscustom}}
+
+                {{#period.iscustom}}
+                    <div class="col-12 mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="dixeo-tutor-usage-report-filter-label" for="datefrom">{{#str}}from{{/str}}</label>
+                                <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="dixeo-tutor-usage-report-filter-label" for="dateto">{{#str}}to{{/str}}</label>
+                                <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
+                            </div>
+                        </div>
+                    </div>
+                {{/period.iscustom}}
+
+                <div class="col-md-4">
+                    <label class="dixeo-tutor-usage-report-filter-label" for="rolescope">{{#str}}tutor_usage_report_filter_roles, local_dixeo{{/str}}</label>
+                    <select class="form-control" id="rolescope" name="rolescope">
+                        {{#filters.rolescopes}}
+                            <option value="{{id}}" {{#selected}}selected{{/selected}}>{{name}}</option>
+                        {{/filters.rolescopes}}
+                    </select>
+                </div>
+
+                <div class="col-12 d-flex justify-content-end align-items-center mt-2 pt-2">
+                    <button type="submit" class="btn btn-primary me-2">{{#str}}tutor_usage_report_apply_filters, local_dixeo{{/str}}</button>
+                    <a href="{{reseturl}}" class="btn btn-secondary">{{#str}}tutor_usage_report_reset_filters, local_dixeo{{/str}}</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4 local-dixeo-tutor-usage-report-summary">
+        <div class="card-header">
+            <h4 class="mb-0">{{#str}}tutor_usage_report_summary, local_dixeo{{/str}}</h4>
+        </div>
+        <div class="card-body">
+            <p class="h5 mb-4">{{period.label}}</p>
+
+            <div class="row mb-4 g-3">
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.adoption.tooltip}}">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_adoption, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.adoption.value}}</div>
+                            {{#haschange}}{{#kpis.adoption.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.adoption.change}}{{/haschange}}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.messages.tooltip}}">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_messages, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.messages.value}}</div>
+                            {{#haschange}}{{#kpis.messages.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.messages.change}}{{/haschange}}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.sessions.tooltip}}">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_sessions, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.sessions.value}}</div>
+                            {{#haschange}}{{#kpis.sessions.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.sessions.change}}{{/haschange}}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.duration.tooltip}}">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_duration, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.duration.value}}</div>
+                            {{#haschange}}{{#kpis.duration.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.duration.change}}{{/haschange}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4 g-3">
+                {{#kpis.modes}}
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         {{#hastooltip}}
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{tooltip}}"
+                         {{/hastooltip}}>
+                        <div class="card-body">
+                            <div class="text-muted">{{label}}</div>
+                            <div class="h4 mb-1">{{value}}</div>
+                            {{#change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/change}}
+                        </div>
+                    </div>
+                </div>
+                {{/kpis.modes}}
+            </div>
+
+            {{#haschartdata}}
+                <div class="row g-3">
+                    <div class="col-lg-8">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="dixeo-tutor-usage-report-chart-title">{{#str}}tutor_usage_report_stacked_bar, local_dixeo{{/str}}</h5>
+                                <div class="dixeo-tutor-usage-report-chart-container">
+                                    <canvas id="tutorUsageStackedBar"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="dixeo-tutor-usage-report-chart-title">{{#str}}tutor_usage_report_heatmap, local_dixeo{{/str}}</h5>
+                                <div class="dixeo-tutor-usage-report-heatmap-wrap">
+                                    <table class="table table-sm dixeo-tutor-usage-report-heatmap" id="tutorUsageHeatmap">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col"></th>
+                                                <th scope="col">{{#str}}day_mon, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_tue, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_wed, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_thu, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_fri, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_sat, local_dixeo{{/str}}</th>
+                                                <th scope="col">{{#str}}day_sun, local_dixeo{{/str}}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tutorUsageHeatmapBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{/haschartdata}}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h4 class="mb-0">{{tabletitle}}</h4>
+            <div class="dixeo-tutor-usage-report-export">{{{exportselector}}}</div>
+        </div>
+        <div class="card-body">
+            {{#hasrows}}
+                <div class="table-responsive">
+                    <table class="table table-striped dixeo-tutor-usage-report-summary-table">
+                        <thead>
+                            <tr>
+                                <th>{{#str}}tutor_usage_report_column_name, local_dixeo{{/str}}</th>
+                                {{#issite}}
+                                <th>{{#str}}tutor_usage_report_kpi_adoption, local_dixeo{{/str}}</th>
+                                {{/issite}}
+                                {{#isuser}}
+                                <th>{{#str}}tutor_usage_report_column_moduletype, local_dixeo{{/str}}</th>
+                                {{/isuser}}
+                                <th>{{#str}}tutor_usage_report_column_messages, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_standard, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_guide, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_quiz, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_teach, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_sessions, local_dixeo{{/str}}</th>
+                                <th>{{#str}}tutor_usage_report_column_lastactive, local_dixeo{{/str}}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{#rows}}
+                                <tr>
+                                    <td>
+                                        {{#url}}<a href="{{url}}">{{namelabel}}</a>{{/url}}
+                                        {{^url}}{{namelabel}}{{/url}}
+                                    </td>
+                                    {{#issitelevel}}
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{adoptiontooltip}}">{{adoptionformatted}}</td>
+                                    {{/issitelevel}}
+                                    {{#isuserlevel}}
+                                    <td>{{moduletypelabel}}</td>
+                                    {{/isuserlevel}}
+                                    <td>{{messagesformatted}}</td>
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{normaltooltip}}">{{normalformatted}}</td>
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{guidetooltip}}">{{guideformatted}}</td>
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{quiztooltip}}">{{quizformatted}}</td>
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{teachtooltip}}">{{teachformatted}}</td>
+                                    <td class="dixeo-tutor-usage-report-stat"
+                                        data-toggle="tooltip"
+                                        data-placement="bottom"
+                                        title="{{sessionstooltip}}">{{sessionsformatted}}</td>
+                                    <td><span class="text-nowrap">{{lastactiveformatted}}</span></td>
+                                </tr>
+                            {{/rows}}
+                        </tbody>
+                    </table>
+                </div>
+                {{#haspagination}}
+                    <div class="mt-3">
+                        {{{paginationbar}}}
+                    </div>
+                {{/haspagination}}
+            {{/hasrows}}
+            {{^hasrows}}
+                <div class="alert alert-info mb-0">{{#str}}tutor_usage_report_no_rows, local_dixeo{{/str}}</div>
+            {{/hasrows}}
+        </div>
+    </div>
+
+    {{#haschartdata}}
+        <script type="application/json" id="tutor-usage-stacked-bar-data">{{{stackedbardata}}}</script>
+        <script type="application/json" id="tutor-usage-heatmap-data">{{{heatmapdata}}}</script>
+    {{/haschartdata}}
+</div>
+{{/error}}

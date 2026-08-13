@@ -12,21 +12,26 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and dependencies.
+ * Scheduled tasks for local_dixeo.
  *
  * @package    local_dixeo
- * @copyright  2025 Edunao SAS (contact@edunao.com)
- * @author     Pierre FACQ <pierre.facq@edunao.com>
+ * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-
 defined('MOODLE_INTERNAL') || die();
-$plugin->version   = 2026081200;        // The current plugin version (Date: YYYYMMDDXX).
-$plugin->requires  = 2024100700;        // Requires Moodle 4.5+.
-$plugin->component = 'local_dixeo';     // Full name of the plugin.
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.9.0';
+
+$tasks = [
+    [
+        'classname' => '\local_dixeo\task\aggregate_tutor_usage',
+        'blocking' => 0,
+        'minute' => '15',
+        'hour' => '1',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
+];

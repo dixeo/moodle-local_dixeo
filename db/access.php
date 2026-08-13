@@ -80,6 +80,27 @@ $capabilities = [
         ],
     ],
 
+    // Site-wide tutor usage analytics (all courses) and export (includes user/course PII).
+    'local/dixeo:viewtutorusagesite' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => [
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
+    // Course-scoped tutor usage analytics and user drill-down (includes user PII).
+    'local/dixeo:viewtutorusage' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => [
+            'manager' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+        ],
+    ],
+
     // Capability to create courses using Dixeo Course Designer.
     'local/dixeo:create' => [
         'riskbitmask' => RISK_XSS,
