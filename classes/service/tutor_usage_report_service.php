@@ -717,7 +717,11 @@ class tutor_usage_report_service {
         $rows = [];
 
         foreach ($aggregates as $key => $metrics) {
-            $rows[] = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids);
+            $row = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids);
+            if ($level === self::LEVEL_USER && $this->should_hide_zero_usage_excluded_activity($row)) {
+                continue;
+            }
+            $rows[] = $row;
         }
 
         usort($rows, static function (array $a, array $b): int {
@@ -852,15 +856,20 @@ class tutor_usage_report_service {
         $quizcreated = 0;
         $lessoncreated = 0;
         $activeusers = [];
+        $activedays = [];
+        $lastactive = 0;
         $messagesbyuser = array_fill_keys($scopeusers, 0);
 
         foreach ($events as $event) {
             $uid = (int) $event->userid;
+            $eventtime = (int) $event->timecreated;
             if ($event->eventtype === tutor_usage_recorder::EVENT_MESSAGE) {
                 $messages++;
                 $mode = tutor_message::normalize_mode((string) $event->mode);
                 $modecounts[$mode] = ($modecounts[$mode] ?? 0) + 1;
                 $activeusers[$uid] = true;
+                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
+                $lastactive = max($lastactive, $eventtime);
                 if (array_key_exists($uid, $messagesbyuser)) {
                     $messagesbyuser[$uid]++;
                 }
@@ -870,9 +879,13 @@ class tutor_usage_report_service {
             } else if ($event->eventtype === tutor_usage_recorder::EVENT_QUIZ_CREATED) {
                 $quizcreated++;
                 $activeusers[$uid] = true;
+                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
+                $lastactive = max($lastactive, $eventtime);
             } else if ($event->eventtype === tutor_usage_recorder::EVENT_LESSON_CREATED) {
                 $lessoncreated++;
                 $activeusers[$uid] = true;
+                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
+                $lastactive = max($lastactive, $eventtime);
             }
         }
         $events->close();
@@ -905,6 +918,8 @@ class tutor_usage_report_service {
 
         return [
             'adoption' => $adoption,
+            'activedays' => count($activedays),
+            'lastactive' => $lastactive,
             'activeusers' => count($activeusers),
             'totalusers' => $totalusers,
             'messages' => $messages,
@@ -984,6 +999,21 @@ class tutor_usage_report_service {
             'total' => $totalformatted,
         ]);
 
+        $activedays = (int) ($current['activedays'] ?? 0);
+        $engagement = $build('activedays', static function ($v) {
+            $days = (int) $v;
+            return get_string('tutor_usage_report_kpi_engagement_value', 'local_dixeo', $days);
+        });
+        $lastactive = (int) ($current['lastactive'] ?? 0);
+        $lastactiveformatted = $lastactive > 0
+            ? userdate($lastactive, get_string('strftimedatetime', 'langconfig'))
+            : get_string('tutor_usage_report_performance_na', 'local_dixeo');
+        $engagement['tooltip'] = get_string(
+            'tutor_usage_report_kpi_engagement_secondary',
+            'local_dixeo',
+            $lastactiveformatted
+        );
+
         $messages = $build('messages', static fn($v) => number_format((int) $v));
         $messages['tooltip'] = get_string('tutor_usage_report_kpi_messages_secondary', 'local_dixeo', (object) [
             'median' => $medianmessages,
@@ -1004,6 +1034,7 @@ class tutor_usage_report_service {
 
         return [
             'adoption' => $adoption,
+            'engagement' => $engagement,
             'active' => [
                 'value' => $activeformatted,
                 'raw' => (int) ($current['activeusers'] ?? 0),
@@ -1345,6 +1376,54 @@ class tutor_usage_report_service {
         }
 
         return array_values(array_unique($ids));
+    }
+
+    /**
+     * Hide user-level activity rows with no messages when the module type is tutor-excluded.
+     *
+     * Uses block_dixeo_tutor | excludedmodules (via block_dixeo_tutor::get_excluded_modules()).
+     *
+     * @param array $row Formatted summary row.
+     * @return bool
+     */
+    protected function should_hide_zero_usage_excluded_activity(array $row): bool {
+        if ((int) ($row['messages'] ?? 0) > 0) {
+            return false;
+        }
+
+        $moduletype = (string) ($row['moduletype'] ?? '');
+        if ($moduletype === '' || $moduletype === 'course') {
+            return false;
+        }
+
+        return in_array($moduletype, $this->get_tutor_excluded_modules(), true);
+    }
+
+    /**
+     * Module types listed in the Dixeo Tutor excludedmodules setting.
+     *
+     * @return string[]
+     */
+    protected function get_tutor_excluded_modules(): array {
+        global $CFG;
+
+        if (!class_exists('block_dixeo_tutor', false)) {
+            $blockfile = $CFG->dirroot . '/blocks/dixeo_tutor/block_dixeo_tutor.php';
+            if (is_readable($blockfile)) {
+                require_once($blockfile);
+            }
+        }
+
+        if (class_exists('block_dixeo_tutor')) {
+            return \block_dixeo_tutor::get_excluded_modules();
+        }
+
+        $setting = get_config('block_dixeo_tutor', 'excludedmodules');
+        if ($setting === false || $setting === '') {
+            return ['quiz', 'simplequiz2'];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', (string) $setting))));
     }
 
     /**

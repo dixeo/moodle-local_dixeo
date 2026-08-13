@@ -345,6 +345,18 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertNotEmpty($kpis['messages']['tooltip']);
         $this->assertSame(1, (int) $kpis['active']['raw']);
         $this->assertGreaterThanOrEqual(1, (int) $kpis['total']['raw']);
+
+        $userkpis = $service->get_kpis(
+            tutor_usage_report_service::LEVEL_USER,
+            (int) $course->id,
+            (int) $student->id,
+            $now - DAYSECS,
+            $now + HOURSECS,
+            $roleids
+        );
+        $this->assertSame(1, (int) $userkpis['engagement']['raw']);
+        $this->assertStringContainsString('1', $userkpis['engagement']['value']);
+        $this->assertStringContainsString('Last active:', $userkpis['engagement']['tooltip']);
     }
 
     /**
@@ -359,6 +371,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $inactive = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
         $roleids = tutor_usage_report_service::get_default_student_roleids();
         $service = new tutor_usage_report_service();
         $now = time();
@@ -408,7 +421,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
             }
         }
 
-        // User: course page + activity appear with zeros.
+        // User: course page + non-excluded activity appear with zeros; excluded zero-usage hidden.
         $userrows = $service->get_rows(
             tutor_usage_report_service::LEVEL_USER,
             (int) $course->id,
@@ -422,12 +435,33 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $cmids = array_column($userrows['rows'], 'key');
         $this->assertContains(0, $cmids);
         $this->assertContains((int) $page->cmid, $cmids);
+        $this->assertNotContains((int) $quiz->cmid, $cmids);
         foreach ($userrows['rows'] as $row) {
             $this->assertSame(0, (int) $row['messages']);
             $this->assertNotEmpty($row['url']);
         }
 
+        // Excluded module with messages still appears.
         $recorder = new tutor_usage_recorder();
+        $recorder->record_message(
+            (int) $student->id,
+            (int) $course->id,
+            tutor_message::MODE_NORMAL,
+            (int) $quiz->cmid,
+            $now - 60
+        );
+        $userrowswithquiz = $service->get_rows(
+            tutor_usage_report_service::LEVEL_USER,
+            (int) $course->id,
+            (int) $student->id,
+            $now - DAYSECS,
+            $now + HOURSECS,
+            $roleids,
+            0,
+            100
+        );
+        $this->assertContains((int) $quiz->cmid, array_column($userrowswithquiz['rows'], 'key'));
+
         $recorder->record_message((int) $student->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $now - 30);
         $siterows = $service->get_rows(
             tutor_usage_report_service::LEVEL_SITE,

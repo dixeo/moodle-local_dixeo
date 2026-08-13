@@ -42,6 +42,9 @@
     * iscourse - bool - Course-level report.
     * isuser - bool - User-level report.
 
+    * hasperformance - bool - Whether the Performance section is shown.
+    * performance - object|null - Performance scatter and graded activities context.
+
     Example context (json):
     {
         "error": false,
@@ -103,6 +106,11 @@
                 "tooltip": "17 active / 23 inactive / 40 total",
                 "change": {"value": "+5.0% since last week", "positive": true, "negative": false}
             },
+            "engagement": {
+                "value": "3 days",
+                "tooltip": "Last active: 20 Jul 2026, 10:00",
+                "change": {"value": "+50.0% since last week", "positive": true, "negative": false}
+            },
             "messages": {
                 "value": "120",
                 "tooltip": "Median 3.0 / Average 4.5",
@@ -155,6 +163,23 @@
         "haschartdata": true,
         "stackedbardata": "{\"labels\":[\"14 Jul\",\"15 Jul\"],\"datasets\":[{\"label\":\"Standard\",\"data\":[10,12]}]}",
         "heatmapdata": "{\"days\":[\"Mon\",\"Tue\"],\"hours\":[9,10],\"cells\":[{\"day\":0,\"hour\":0,\"count\":2,\"intensity\":0.5}]}",
+        "hasperformance": true,
+        "performance": {
+            "hasscatter": true,
+            "hasactivities": true,
+            "isuserlevel": false,
+            "scatterempty": "No graded students to plot yet.",
+            "scatterdata": "{\"points\":[{\"x\":3,\"y\":72,\"iscurrent\":false}],\"meanx\":3,\"meany\":72,\"xmax\":3}",
+            "activities": [
+                {
+                    "name": "Course total",
+                    "url": null,
+                    "typelabel": "Course total",
+                    "averageformatted": "72.0%",
+                    "iscoursetotal": true
+                }
+            ]
+        },
         "tabletitle": "Courses",
         "exportselector": "<div class=\"form-inline\"><label>Download as</label></div>",
         "reseturl": "https://example.com/local/dixeo/tutor_usage_report.php",
@@ -280,6 +305,22 @@
 
             <div class="row mb-4 g-3">
                 <div class="col-md-6 col-xl-3">
+                    {{#isuser}}
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.engagement.tooltip}}">
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_engagement, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.engagement.value}}</div>
+                            {{#haschange}}{{#kpis.engagement.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.engagement.change}}{{/haschange}}
+                        </div>
+                    </div>
+                    {{/isuser}}
+                    {{^isuser}}
                     <div class="card h-100 dixeo-tutor-usage-report-kpi"
                          tabindex="0"
                          data-toggle="tooltip"
@@ -293,6 +334,7 @@
                             {{/kpis.adoption.change}}{{/haschange}}
                         </div>
                     </div>
+                    {{/isuser}}
                 </div>
                 <div class="col-md-6 col-xl-3">
                     <div class="card h-100 dixeo-tutor-usage-report-kpi"
@@ -403,6 +445,72 @@
             {{/haschartdata}}
         </div>
     </div>
+
+    {{#hasperformance}}
+    <div class="card mb-4 local-dixeo-tutor-usage-report-performance">
+        <div class="card-header">
+            <h4 class="mb-0">{{#str}}tutor_usage_report_performance, local_dixeo{{/str}}</h4>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-12 col-lg-6">
+                    <h5 class="dixeo-tutor-usage-report-chart-title">
+                        {{#str}}tutor_usage_report_performance_scatter, local_dixeo{{/str}}
+                    </h5>
+                    {{#performance.hasscatter}}
+                        <div class="dixeo-tutor-usage-report-chart-container dixeo-tutor-usage-report-performance-scatter">
+                            <canvas id="tutorUsagePerformanceScatter" aria-label="{{#str}}tutor_usage_report_performance_scatter, local_dixeo{{/str}}"></canvas>
+                        </div>
+                    {{/performance.hasscatter}}
+                    {{^performance.hasscatter}}
+                        <div class="alert alert-info mb-0">{{performance.scatterempty}}</div>
+                    {{/performance.hasscatter}}
+                </div>
+                <div class="col-12 col-lg-6">
+                    <h5 class="dixeo-tutor-usage-report-chart-title">
+                        {{#str}}tutor_usage_report_performance_activities, local_dixeo{{/str}}
+                    </h5>
+                    {{#performance.hasactivities}}
+                        <div class="table-responsive">
+                            <table class="table table-striped mb-0 dixeo-tutor-usage-report-performance-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{#str}}tutor_usage_report_column_name, local_dixeo{{/str}}</th>
+                                        <th>{{#str}}tutor_usage_report_column_moduletype, local_dixeo{{/str}}</th>
+                                        {{#performance.isuserlevel}}
+                                        <th>{{#str}}tutor_usage_report_performance_column_user_vs_average, local_dixeo{{/str}}</th>
+                                        {{/performance.isuserlevel}}
+                                        {{^performance.isuserlevel}}
+                                        <th>{{#str}}tutor_usage_report_performance_column_average, local_dixeo{{/str}}</th>
+                                        {{/performance.isuserlevel}}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{#performance.activities}}
+                                        <tr>
+                                            <td>
+                                                {{#url}}<a href="{{url}}">{{name}}</a>{{/url}}
+                                                {{^url}}{{name}}{{/url}}
+                                            </td>
+                                            <td>{{typelabel}}</td>
+                                            <td>
+                                                {{#isuserlevel}}{{uservsaverage}}{{/isuserlevel}}
+                                                {{^isuserlevel}}{{averageformatted}}{{/isuserlevel}}
+                                            </td>
+                                        </tr>
+                                    {{/performance.activities}}
+                                </tbody>
+                            </table>
+                        </div>
+                    {{/performance.hasactivities}}
+                </div>
+            </div>
+        </div>
+        {{#performance.hasscatter}}
+            <script type="application/json" id="tutor-usage-performance-scatter-data">{{{performance.scatterdata}}}</script>
+        {{/performance.hasscatter}}
+    </div>
+    {{/hasperformance}}
 
     <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">

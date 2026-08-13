@@ -22,6 +22,7 @@ use renderer_base;
 use core\output\paging_bar;
 use core\plugin_manager;
 use local_dixeo\event\tutor_usage_report_viewed;
+use local_dixeo\service\tutor_usage_performance_service;
 use local_dixeo\service\tutor_usage_report_service;
 
 /**
@@ -145,6 +146,14 @@ class tutor_usage_report_page implements renderable, templatable {
         $exportselector = $this->build_export_selector($output, $request);
         $breadcrumbs = $this->build_breadcrumbs($request);
 
+        $performanceservice = new tutor_usage_performance_service();
+        $performance = $performanceservice->get_section_context(
+            $request->level,
+            $request->courseid,
+            $request->userid,
+            $request->rolescope
+        );
+
         tutor_usage_report_viewed::create_for_request($request, (int) $rowsresult['total'])->trigger();
 
         $haschartdata = $this->has_stacked_bar_data($stackedbar) || ($heatmap['max'] ?? 0) > 0;
@@ -244,6 +253,8 @@ class tutor_usage_report_page implements renderable, templatable {
                 'userid' => $request->userid ?: null,
             ]),
             'tabletitle' => $this->get_table_title($request),
+            'hasperformance' => $performance !== null,
+            'performance' => $performance,
         ];
     }
 
