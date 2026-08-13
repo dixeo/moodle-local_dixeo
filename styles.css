@@ -518,3 +518,17 @@ h2:has(.dixeo-sync-indicator),
 .dixeo-tutor-usage-report-export .dataformatselector {
     margin: 0;
 }
+
+.local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-chart-title {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-performance-scatter {
+    height: 320px;
+}
+
+.local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-performance-table th,
+.local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-performance-table td {
+    vertical-align: middle;
+}

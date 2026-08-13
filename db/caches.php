@@ -43,4 +43,10 @@ $definitions = [
         'simpledata' => false,
         'ttl' => 60 * 60 * 24, // 24 hours
     ],
+    'tutorusageperformance' => [
+        'mode' => \cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => false,
+        'ttl' => 5 * 60, // 5 minutes
+    ],
 ];
