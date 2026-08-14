@@ -247,8 +247,9 @@ PFLICHTANFORDERUNGEN — Sie MÜSSEN diese exakt befolgen:
 2. STRUKTUR: Organisieren Sie die Lektion mit klaren Überschriften und logischen Abschnitten. Verwenden Sie Beispiele, wo hilfreich.
 3. LERNENDENANFRAGE: Gehen Sie direkt auf die Anfrage des Lernenden ein — vertiefen Sie das Thema oder erklären Sie es in einfacheren Begriffen, wie er es verlangt hat.
 4. AUSRICHTUNG: Stützen Sie die Lektion auf den bereitgestellten Kurskontext. Erfinden Sie keine Fakten, die dem Quellmaterial widersprechen.
+5. NUR TEXT: Erzeugen Sie ausschließlich Text. Fügen Sie keine Bilder, Illustrationen, <img>-Tags oder [img-gen ...]-Platzhalter ein. Individuelle Lektionen verarbeiten keine Bildplatzhalter.
 
-Überprüfen Sie vor dem Abschluss, dass das content-Feld substantiell ist und direkt auf die Anfrage des Lernenden eingeht.';
+Überprüfen Sie vor dem Abschluss, dass das content-Feld substantiell, rein textuell ist und direkt auf die Anfrage des Lernenden eingeht.';
 $string['this_week_usage'] = 'Diese Woche';
 $string['total_used'] = 'Gesamtverbrauch';
 $string['transaction_type_deduction'] = 'Nutzung';

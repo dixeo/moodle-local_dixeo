@@ -247,8 +247,9 @@ EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
 2. STRUCTURE : Organisez la leçon avec des titres clairs et des sections logiques. Utilisez des exemples lorsque c\'est utile.
 3. DEMANDE DE L\'APPRENANT : Répondez directement à la demande de l\'apprenant — approfondissez le sujet ou expliquez-le en termes plus simples comme il l\'a demandé.
 4. ALIGNEMENT : Basez la leçon sur le contexte de cours fourni. N\'inventez pas de faits qui contredisent le matériel source.
+5. TEXTE UNIQUEMENT : Produisez uniquement du texte. N\'incluez pas d\'images, d\'illustrations, de balises <img> ni d\'espaces réservés [img-gen ...]. Les leçons personnalisées ne traitent pas les espaces réservés d\'image.
 
-Avant de terminer, vérifiez que le champ content est substantiel et répond directement à la demande de l\'apprenant.';
+Avant de terminer, vérifiez que le champ content est substantiel, uniquement textuel, et répond directement à la demande de l\'apprenant.';
 $string['this_week_usage'] = 'Cette semaine';
 $string['total_used'] = 'Total utilisé';
 $string['transaction_type_deduction'] = 'Utilisation';

@@ -247,8 +247,9 @@ MANDATORY REQUIREMENTS — you MUST follow these exactly:
 2. STRUCTURE: Organize the lesson with clear headings and logical sections. Use examples where helpful.
 3. LEARNER REQUEST: Address the learner\'s request directly — go deeper into the subject or explain it in simpler terms as they asked.
 4. ALIGNMENT: Base the lesson on the provided course context. Do not invent facts that contradict the source material.
+5. TEXT ONLY: Produce text only. Do not include images, illustrations, <img> tags, or [img-gen ...] placeholders. Custom lessons do not process image placeholders.
 
-Before finishing, verify the content field is substantive and directly responds to the learner\'s request.';
+Before finishing, verify the content field is substantive, text-only, and directly responds to the learner\'s request.';
 $string['this_week_usage'] = 'This Week';
 $string['total_used'] = 'Total Used';
 $string['transaction_type_deduction'] = 'Usage';
