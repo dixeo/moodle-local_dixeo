@@ -71,6 +71,9 @@ class module_generation_service {
     /** @var job_binding_metadata|null Optional metadata override for job bindings. */
     private ?job_binding_metadata $jobmetadata = null;
 
+    /** @var bool Whether to append content-image shortcode instructions. */
+    private bool $includeimageprompt = true;
+
     /**
      * Constructor.
      *
@@ -107,6 +110,17 @@ class module_generation_service {
      */
     public function set_job_metadata(?job_binding_metadata $metadata): self {
         $this->jobmetadata = $metadata;
+        return $this;
+    }
+
+    /**
+     * Whether subsequent generate/edit payloads include [img-gen] shortcode instructions.
+     *
+     * @param bool $include False for ephemeral outputs that never process image placeholders.
+     * @return self
+     */
+    public function set_include_image_prompt(bool $include): self {
+        $this->includeimageprompt = $include;
         return $this;
     }
 
@@ -538,7 +552,8 @@ class module_generation_service {
         }
 
         if (
-            \local_dixeo\service\image\policy::is_enabled(
+            $this->includeimageprompt
+            && \local_dixeo\service\image\policy::is_enabled(
                 \local_dixeo\service\image\policy::ENTITY_CONTENT,
                 \local_dixeo\service\image\policy::ACTION_GENERATE
             )
