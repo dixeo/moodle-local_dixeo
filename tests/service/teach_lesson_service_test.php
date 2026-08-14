@@ -53,6 +53,8 @@ final class teach_lesson_service_test extends \advanced_testcase {
         $this->assertStringContainsString('Explain photosynthesis in simpler terms', $instructions);
         $this->assertStringContainsString('MANDATORY REQUIREMENTS', $instructions);
         $this->assertStringContainsString('Page module', $instructions);
+        $this->assertStringContainsString('TEXT ONLY', $instructions);
+        $this->assertStringContainsString('[img-gen', $instructions);
     }
 
     /**

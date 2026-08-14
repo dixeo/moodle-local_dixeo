@@ -400,8 +400,9 @@ REQUISITI OBBLIGATORI — DEVI seguirli esattamente:
 2. STRUTTURA: Organizza la lezione con titoli chiari e sezioni logiche. Usa esempi dove utile.
 3. RICHIESTA DELLO STUDENTE: Rispondi direttamente alla richiesta dello studente — approfondisci l\'argomento o spiegalo in termini più semplici come ha chiesto.
 4. ALLINEAMENTO: Basa la lezione sul contesto del corso fornito. Non inventare fatti che contraddicono il materiale di origine.
+5. SOLO TESTO: Produci solo testo. Non includere immagini, illustrazioni, tag <img> o segnaposto [img-gen ...]. Le lezioni personalizzate non elaborano i segnaposto delle immagini.
 
-Prima di terminare, verifica che il campo content sia sostanzioso e risponda direttamente alla richiesta dello studente.';
+Prima di terminare, verifica che il campo content sia sostanzioso, solo testo, e risponda direttamente alla richiesta dello studente.';
 $string['this_week_usage'] = 'Questa settimana';
 $string['total_used'] = 'Totale utilizzato';
 $string['transaction_type_deduction'] = 'Utilizzo';

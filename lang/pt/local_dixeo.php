@@ -400,8 +400,9 @@ REQUISITOS OBRIGATÓRIOS — DEVE segui-los exatamente:
 2. ESTRUTURA: Organize a lição com títulos claros e secções lógicas. Use exemplos quando útil.
 3. PEDIDO DO ALUNO: Responda diretamente ao pedido do aluno — aprofunde o assunto ou explique-o em termos mais simples como pediu.
 4. ALINHAMENTO: Baseie a lição no contexto do curso fornecido. Não invente factos que contradigam o material de origem.
+5. APENAS TEXTO: Produza apenas texto. Não inclua imagens, ilustrações, tags <img> nem marcadores [img-gen ...]. As lições personalizadas não processam marcadores de imagem.
 
-Antes de terminar, verifique se o campo content é substantivo e responde diretamente ao pedido do aluno.';
+Antes de terminar, verifique se o campo content é substantivo, apenas texto, e responde diretamente ao pedido do aluno.';
 $string['this_week_usage'] = 'Esta semana';
 $string['total_used'] = 'Total utilizado';
 $string['transaction_type_deduction'] = 'Utilização';
