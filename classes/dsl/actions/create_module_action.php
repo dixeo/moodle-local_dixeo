@@ -155,6 +155,11 @@ class create_module_action {
             // Prepare module data for the add_instance function.
             $moduledata = $this->prepare_module_data($fields, $courseid, $cmid, $modulename);
 
+            // Activity names are PARAM_TEXT. Remove any markup in the name if it exists.
+            if (isset($moduledata->name)) {
+                $moduledata->name = clean_param((string) $moduledata->name, PARAM_TEXT);
+            }
+
             // Run module-specific pre-creation hooks if available.
             $this->run_before_hook($modulename, $cmid, $moduledata);
 
