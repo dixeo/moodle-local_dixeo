@@ -34,6 +34,8 @@ use local_dixeo\api\exception\api_exception;
 
 /**
  * External function to cancel a running job.
+ *
+ * Access follows the mode persisted at job registration.
  */
 class cancel_job extends external_api {
     use capability_check;
@@ -58,6 +60,9 @@ class cancel_job extends external_api {
      * @return array The cancellation result.
      */
     public static function execute(string $jobid, int $courseid): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'jobid' => $jobid,
             'courseid' => $courseid,
@@ -65,9 +70,17 @@ class cancel_job extends external_api {
 
         self::validate_course_capability($params['courseid']);
 
+        if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+
         try {
             $service = service_factory::get_job_service();
-            $result = $service->cancel_job($params['jobid'], $params['courseid']);
+            $result = $service->cancel_job(
+                $params['jobid'],
+                $params['courseid'],
+                (int) $USER->id
+            );
 
             $status = $result['status'] ?? 'cancelled';
             return response_factory::cancellation_result(

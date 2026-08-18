@@ -55,10 +55,12 @@ class file_sync_disabled extends \core\event\base {
      */
     public function get_description(): string {
         $removefiles = !empty($this->other['removefiles']) ? 1 : 0;
+        $remotestatus = (string) ($this->other['remotedeletestatus'] ?? 'not_requested');
         return get_string('eventfilesyncdisableddesc', 'local_dixeo', (object) [
             'userid' => $this->userid,
             'courseid' => $this->courseid,
             'removefiles' => $removefiles,
+            'remotedeletestatus' => $remotestatus,
         ]);
     }
 
@@ -78,9 +80,16 @@ class file_sync_disabled extends \core\event\base {
      * @param int $userid User who disabled sync.
      * @param int $objectid local_dixeo_course_ai row id.
      * @param bool $removefiles Whether remote files were requested for deletion.
+     * @param string $remotedeletestatus completed|pending|not_requested
      * @return self
      */
-    public static function create_for_course(int $courseid, int $userid, int $objectid, bool $removefiles): self {
+    public static function create_for_course(
+        int $courseid,
+        int $userid,
+        int $objectid,
+        bool $removefiles,
+        string $remotedeletestatus = 'not_requested'
+    ): self {
         return self::create([
             'context' => \context_course::instance($courseid),
             'objectid' => $objectid,
@@ -88,6 +97,7 @@ class file_sync_disabled extends \core\event\base {
             'courseid' => $courseid,
             'other' => [
                 'removefiles' => $removefiles ? 1 : 0,
+                'remotedeletestatus' => $remotedeletestatus,
             ],
         ]);
     }
@@ -99,6 +109,9 @@ class file_sync_disabled extends \core\event\base {
         parent::validate_data();
         if (!isset($this->other['removefiles'])) {
             throw new \coding_exception('The \'removefiles\' value must be set in other.');
+        }
+        if (!isset($this->other['remotedeletestatus'])) {
+            throw new \coding_exception('The \'remotedeletestatus\' value must be set in other.');
         }
     }
 

@@ -257,7 +257,7 @@ class course_ai_repository {
             return 0;
         }
 
-        return match ($record->errorcount) {
+        return match ((int) $record->errorcount) {
             1 => self::RETRY_DELAY_FIRST,
             2 => self::RETRY_DELAY_SECOND,
             3 => self::RETRY_DELAY_THIRD,
@@ -279,7 +279,7 @@ class course_ai_repository {
             return false;
         }
 
-        if ($record->errorcount >= self::MAX_RETRY_COUNT) {
+        if ((int) $record->errorcount >= self::MAX_RETRY_COUNT) {
             return false;
         }
 
@@ -347,6 +347,85 @@ class course_ai_repository {
         $update->timemodified = time();
 
         $DB->update_record(self::TABLE, $update);
+    }
+
+    /**
+     * Mark a course as awaiting confirmed remote file deletion.
+     *
+     * Keeps enough identity for idempotent DELETE retries. Does not clear filehash
+     * until {@see reset_sync_state()} runs after a successful remote delete.
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     */
+    public function mark_pending_deletion(int $courseid): void {
+        global $DB;
+
+        $record = $this->get_by_courseid($courseid);
+        if ($record === null) {
+            $record = $this->create($courseid, 0);
+        }
+
+        $update = new \stdClass();
+        $update->id = $record->id;
+        $update->enabled = 0;
+        $update->syncstatus = 'pending_deletion';
+        $update->timemodified = time();
+
+        $DB->update_record(self::TABLE, $update);
+    }
+
+    /**
+     * Record a failed remote deletion while keeping pending_deletion status.
+     *
+     * @param int $courseid The course ID.
+     * @param string $message Last error message (may be truncated for storage).
+     * @return void
+     */
+    public function record_pending_deletion_error(int $courseid, string $message): void {
+        global $DB;
+
+        $record = $this->get_by_courseid($courseid);
+        if ($record === null) {
+            return;
+        }
+
+        $update = new \stdClass();
+        $update->id = $record->id;
+        $update->syncstatus = 'pending_deletion';
+        $update->enabled = 0;
+        $update->errormessage = \core_text::substr($message, 0, 1000);
+        $update->errorcount = (int) $record->errorcount + 1;
+        $update->lasterrorat = time();
+        $update->timemodified = time();
+
+        $DB->update_record(self::TABLE, $update);
+    }
+
+    /**
+     * Whether another remote-deletion retry should be queued.
+     *
+     * @param int $courseid The course ID.
+     * @return bool
+     */
+    public function should_retry_pending_deletion(int $courseid): bool {
+        $record = $this->get_by_courseid($courseid);
+        if ($record === null || $record->syncstatus !== 'pending_deletion') {
+            return false;
+        }
+
+        return $this->get_retry_delay($courseid) > 0;
+    }
+
+    /**
+     * Find courses with pending remote file deletion.
+     *
+     * @return array<int, \stdClass>
+     */
+    public function get_pending_deletion_courses(): array {
+        global $DB;
+
+        return $DB->get_records(self::TABLE, ['syncstatus' => 'pending_deletion'], 'id ASC');
     }
 
     /**
