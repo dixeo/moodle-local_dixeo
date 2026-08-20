@@ -178,7 +178,7 @@ class practice_quiz_service {
      * @param string $fallbacktitle Title if job data has no name.
      * @param int|null $expectedcount Trim excess questions when the API returns too many.
      * @param int|null $courseid Course ID to enforce job ownership (required for AJAX paths).
-     * @return array{success: bool, error: string, title: string, questions: string}
+     * @return array{success: bool, error: string, title: string, introhtml: string, questions: string}
      * @throws api_exception
      */
     public function finalize_from_job(
@@ -193,6 +193,7 @@ class practice_quiz_service {
             return $this->practice_quiz_result(
                 false,
                 '',
+                '',
                 '[]',
                 get_string('practice_quiz_error_job_not_completed', 'local_dixeo', (object) [
                     'status' => $status->status,
@@ -205,6 +206,7 @@ class practice_quiz_service {
             return $this->practice_quiz_result(
                 false,
                 '',
+                '',
                 '[]',
                 get_string('practice_quiz_error_invalid_result', 'local_dixeo')
             );
@@ -214,6 +216,7 @@ class practice_quiz_service {
         if ($moduletype !== 'simplequiz2') {
             return $this->practice_quiz_result(
                 false,
+                '',
                 '',
                 '[]',
                 get_string('practice_quiz_error_wrong_module_type', 'local_dixeo')
@@ -226,6 +229,7 @@ class practice_quiz_service {
             return $this->practice_quiz_result(
                 false,
                 '',
+                '',
                 '[]',
                 get_string('practice_quiz_error_no_questions', 'local_dixeo')
             );
@@ -234,7 +238,7 @@ class practice_quiz_service {
         try {
             $questions = simplequiz2_question_transformer::transform_job_questions($rawquestions);
         } catch (dsl_exception $e) {
-            return $this->practice_quiz_result(false, '', '[]', $e->getMessage());
+            return $this->practice_quiz_result(false, '', '', '[]', $e->getMessage());
         }
 
         $title = trim((string) ($data['name'] ?? ''));
@@ -243,6 +247,16 @@ class practice_quiz_service {
         }
         if ($title === '') {
             $title = get_string('practice_quiz_default_title', 'local_dixeo');
+        }
+
+        $intro = trim((string) ($data['intro'] ?? ''));
+        $introhtml = '';
+        if ($intro !== '') {
+            $introhtml = trim(format_text($intro, FORMAT_HTML, [
+                'noclean' => true,
+                'para' => true,
+                'filter' => true,
+            ], $courseid ?? 0));
         }
 
         // Re-index as JSON array for embed player.
@@ -258,6 +272,7 @@ class practice_quiz_service {
         return $this->practice_quiz_result(
             true,
             $title,
+            $introhtml,
             json_encode($questionlist)
         );
     }
@@ -267,13 +282,15 @@ class practice_quiz_service {
      *
      * @param bool $success
      * @param string $title
+     * @param string $introhtml
      * @param string $questions
      * @param string $error
-     * @return array{success: bool, error: string, title: string, questions: string}
+     * @return array{success: bool, error: string, title: string, introhtml: string, questions: string}
      */
     private function practice_quiz_result(
         bool $success,
         string $title = '',
+        string $introhtml = '',
         string $questions = '[]',
         string $error = ''
     ): array {
@@ -281,6 +298,7 @@ class practice_quiz_service {
             'success' => $success,
             'error' => $error,
             'title' => $title,
+            'introhtml' => $introhtml,
             'questions' => $questions,
         ];
     }

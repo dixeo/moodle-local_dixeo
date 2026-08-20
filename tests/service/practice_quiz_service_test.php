@@ -135,6 +135,7 @@ final class practice_quiz_service_test extends \advanced_testcase {
                 'moduleType' => 'simplequiz2',
                 'data' => [
                     'name' => 'Cell biology quiz',
+                    'intro' => '<p>Check your knowledge of cell biology.</p>',
                     'questions' => [
                         [
                             'text' => 'What is a cell?',
@@ -153,6 +154,7 @@ final class practice_quiz_service_test extends \advanced_testcase {
 
         $this->assertTrue($result['success']);
         $this->assertEquals('Cell biology quiz', $result['title']);
+        $this->assertStringContainsString('cell biology', strtolower($result['introhtml']));
         $questions = json_decode($result['questions'], true);
         $this->assertCount(1, $questions);
         $this->assertEquals('What is a cell?', $questions[0]['text']);
