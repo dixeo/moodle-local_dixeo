@@ -41,6 +41,9 @@ use local_dixeo\service\tutor_usage_recorder;
  * Service for tutor message operations.
  */
 class tutor_service {
+    /** @var int Page size requested when walking the conversation and message endpoints. */
+    private const PAGE_SIZE = 100;
+
     /** @var job_service The job service for submitting messages. */
     private job_service $jobservice;
 
@@ -107,7 +110,7 @@ class tutor_service {
      * @param int $userid The user ID.
      * @param string $sinceid Optional message ID cursor for newer messages (delta).
      * @param int $limit Maximum number of messages to return per request.
-     * @param int $offset Optional offset for loading older message pages.
+     * @param int $offset Skip that many messages, counted from the newest when no cursor is supplied.
      * @return array Array of message objects with id, role, content, time keys.
      * @throws api_exception If the API request fails.
      */
@@ -124,6 +127,123 @@ class tutor_service {
         return $this->map_raw_messages(
             $this->request_messages($courseid, $userid, $sinceid, $limit, $offset)
         );
+    }
+
+    /**
+     * List the conversations the API holds, restricted to the configured namespace.
+     *
+     * Backs the Moodle privacy API: enumerating conversations tells a privacy provider
+     * which courses hold data for a user, and which users hold data in a course.
+     * At least one filter must be supplied.
+     *
+     * @param int|null $courseid Restrict to one course, or null for every course.
+     * @param int|null $userid Restrict to one user, or null for every user.
+     * @return array List of ['courseid' => int, 'userid' => int].
+     * @throws api_exception If the API request fails.
+     * @throws \coding_exception If no filter is supplied.
+     */
+    public function list_conversations(?int $courseid = null, ?int $userid = null): array {
+        $filters = $this->conversation_filters($courseid, $userid);
+        $conversations = [];
+        $seen = [];
+        $offset = 0;
+
+        // The API is free to serve fewer rows than asked, so advance by what it actually
+        // returned. Conversations are unique per course and user within a namespace, so a
+        // page holding none we have not seen means the walk stopped progressing (a server
+        // ignoring offset, say) and no later page would progress either.
+        do {
+            $page = $this->client->get('/v1/tutor/conversations', $filters + [
+                'limit' => self::PAGE_SIZE,
+                'offset' => $offset,
+            ]);
+
+            $before = count($conversations);
+            foreach ($page as $conversation) {
+                $entry = [
+                    'courseid' => (int) ($conversation['courseId'] ?? 0),
+                    'userid' => (int) ($conversation['userId'] ?? 0),
+                ];
+
+                $key = $entry['courseid'] . '|' . $entry['userid'];
+                if (isset($seen[$key])) {
+                    continue;
+                }
+
+                $seen[$key] = true;
+                $conversations[] = $entry;
+            }
+
+            $offset += count($page);
+        } while (count($conversations) > $before);
+
+        return $conversations;
+    }
+
+    /**
+     * Fetch every message of a conversation, following the API pagination.
+     *
+     * {@see self::get_conversation()} returns a single page; privacy exports must be
+     * complete, so this walks the whole history.
+     *
+     * Without a cursor the API returns the newest page first, so the walk climbs back
+     * through the history by offset and prepends each page: a growing offset reaches
+     * older messages, and every page is already chronological internally.
+     *
+     * @param int $courseid The course ID.
+     * @param int $userid The user ID.
+     * @return array Messages with id, role, content and time keys, oldest first.
+     * @throws api_exception If the API request fails.
+     */
+    public function export_conversation(int $courseid, int $userid): array {
+        $messages = [];
+        $seen = [];
+        $offset = 0;
+
+        do {
+            $page = $this->get_conversation($courseid, $userid, '', self::PAGE_SIZE, $offset);
+            $offset += count($page);
+
+            // Writes landing mid-export shift the offsets and can repeat a message across
+            // two pages; drop the repeats rather than risk dropping a message.
+            $older = [];
+            foreach ($page as $message) {
+                $id = (string) $message['id'];
+                if (isset($seen[$id])) {
+                    continue;
+                }
+
+                $seen[$id] = true;
+                $older[] = $message;
+            }
+
+            $messages = array_merge($older, $messages);
+
+            // A page holding nothing new means the walk stopped progressing (a server
+            // ignoring offset, say); no later page would progress either.
+        } while ($older !== []);
+
+        return $messages;
+    }
+
+    /**
+     * Erase conversations, both the local API records and the remote AI provider copy.
+     *
+     * Backs the Moodle privacy API erasure path. At least one filter must be supplied.
+     *
+     * @param int|null $courseid Restrict to one course, or null for every course.
+     * @param int|null $userid Restrict to one user, or null for every user.
+     * @return int Number of conversations deleted.
+     * @throws api_exception If the API request fails.
+     * @throws \coding_exception If no filter is supplied.
+     */
+    public function delete_conversations(?int $courseid = null, ?int $userid = null): int {
+        $response = $this->client->delete(
+            '/v1/tutor/conversations',
+            $this->conversation_filters($courseid, $userid)
+        );
+
+        return (int) ($response['deleted'] ?? 0);
     }
 
     /**
@@ -200,6 +320,36 @@ class tutor_service {
         }
 
         return $messages;
+    }
+
+    /**
+     * Build the query filters shared by the conversation list and delete endpoints.
+     *
+     * The namespace is always sent and always cast to a string: http_build_query drops
+     * null values, and an absent namespace makes the API match every namespace, so a
+     * deletion issued by one site would reach conversations belonging to another site
+     * sharing the same tenant.
+     *
+     * @param int|null $courseid Restrict to one course, or null for every course.
+     * @param int|null $userid Restrict to one user, or null for every user.
+     * @return array Query parameters for the API request.
+     * @throws \coding_exception If no filter is supplied.
+     */
+    private function conversation_filters(?int $courseid, ?int $userid): array {
+        if ($courseid === null && $userid === null) {
+            throw new \coding_exception('At least one of courseid or userid must be supplied.');
+        }
+
+        $filters = ['namespace' => (string) $this->namespace];
+
+        if ($courseid !== null) {
+            $filters['courseId'] = (string) $courseid;
+        }
+        if ($userid !== null) {
+            $filters['userId'] = (string) $userid;
+        }
+
+        return $filters;
     }
 
     /**
