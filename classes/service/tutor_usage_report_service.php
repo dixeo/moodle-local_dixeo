@@ -669,7 +669,6 @@ class tutor_usage_report_service {
         $rows = [];
         for ($slot = 0; $slot < self::HEATMAP_SLOT_COUNT; $slot++) {
             $starthour = $slot * 3;
-            $endhour = $starthour + 2;
             $cells = [];
             for ($dow = 0; $dow < 7; $dow++) {
                 $value = $grid[$slot][$dow] ?? 0;
@@ -679,7 +678,7 @@ class tutor_usage_report_service {
                 ];
             }
             $rows[] = [
-                'label' => sprintf('%02d:00–%02d:59', $starthour, $endhour),
+                'label' => sprintf('%d-%d', $starthour, $starthour + 3),
                 'cells' => $cells,
             ];
         }
@@ -1053,6 +1052,7 @@ class tutor_usage_report_service {
             'modes' => array_map(function (string $mode) use ($current, $previous, $formatchange) {
                 $value = (int) ($current['modecounts'][$mode] ?? 0);
                 $tooltip = '';
+                $description = get_string('tutor_usage_report_kpi_mode_desc_messages', 'local_dixeo');
                 if ($mode === tutor_message::MODE_NORMAL || $mode === tutor_message::MODE_GUIDE) {
                     $tooltip = get_string('tutor_usage_report_kpi_messages_secondary', 'local_dixeo', (object) [
                         'median' => number_format((float) ($current['modemedian'][$mode] ?? 0), 1),
@@ -1064,12 +1064,14 @@ class tutor_usage_report_service {
                         'local_dixeo',
                         number_format((int) ($current['quizcreated'] ?? 0))
                     );
+                    $description = get_string('tutor_usage_report_kpi_mode_desc_quiz', 'local_dixeo');
                 } else if ($mode === tutor_message::MODE_TEACH) {
                     $tooltip = get_string(
                         'tutor_usage_report_kpi_mode_secondary_lesson',
                         'local_dixeo',
                         number_format((int) ($current['lessoncreated'] ?? 0))
                     );
+                    $description = get_string('tutor_usage_report_kpi_mode_desc_lesson', 'local_dixeo');
                 }
 
                 $item = [
@@ -1079,6 +1081,7 @@ class tutor_usage_report_service {
                     'raw' => $value,
                     'isquiz' => $mode === tutor_message::MODE_QUIZ,
                     'isteach' => $mode === tutor_message::MODE_TEACH,
+                    'description' => $description,
                     'tooltip' => $tooltip,
                     'hastooltip' => $tooltip !== '',
                 ];

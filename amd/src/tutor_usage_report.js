@@ -25,11 +25,12 @@ define([
     'jquery',
     'core/chartjs',
 ], function($, Chart) {
+    // Mode colors mirror the tutor block mode variables in blocks/dixeo_tutor/styles.css.
     const palette = {
-        normal: 'rgba(37, 99, 235, 0.8)',
-        guide: 'rgba(16, 185, 129, 0.8)',
-        quiz: 'rgba(245, 158, 11, 0.8)',
-        teach: 'rgba(139, 92, 246, 0.8)',
+        normal: 'rgba(16, 142, 238, 0.8)',
+        guide: 'rgba(124, 92, 191, 0.8)',
+        quiz: 'rgba(220, 120, 0, 0.8)',
+        teach: 'rgba(47, 158, 68, 0.8)',
         peer: 'rgba(37, 99, 235, 0.65)',
         current: 'rgba(220, 38, 38, 0.9)',
         mean: 'rgba(100, 116, 139, 0.85)',
@@ -263,7 +264,7 @@ define([
                         plugins: {legend: {position: 'bottom'}},
                         scales: {
                             x: {stacked: true},
-                            y: {stacked: true, beginAtZero: true},
+                            y: {stacked: true, beginAtZero: true, suggestedMax: 10},
                         },
                     },
                 });
