@@ -28,6 +28,8 @@ namespace local_dixeo;
 use local_dixeo\api\client;
 use local_dixeo\dto\operation_result;
 use local_dixeo\dto\tutor_message;
+use local_dixeo\external\service_factory;
+use local_dixeo\service\file_sync_service;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_service;
 
@@ -37,6 +39,21 @@ use local_dixeo\service\tutor_service;
  * @covers \local_dixeo\service\tutor_service
  */
 final class tutor_service_test extends \advanced_testcase {
+    protected function tearDown(): void {
+        service_factory::reset();
+        parent::tearDown();
+    }
+
+    /**
+     * Stub RAG sync so submit payload tests do not call the real Dixeo API.
+     */
+    private function stub_file_sync_service(): void {
+        $sync = $this->createMock(file_sync_service::class);
+        $sync->expects($this->once())
+            ->method('ensure_enabled_and_synchronized');
+        service_factory::set_test_file_sync_service($sync);
+    }
+
     public function test_get_conversation_initial_load_fetches_single_page(): void {
         $page = [];
         for ($i = 1; $i <= 50; $i++) {
@@ -131,6 +148,7 @@ final class tutor_service_test extends \advanced_testcase {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'page', 'version' => 1, 'url' => 'https://example.test/course/view.php?id=1'];
+        $this->stub_file_sync_service();
 
         $mockjob = $this->createMock(job_service::class);
         $mockjob->expects($this->once())
@@ -161,6 +179,7 @@ final class tutor_service_test extends \advanced_testcase {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'proactive', 'version' => 1, 'body' => 'Context line'];
+        $this->stub_file_sync_service();
 
         $mockjob = $this->createMock(job_service::class);
         $mockjob->expects($this->once())
