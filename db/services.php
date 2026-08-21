@@ -42,6 +42,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'capabilities' => 'local/dixeo:generate',
+        'readonlysession' => true,
     ],
 
     // Cancel a running job.
@@ -60,6 +61,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'capabilities' => '',
+        'readonlysession' => true,
     ],
 
     // Create a module from a completed job.
@@ -78,6 +80,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'capabilities' => 'local/dixeo:generate',
+        'readonlysession' => true,
     ],
 
     // Enable or disable file sync for a course.
