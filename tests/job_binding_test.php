@@ -313,9 +313,9 @@ final class job_binding_test extends \advanced_testcase {
     }
 
     public function test_get_job_status_allows_same_course_other_user(): void {
-        // Course-work model: any caller who may operate in the course can poll a peer's job.
+        // Course-shared jobs: any caller who may operate in the course can poll a peer's job.
         $repo = new job_repository();
-        $repo->register('job-peer', 15, 3, 'default', 'module_generate');
+        $this->register_course_job($repo, 'job-peer', 15, 3, 'default', 'module_generate', true);
 
         $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
             ->disableOriginalConstructor()
@@ -340,7 +340,7 @@ final class job_binding_test extends \advanced_testcase {
 
     public function test_get_job_status_allows_matching_course(): void {
         $repo = new job_repository();
-        $repo->register('job-ok', 15, 3, 'default', 'tutor_message');
+        $this->register_course_job($repo, 'job-ok', 15, 3, 'default', 'tutor_message');
 
         $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
             ->disableOriginalConstructor()
@@ -358,9 +358,47 @@ final class job_binding_test extends \advanced_testcase {
             ));
 
         $service = new job_service(null, $poller, $repo);
-        $status = $service->get_job_status('job-ok', 15);
+        // Pass the initiating userid so initiator-scoped access (release) still succeeds.
+        $status = $service->get_job_status('job-ok', 15, 3);
         $this->assertEquals('job-ok', $status->jobid);
         $this->assertTrue($status->is_completed());
+    }
+
+    /**
+     * Register a job, using course_shared when job_access_mode is available.
+     *
+     * @param job_repository $repo
+     * @param string $jobid
+     * @param int $courseid
+     * @param int $userid
+     * @param string $namespace
+     * @param string $operation
+     * @param bool $courseshared
+     */
+    private function register_course_job(
+        job_repository $repo,
+        string $jobid,
+        int $courseid,
+        int $userid,
+        string $namespace,
+        string $operation,
+        bool $courseshared = false
+    ): void {
+        if ($courseshared && enum_exists(\local_dixeo\job_access_mode::class)) {
+            $repo->register(
+                $jobid,
+                $courseid,
+                $userid,
+                $namespace,
+                $operation,
+                null,
+                null,
+                \local_dixeo\job_access_mode::COURSE_SHARED
+            );
+            return;
+        }
+
+        $repo->register($jobid, $courseid, $userid, $namespace, $operation);
     }
 
     public function test_get_job_status_rejects_same_course_peer_when_userid_required(): void {
