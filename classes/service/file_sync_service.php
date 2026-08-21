@@ -196,6 +196,11 @@ class file_sync_service {
      * @throws \moodle_exception When sync fails or times out.
      */
     public function ensure_enabled_and_synchronized(int $courseid, int $userid, int $timeoutseconds = 120): void {
+        // A confirmed-clean course stays clean until content changes, and content changes
+        // queue their own sync. Re-confirming on every message cost two hub round trips.
+        if (self::recently_verified($courseid)) {
+            return;
+        }
         if (!$this->is_enabled($courseid)) {
             if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
                 return;
@@ -209,6 +214,7 @@ class file_sync_service {
         while (time() < $deadline) {
             $status = $this->poll_status($courseid);
             if ($status->status === 'synchronized' || $status->status === 'none') {
+                self::mark_verified($courseid);
                 return;
             }
             if ($status->status === 'error') {
@@ -218,6 +224,38 @@ class file_sync_service {
         }
 
         throw new \moodle_exception('filesync_timeout', 'local_dixeo');
+    }
+
+    /**
+     * Whether this course was confirmed in sync recently enough to skip the blocking check.
+     *
+     * @param int $courseid The course ID.
+     * @return bool
+     */
+    private static function recently_verified(int $courseid): bool {
+        return \cache::make('local_dixeo', 'filesyncverified')->get((string) $courseid) !== false;
+    }
+
+    /**
+     * Record that this course was confirmed in sync.
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     */
+    private static function mark_verified(int $courseid): void {
+        \cache::make('local_dixeo', 'filesyncverified')->set((string) $courseid, time());
+    }
+
+    /**
+     * Drop the verified marker so the next RAG-backed job re-checks synchronization.
+     *
+     * Called when course content changes (new or updated activities and files).
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     */
+    public static function invalidate_verified(int $courseid): void {
+        \cache::make('local_dixeo', 'filesyncverified')->delete((string) $courseid);
     }
 
     /**
@@ -235,6 +273,7 @@ class file_sync_service {
 
         try {
             $userid = $userid ?? (int) ($USER->id ?? 0);
+            self::invalidate_verified($courseid);
             if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
                 return;
             }
@@ -264,6 +303,7 @@ class file_sync_service {
 
         try {
             $userid = $userid ?? (int) ($USER->id ?? 0);
+            self::invalidate_verified($courseid);
             if (!$this->user_can_sync_files_in_course($courseid, $userid)) {
                 return;
             }
