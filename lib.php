@@ -53,7 +53,10 @@ function local_dixeo_extend_navigation_course(navigation_node $navigation, stdCl
         'courseid' => (int) $course->id,
     ]);
 
-    $navigation->add(
+    // Moodle removes the reports container when no report plugin populated it, so fall back to the course node.
+    $parent = $navigation->get('coursereports') ?: $navigation;
+
+    $parent->add(
         get_string('tutor_usage_report_nav', 'local_dixeo'),
         $url,
         navigation_node::TYPE_SETTING,

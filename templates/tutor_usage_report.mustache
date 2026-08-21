@@ -131,6 +131,7 @@
                     "mode": "normal",
                     "label": "Standard",
                     "value": "50",
+                    "description": "messages sent",
                     "tooltip": "Median 2.0 / Average 2.5",
                     "hastooltip": true,
                     "change": {"value": "+4.0% since last week", "positive": true, "negative": false}
@@ -139,6 +140,7 @@
                     "mode": "guide",
                     "label": "Guide",
                     "value": "40",
+                    "description": "messages sent",
                     "tooltip": "Median 1.0 / Average 1.5",
                     "hastooltip": true
                 },
@@ -146,6 +148,7 @@
                     "mode": "quiz",
                     "label": "Quiz",
                     "value": "20",
+                    "description": "quizzes submitted",
                     "tooltip": "Quizzes created: 3",
                     "hastooltip": true,
                     "isquiz": true
@@ -154,6 +157,7 @@
                     "mode": "teach",
                     "label": "Teach",
                     "value": "10",
+                    "description": "lessons created",
                     "tooltip": "Lessons created: 1",
                     "hastooltip": true,
                     "isteach": true
@@ -395,7 +399,7 @@
                          {{/hastooltip}}>
                         <div class="card-body">
                             <div class="text-muted">{{label}}</div>
-                            <div class="h4 mb-1">{{value}}</div>
+                            <div class="h4 mb-1">{{value}} <span class="small text-muted">{{description}}</span></div>
                             {{#change}}
                                 <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
                             {{/change}}
