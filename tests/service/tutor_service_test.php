@@ -1,6 +1,21 @@
 <?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
 /**
- * Tests for tutor conversation loading.
+ * Tests for tutor conversation loading and message submit payloads.
  *
  * @package    local_dixeo
  * @category   test
@@ -12,17 +27,16 @@ namespace local_dixeo;
 
 use local_dixeo\api\client;
 use local_dixeo\dto\operation_result;
+use local_dixeo\dto\tutor_message;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_service;
-use local_dixeo\dto\tutor_message;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
+ * Tests for {@see tutor_service} conversation loading and submit payloads.
+ *
  * @covers \local_dixeo\service\tutor_service
  */
 final class tutor_service_test extends \advanced_testcase {
-
     public function test_get_conversation_initial_load_fetches_single_page(): void {
         $page = [];
         for ($i = 1; $i <= 50; $i++) {
@@ -34,7 +48,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['limit'] === 50
                         && !isset($params['sinceId'])
                         && !isset($params['offset']);
@@ -60,7 +74,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['sinceId'] === 'm98' && $params['limit'] === 50;
                 })
             )
@@ -84,7 +98,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('get')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $params): bool {
+                $this->callback(function (array $params): bool {
                     return $params['offset'] === 50 && $params['limit'] === 50;
                 })
             )
@@ -123,7 +137,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('submit_job')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $payload) use ($context): bool {
+                $this->callback(function (array $payload) use ($context): bool {
                     return ($payload['role'] ?? '') === 'user'
                         && ($payload['message'] ?? '') === 'Hello'
                         && ($payload['mode'] ?? '') === tutor_message::MODE_GUIDE
@@ -153,7 +167,7 @@ final class tutor_service_test extends \advanced_testcase {
             ->method('submit_job')
             ->with(
                 '/v1/tutor/messages',
-                $this->callback(function(array $payload) use ($context): bool {
+                $this->callback(function (array $payload) use ($context): bool {
                     return ($payload['role'] ?? '') === 'system'
                         && ($payload['context'] ?? null) === $context
                         && ($payload['requireResponse'] ?? null) === true
@@ -235,6 +249,8 @@ final class tutor_service_test extends \advanced_testcase {
     }
 
     /**
+     * Build a raw API message fixture for conversation tests.
+     *
      * @param string $id
      * @param int $index Used to build distinct timestamps.
      * @return array
