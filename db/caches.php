@@ -49,4 +49,12 @@ $definitions = [
         'simpledata' => false,
         'ttl' => 5 * 60, // 5 minutes
     ],
+    // Marks courses whose files were recently confirmed in sync, so RAG-backed jobs
+    // (tutor messages, module generation) can skip the blocking trigger-and-poll round trips.
+    'filesyncverified' => [
+        'mode' => \cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => true,
+        'ttl' => 5 * 60, // 5 minutes
+    ],
 ];
