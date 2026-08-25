@@ -37,10 +37,10 @@ class tutor_usage_aggregator {
     public const CONFIG_LAST_AGGREGATED_DAY = 'tutor_usage_last_aggregated_day';
 
     /** @var int Idle timeout before a session closes (seconds). */
-    public const SESSION_TIMEOUT = 3600;
+    public const SESSION_TIMEOUT = 900;
 
-    /** @var int Minimum session duration (seconds). */
-    public const SESSION_MIN_DURATION = 300;
+    /** @var int Duration credited to every session on top of its message span (seconds). */
+    public const SESSION_BASE_DURATION = 300;
 
     /** @var int Maximum days to catch up in one task run (and on first run). */
     public const MAX_CATCHUP_DAYS = 180;
@@ -497,7 +497,7 @@ class tutor_usage_aggregator {
 
         $timestart = (int) $open->timestart;
         $timeend = (int) $open->lastmessage;
-        $duration = max($timeend - $timestart, self::SESSION_MIN_DURATION);
+        $duration = self::calculate_duration($timestart, $timeend);
 
         $DB->insert_record(self::TABLE_SESSION, (object) [
             'userid' => (int) $open->userid,
@@ -587,11 +587,15 @@ class tutor_usage_aggregator {
     /**
      * Compute session duration from first/last message timestamps.
      *
+     * The base duration is always credited on top of the message span, since the
+     * last message of a session is still read and acted on after it arrives. A
+     * single-message session therefore counts as the base duration alone.
+     *
      * @param int $timestart First message time.
      * @param int $timeend Last message time.
      * @return int Duration in seconds.
      */
     public static function calculate_duration(int $timestart, int $timeend): int {
-        return max($timeend - $timestart, self::SESSION_MIN_DURATION);
+        return max(0, $timeend - $timestart) + self::SESSION_BASE_DURATION;
     }
 }

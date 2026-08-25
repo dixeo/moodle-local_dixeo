@@ -17,6 +17,7 @@
 namespace local_dixeo;
 
 use local_dixeo\dto\tutor_message;
+use local_dixeo\output\tutor_usage_report_page;
 use local_dixeo\output\tutor_usage_report_request;
 use local_dixeo\service\tutor_usage_aggregator;
 use local_dixeo\service\tutor_usage_recorder;
@@ -33,6 +34,7 @@ use local_dixeo\service\tutor_usage_report_service;
  * @covers \local_dixeo\service\tutor_usage_aggregator
  * @covers \local_dixeo\service\tutor_usage_report_service
  * @covers \local_dixeo\output\tutor_usage_report_request
+ * @covers \local_dixeo\output\tutor_usage_report_page
  */
 final class tutor_usage_report_test extends \advanced_testcase {
     /**
@@ -75,18 +77,36 @@ final class tutor_usage_report_test extends \advanced_testcase {
     }
 
     /**
-     * Session duration uses the 5-minute minimum for a single message.
+     * The base duration is credited on top of the message span of every session.
      */
-    public function test_session_minimum_duration(): void {
+    public function test_session_duration_adds_base_duration(): void {
         $this->assertSame(
-            tutor_usage_aggregator::SESSION_MIN_DURATION,
+            tutor_usage_aggregator::SESSION_BASE_DURATION,
             tutor_usage_aggregator::calculate_duration(1000, 1000)
         );
-        $this->assertSame(600, tutor_usage_aggregator::calculate_duration(1000, 1600));
+        $this->assertSame(
+            600 + tutor_usage_aggregator::SESSION_BASE_DURATION,
+            tutor_usage_aggregator::calculate_duration(1000, 1600)
+        );
     }
 
     /**
-     * Idle gap above one hour closes a session; aggregation is idempotent.
+     * Durations are rendered in seconds, minutes, hours, or days without unit overflow.
+     */
+    public function test_format_duration_units(): void {
+        $this->assertSame('45s', tutor_usage_report_service::format_duration(45));
+        $this->assertSame('15 min', tutor_usage_report_service::format_duration(15 * MINSECS));
+        $this->assertSame('2h 15m', tutor_usage_report_service::format_duration(2 * HOURSECS + 15 * MINSECS));
+        $this->assertSame('1h 59m', tutor_usage_report_service::format_duration(2 * HOURSECS - 30));
+        $this->assertSame('1d 0h 0m', tutor_usage_report_service::format_duration(DAYSECS));
+        $this->assertSame(
+            '3d 4h 5m',
+            tutor_usage_report_service::format_duration(3 * DAYSECS + 4 * HOURSECS + 5 * MINSECS)
+        );
+    }
+
+    /**
+     * Idle gap above the session timeout closes a session; aggregation is idempotent.
      */
     public function test_aggregator_closes_timed_out_sessions_idempotently(): void {
         global $DB;
@@ -124,7 +144,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertCount(2, $sessions);
         $firstsession = reset($sessions);
         $this->assertSame(2, (int) $firstsession->messagecount);
-        $this->assertSame(600, (int) $firstsession->duration);
+        $this->assertSame(600 + tutor_usage_aggregator::SESSION_BASE_DURATION, (int) $firstsession->duration);
     }
 
     /**
@@ -252,6 +272,58 @@ final class tutor_usage_report_test extends \advanced_testcase {
             'rolescope' => tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
         ]);
         $this->assertSame($studentids, $request->resolved_roleids());
+
+        // Requests without an explicit scope, and invalid values, fall back to students.
+        $this->assertSame(
+            tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+            tutor_usage_report_service::ROLE_SCOPE_DEFAULT
+        );
+        $this->assertSame(
+            tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+            tutor_usage_report_request::from_renderable_params([])->rolescope
+        );
+        $this->assertSame(
+            tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+            tutor_usage_report_service::normalize_role_scope('bogus')
+        );
+    }
+
+    /**
+     * The role scope selector links switch scope while keeping the active period.
+     */
+    public function test_role_scope_selector_links(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $PAGE->set_url('/local/dixeo/tutor_usage_report.php');
+
+        $page = new tutor_usage_report_page([
+            'level' => tutor_usage_report_service::LEVEL_SITE,
+            'view' => tutor_usage_report_service::VIEW_WEEK,
+            'anchor' => '2026-07-14',
+            'rolescope' => tutor_usage_report_service::ROLE_SCOPE_TEACHERS,
+        ]);
+        $data = $page->export_for_template($PAGE->get_renderer('core'));
+
+        $scopes = [];
+        foreach ($data['rolescopes'] as $scope) {
+            $scopes[$scope['id']] = $scope;
+            $this->assertStringContainsString('anchor=2026-07-14', $scope['url']);
+        }
+
+        $this->assertTrue($scopes[tutor_usage_report_service::ROLE_SCOPE_TEACHERS]['active']);
+        $this->assertFalse($scopes[tutor_usage_report_service::ROLE_SCOPE_STUDENTS]['active']);
+
+        // Students is the default scope, so only the other scopes carry the param.
+        $this->assertStringNotContainsString(
+            'rolescope',
+            $scopes[tutor_usage_report_service::ROLE_SCOPE_STUDENTS]['url']
+        );
+        $this->assertStringContainsString(
+            'rolescope=all',
+            $scopes[tutor_usage_report_service::ROLE_SCOPE_ALL]['url']
+        );
     }
 
     /**
@@ -357,6 +429,266 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertSame(1, (int) $userkpis['engagement']['raw']);
         $this->assertStringContainsString('1', $userkpis['engagement']['value']);
         $this->assertStringContainsString('Last active:', $userkpis['engagement']['tooltip']);
+        $this->assertTrue($userkpis['engagement']['hastooltip']);
+
+        // Median/average repeat the value for a single user, so those tooltips are hidden.
+        foreach (['messages', 'sessions', 'duration'] as $kpi) {
+            $this->assertTrue($kpis[$kpi]['hastooltip'], "{$kpi} tooltip expected at course level");
+            $this->assertFalse($userkpis[$kpi]['hastooltip'], "{$kpi} tooltip expected to be hidden");
+            $this->assertArrayNotHasKey('tooltip', $userkpis[$kpi]);
+        }
+        // Quiz is the only mode whose tooltip reports something other than the card value.
+        foreach ($userkpis['modes'] as $mode) {
+            $this->assertSame($mode['mode'] === tutor_message::MODE_QUIZ, $mode['hastooltip']);
+            $this->assertNotEmpty($mode['info']);
+        }
+        foreach ($kpis['modes'] as $mode) {
+            $this->assertSame($mode['mode'] !== tutor_message::MODE_TEACH, $mode['hastooltip']);
+        }
+
+        // Every KPI carries the description shown by its info icon.
+        foreach (['adoption', 'engagement', 'messages', 'sessions', 'duration'] as $kpi) {
+            $this->assertNotEmpty($kpis[$kpi]['info'], "{$kpi} description missing");
+            $this->assertStringNotContainsString('[[', $kpis[$kpi]['info']);
+        }
+        $this->assertNotSame($kpis['engagement']['info'], $userkpis['engagement']['info']);
+
+        // Above user level, engagement is active days averaged over active users.
+        $this->assertSame(1.0, (float) $kpis['engagement']['raw']);
+        $this->assertStringContainsString('1.0', $kpis['engagement']['value']);
+        $this->assertStringContainsString('Median 1.0 / Average 1.0', $kpis['engagement']['tooltip']);
+    }
+
+    /**
+     * Summary rows can be sorted by any column, in either direction.
+     */
+    public function test_summary_rows_sorting_by_column(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $first = $this->getDataGenerator()->create_and_enrol($course, 'student', [
+            'firstname' => 'Anna',
+            'lastname' => 'Alpha',
+        ]);
+        $second = $this->getDataGenerator()->create_and_enrol($course, 'student', [
+            'firstname' => 'Bob',
+            'lastname' => 'Beta',
+        ]);
+        $third = $this->getDataGenerator()->create_and_enrol($course, 'student', [
+            'firstname' => 'Cara',
+            'lastname' => 'Gamma',
+        ]);
+
+        $recorder = new tutor_usage_recorder();
+        $now = time();
+        $messagecounts = [
+            (int) $first->id => 1,
+            (int) $second->id => 5,
+            (int) $third->id => 3,
+        ];
+        foreach ($messagecounts as $userid => $count) {
+            for ($i = 0; $i < $count; $i++) {
+                $recorder->record_message(
+                    $userid,
+                    (int) $course->id,
+                    tutor_message::MODE_NORMAL,
+                    0,
+                    $now - HOURSECS + $i
+                );
+            }
+        }
+
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        $service = new tutor_usage_report_service();
+        $sortedids = function (
+            string $sort = tutor_usage_report_service::SORT_DEFAULT,
+            string $dir = ''
+        ) use (
+            $service,
+            $course,
+            $roleids,
+            $now
+        ): array {
+            $result = $service->get_rows(
+                tutor_usage_report_service::LEVEL_COURSE,
+                (int) $course->id,
+                0,
+                $now - DAYSECS,
+                $now + HOURSECS,
+                $roleids,
+                0,
+                100,
+                [],
+                $sort,
+                $dir
+            );
+            return array_map('intval', array_column($result['rows'], 'key'));
+        };
+
+        // Messages descending is the default, and metric columns start descending.
+        $bymessagesdesc = [(int) $second->id, (int) $third->id, (int) $first->id];
+        $this->assertSame($bymessagesdesc, $sortedids());
+        $this->assertSame($bymessagesdesc, $sortedids('messages'));
+        $this->assertSame(array_reverse($bymessagesdesc), $sortedids('messages', 'asc'));
+
+        // Text columns start ascending.
+        $byname = [(int) $first->id, (int) $second->id, (int) $third->id];
+        $this->assertSame($byname, $sortedids('name'));
+        $this->assertSame(array_reverse($byname), $sortedids('name', 'desc'));
+
+        // Unknown columns, unknown directions, and columns absent at this level fall back to the default.
+        $this->assertSame($bymessagesdesc, $sortedids('bogus'));
+        $this->assertSame($bymessagesdesc, $sortedids('messages', 'sideways'));
+        $this->assertSame($bymessagesdesc, $sortedids('moduletype'));
+
+        $this->assertSame(
+            tutor_usage_report_service::SORT_DEFAULT,
+            tutor_usage_report_service::normalize_sort('sessions', tutor_usage_report_service::LEVEL_USER)
+        );
+        $this->assertSame(
+            'sessions',
+            tutor_usage_report_service::normalize_sort('sessions', tutor_usage_report_service::LEVEL_COURSE)
+        );
+    }
+
+    /**
+     * Table headers expose sort links that flip the active column and keep the active period.
+     */
+    public function test_summary_table_column_sort_links(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $PAGE->set_url('/local/dixeo/tutor_usage_report.php');
+
+        $params = [
+            'level' => tutor_usage_report_service::LEVEL_SITE,
+            'view' => tutor_usage_report_service::VIEW_WEEK,
+            'anchor' => '2026-07-14',
+        ];
+        $page = new tutor_usage_report_page($params);
+        $data = $page->export_for_template($PAGE->get_renderer('core'));
+
+        $columns = [];
+        foreach ($data['columns'] as $column) {
+            $columns[$column['key']] = $column;
+            $this->assertStringContainsString('anchor=2026-07-14', $column['url']);
+        }
+        $this->assertSame(
+            tutor_usage_report_service::table_column_keys(tutor_usage_report_service::LEVEL_SITE),
+            array_keys($columns)
+        );
+
+        // Messages is sorted descending by default, so its link reverses the direction.
+        $this->assertTrue($columns['messages']['active']);
+        $this->assertTrue($columns['messages']['descending']);
+        $this->assertSame('descending', $columns['messages']['ariasort']);
+        $this->assertStringContainsString('sortdir=asc', $columns['messages']['url']);
+
+        // Other columns link to their own natural direction.
+        $this->assertFalse($columns['name']['active']);
+        $this->assertSame('none', $columns['name']['ariasort']);
+        $this->assertStringContainsString('sort=name', $columns['name']['url']);
+        $this->assertStringContainsString('sortdir=asc', $columns['name']['url']);
+        $this->assertStringContainsString('sortdir=desc', $columns['sessions']['url']);
+
+        // A non-default sort rides along with the other report links.
+        $sorted = new tutor_usage_report_page($params + [
+            'sort' => 'sessions',
+            'sortdir' => tutor_usage_report_service::SORT_ASC,
+        ]);
+        $sorteddata = $sorted->export_for_template($PAGE->get_renderer('core'));
+        $this->assertStringContainsString('sort=sessions', $sorteddata['period']['prevurl']);
+        $this->assertStringContainsString('sortdir=asc', $sorteddata['period']['prevurl']);
+        $this->assertStringContainsString('sort=sessions', $sorteddata['rolescopes'][0]['url']);
+        foreach ($sorteddata['columns'] as $column) {
+            if ($column['key'] === 'sessions') {
+                $this->assertTrue($column['ascending']);
+                $this->assertSame('ascending', $column['ariasort']);
+                $this->assertStringContainsString('sortdir=desc', $column['url']);
+            }
+        }
+    }
+
+    /**
+     * Summary rows expose engagement per level and total session duration in the sessions tooltip.
+     */
+    public function test_summary_rows_report_engagement_and_total_duration(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $frequent = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $occasional = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $recorder = new tutor_usage_recorder();
+        $aggregator = new tutor_usage_aggregator();
+
+        $dayonestart = $aggregator->get_day_start(time() - (2 * DAYSECS));
+        $daytwostart = $aggregator->get_day_start(time() - DAYSECS);
+        $dayone = $dayonestart + HOURSECS;
+        $daytwo = $daytwostart + HOURSECS;
+
+        // The frequent learner is active on two days, the occasional one on a single day.
+        $recorder->record_message((int) $frequent->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $dayone);
+        $recorder->record_message((int) $frequent->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $dayone + 600);
+        $recorder->record_message((int) $frequent->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $daytwo);
+        $recorder->record_message((int) $occasional->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $daytwo);
+
+        $timeend = $daytwostart + DAYSECS;
+        $aggregator->close_timed_out_open_sessions($timeend);
+
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        $service = new tutor_usage_report_service();
+
+        $siterows = $service->get_rows(
+            tutor_usage_report_service::LEVEL_SITE,
+            0,
+            0,
+            $dayonestart,
+            $timeend,
+            $roleids,
+            0,
+            100
+        );
+        $siterow = null;
+        foreach ($siterows['rows'] as $row) {
+            if ((int) $row['key'] === (int) $course->id) {
+                $siterow = $row;
+            }
+        }
+        $this->assertNotNull($siterow);
+
+        // Three active days over two active users.
+        $this->assertSame(1.5, (float) $siterow['engagement']);
+        $this->assertStringContainsString('1.5', $siterow['engagementformatted']);
+        // Three sessions of 600 + 300, 300, and 300 seconds.
+        $this->assertSame(3, (int) $siterow['sessions']);
+        $this->assertStringContainsString('25 min', $siterow['sessionstooltip']);
+
+        $courserows = $service->get_rows(
+            tutor_usage_report_service::LEVEL_COURSE,
+            (int) $course->id,
+            0,
+            $dayonestart,
+            $timeend,
+            $roleids,
+            0,
+            100
+        );
+        $byuser = [];
+        foreach ($courserows['rows'] as $row) {
+            $byuser[(int) $row['key']] = $row;
+        }
+
+        // A user row counts that user's own active days, with no decimals.
+        $this->assertSame(2.0, (float) $byuser[(int) $frequent->id]['engagement']);
+        $this->assertStringContainsString('2', $byuser[(int) $frequent->id]['engagementformatted']);
+        $this->assertStringNotContainsString('.', $byuser[(int) $frequent->id]['engagementformatted']);
+        $this->assertSame(1.0, (float) $byuser[(int) $occasional->id]['engagement']);
+        // Two sessions of 900 and 300 seconds: 10 minutes on average, 20 in total.
+        $this->assertStringContainsString('10 min', $byuser[(int) $frequent->id]['sessionstooltip']);
+        $this->assertStringContainsString('20 min', $byuser[(int) $frequent->id]['sessionstooltip']);
     }
 
     /**

@@ -37,18 +37,16 @@ define([
     };
 
     /**
-     * Wire period prev/next controls to submit the filter form with updated anchor.
+     * Reload the report as soon as a custom range date changes, so no apply button is needed.
      */
-    const initPeriodNav = () => {
-        const anchorInput = document.getElementById('tutor-usage-report-anchor');
-        if (!anchorInput) {
+    const initDateRange = () => {
+        const form = document.querySelector('[data-tutor-usage-report-dates]');
+        if (!form) {
             return;
         }
 
-        document.querySelectorAll('[data-tutor-usage-report-anchor]').forEach((button) => {
-            button.addEventListener('click', () => {
-                anchorInput.value = button.getAttribute('data-tutor-usage-report-anchor') || '';
-            });
+        form.querySelectorAll('input[type="date"]').forEach((input) => {
+            input.addEventListener('change', () => form.submit());
         });
     };
 
@@ -275,20 +273,58 @@ define([
     };
 
     /**
-     * Enable Bootstrap tooltips on KPI cards and summary table cells.
+     * Enable Bootstrap tooltips on KPI cards, KPI info icons, and summary table cells.
      */
     const initTooltips = () => {
-        const nodes = document.querySelectorAll(
+        if (typeof $.fn.tooltip !== 'function') {
+            return;
+        }
+
+        const cards = document.querySelectorAll(
             '.dixeo-tutor-usage-report-kpi[data-toggle="tooltip"],' +
             '.dixeo-tutor-usage-report-stat[data-toggle="tooltip"]'
         );
-        if (!nodes.length || typeof $.fn.tooltip !== 'function') {
+        if (cards.length) {
+            $(cards).tooltip({
+                container: 'body',
+                placement: 'bottom',
+                trigger: 'hover focus',
+            });
+        }
+
+        // These deliberately avoid data-toggle="tooltip" and title: the theme delegates a hover
+        // tooltip to every such element, which would reintroduce hover on the info icons.
+        const infoicons = document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]');
+        if (!infoicons.length) {
             return;
         }
-        $(nodes).tooltip({
-            container: 'body',
-            placement: 'bottom',
-            trigger: 'hover focus',
+
+        infoicons.forEach((icon) => {
+            $(icon).tooltip({
+                container: 'body',
+                placement: 'top',
+                trigger: 'click',
+                title: icon.dataset.info || '',
+            });
+        });
+
+        const $infoicons = $(infoicons);
+
+        // A click only toggles its own tooltip, so close any other one that is open.
+        $infoicons.on('show.bs.tooltip', (event) => {
+            $infoicons.not(event.currentTarget).tooltip('hide');
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.dixeo-tutor-usage-report-info')) {
+                $infoicons.tooltip('hide');
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                $infoicons.tooltip('hide');
+            }
         });
     };
 
@@ -296,7 +332,7 @@ define([
      * Initialize tutor usage report UI.
      */
     const init = () => {
-        initPeriodNav();
+        initDateRange();
         initTooltips();
         initCharts();
     };

@@ -67,6 +67,86 @@ class tutor_usage_report_service {
     /** @var string Role filter: student archetype only. */
     public const ROLE_SCOPE_STUDENTS = 'students';
 
+    /** @var string Role filter applied when the request does not specify one. */
+    public const ROLE_SCOPE_DEFAULT = self::ROLE_SCOPE_STUDENTS;
+
+    /** @var string Ascending sort direction. */
+    public const SORT_ASC = 'asc';
+
+    /** @var string Descending sort direction. */
+    public const SORT_DESC = 'desc';
+
+    /** @var string Summary table column sorted when the request does not specify one. */
+    public const SORT_DEFAULT = 'messages';
+
+    /** @var array<string, string> Columns compared as text, mapped to the row field holding their label. */
+    protected const TEXT_SORT_FIELDS = [
+        'name' => 'namelabel',
+        'moduletype' => 'moduletypelabel',
+    ];
+
+    /**
+     * Summary table columns for a level, in display order.
+     *
+     * @param string $level Report level.
+     * @return string[] Column keys.
+     */
+    public static function table_column_keys(string $level): array {
+        $keys = ['name'];
+        if ($level !== self::LEVEL_USER) {
+            $keys[] = 'engagement';
+        }
+        if ($level === self::LEVEL_SITE) {
+            $keys[] = 'adoption';
+        }
+        if ($level === self::LEVEL_USER) {
+            $keys[] = 'moduletype';
+        }
+        array_push($keys, 'messages', 'normal', 'guide', 'quiz', 'teach');
+        if ($level !== self::LEVEL_USER) {
+            $keys[] = 'sessions';
+        }
+        $keys[] = 'lastactive';
+
+        return $keys;
+    }
+
+    /**
+     * Normalize a summary table sort request value.
+     *
+     * @param string $sort Raw column key.
+     * @param string $level Report level.
+     * @return string A column key available at this level.
+     */
+    public static function normalize_sort(string $sort, string $level): string {
+        return in_array($sort, self::table_column_keys($level), true) ? $sort : self::SORT_DEFAULT;
+    }
+
+    /**
+     * Direction a column is sorted in when it is first clicked.
+     *
+     * Text reads naturally from A to Z, while metrics are most useful highest first.
+     *
+     * @param string $sort Column key.
+     * @return string
+     */
+    public static function default_sort_direction(string $sort): string {
+        return isset(self::TEXT_SORT_FIELDS[$sort]) ? self::SORT_ASC : self::SORT_DESC;
+    }
+
+    /**
+     * Normalize a sort direction request value.
+     *
+     * @param string $direction Raw direction.
+     * @param string $sort Column key the direction applies to.
+     * @return string
+     */
+    public static function normalize_sort_direction(string $direction, string $sort): string {
+        return in_array($direction, [self::SORT_ASC, self::SORT_DESC], true)
+            ? $direction
+            : self::default_sort_direction($sort);
+    }
+
     /**
      * Allowed role-scope filter values.
      *
@@ -87,7 +167,7 @@ class tutor_usage_report_service {
      * @return string One of role_scopes().
      */
     public static function normalize_role_scope(string $scope): string {
-        return in_array($scope, self::role_scopes(), true) ? $scope : self::ROLE_SCOPE_ALL;
+        return in_array($scope, self::role_scopes(), true) ? $scope : self::ROLE_SCOPE_DEFAULT;
     }
 
     /**
@@ -538,7 +618,7 @@ class tutor_usage_report_service {
             $previous = $this->compute_kpi_metrics($level, $courseid, $userid, $prevtimestart, $prevtimeend, $roleids);
         }
 
-        return $this->format_kpis($current, $previous, $view);
+        return $this->format_kpis($current, $previous, $view, $level);
     }
 
     /**
@@ -700,6 +780,9 @@ class tutor_usage_report_service {
      * @param int[] $roleids Role filter.
      * @param int $page Page number (0-based).
      * @param int $perpage Rows per page.
+     * @param array $linkparams Extra URL parameters to carry into drill-down links (period, filters).
+     * @param string $sort Column key to sort by.
+     * @param string $sortdir Sort direction (asc|desc), defaulting to the column's natural direction.
      * @return array{rows: array, total: int}
      */
     public function get_rows(
@@ -710,26 +793,23 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids,
         int $page = 0,
-        int $perpage = 50
+        int $perpage = 50,
+        array $linkparams = [],
+        string $sort = self::SORT_DEFAULT,
+        string $sortdir = ''
     ): array {
         $aggregates = $this->aggregate_row_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids);
         $rows = [];
 
         foreach ($aggregates as $key => $metrics) {
-            $row = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids);
+            $row = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids, $linkparams);
             if ($level === self::LEVEL_USER && $this->should_hide_zero_usage_excluded_activity($row)) {
                 continue;
             }
             $rows[] = $row;
         }
 
-        usort($rows, static function (array $a, array $b): int {
-            $bymessages = ($b['messages'] ?? 0) <=> ($a['messages'] ?? 0);
-            if ($bymessages !== 0) {
-                return $bymessages;
-            }
-            return strcasecmp((string) ($a['namelabel'] ?? ''), (string) ($b['namelabel'] ?? ''));
-        });
+        $rows = $this->sort_rows($rows, $level, $sort, $sortdir);
 
         $total = count($rows);
         $offset = max(0, $page) * max(1, $perpage);
@@ -742,29 +822,65 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Column definitions for dataformat export.
+     * Sort summary rows by one column, falling back to name for equal values.
+     *
+     * @param array $rows Formatted summary rows.
+     * @param string $level Report level.
+     * @param string $sort Column key to sort by.
+     * @param string $sortdir Sort direction (asc|desc).
+     * @return array
+     */
+    protected function sort_rows(array $rows, string $level, string $sort, string $sortdir): array {
+        $sort = self::normalize_sort($sort, $level);
+        $direction = self::normalize_sort_direction($sortdir, $sort) === self::SORT_ASC ? 1 : -1;
+        $textfield = self::TEXT_SORT_FIELDS[$sort] ?? null;
+
+        usort($rows, static function (array $a, array $b) use ($sort, $textfield, $direction): int {
+            if ($textfield !== null) {
+                $compared = strcasecmp((string) ($a[$textfield] ?? ''), (string) ($b[$textfield] ?? ''));
+            } else {
+                $compared = ($a[$sort] ?? 0) <=> ($b[$sort] ?? 0);
+            }
+            if ($compared !== 0) {
+                return $direction * $compared;
+            }
+            // Equal values keep a stable, readable order regardless of direction.
+            return strcasecmp((string) ($a['namelabel'] ?? ''), (string) ($b['namelabel'] ?? ''));
+        });
+
+        return $rows;
+    }
+
+    /**
+     * Summary table column labels for a level, in display order.
+     *
+     * Shared by the rendered table header and the dataformat export.
      *
      * @param string $level Report level (site|course|user).
-     * @return array<string, string>
+     * @return array<string, string> Column key to label.
      */
-    public function get_export_columns(string $level = self::LEVEL_SITE): array {
-        $columns = [
-            'name' => get_string('tutor_usage_report_column_name', 'local_dixeo'),
-        ];
-        if ($level === self::LEVEL_SITE) {
-            $columns['adoption'] = get_string('tutor_usage_report_kpi_adoption', 'local_dixeo');
+    public function get_columns(string $level = self::LEVEL_SITE): array {
+        $columns = [];
+        foreach (self::table_column_keys($level) as $key) {
+            $columns[$key] = self::column_label($key);
         }
-        if ($level === self::LEVEL_USER) {
-            $columns['moduletype'] = get_string('tutor_usage_report_column_moduletype', 'local_dixeo');
-        }
-        $columns['messages'] = get_string('tutor_usage_report_column_messages', 'local_dixeo');
-        $columns['normal'] = get_string('tutor_usage_report_column_standard', 'local_dixeo');
-        $columns['guide'] = get_string('tutor_usage_report_column_guide', 'local_dixeo');
-        $columns['quiz'] = get_string('tutor_usage_report_column_quiz', 'local_dixeo');
-        $columns['teach'] = get_string('tutor_usage_report_column_teach', 'local_dixeo');
-        $columns['sessions'] = get_string('tutor_usage_report_column_sessions', 'local_dixeo');
-        $columns['lastactive'] = get_string('tutor_usage_report_column_lastactive', 'local_dixeo');
         return $columns;
+    }
+
+    /**
+     * Label for a summary table column.
+     *
+     * @param string $key Column key.
+     * @return string
+     */
+    protected static function column_label(string $key): string {
+        return match ($key) {
+            'engagement' => get_string('tutor_usage_report_kpi_engagement', 'local_dixeo'),
+            'adoption' => get_string('tutor_usage_report_kpi_adoption', 'local_dixeo'),
+            'moduletype' => get_string('tutor_usage_report_column_moduletype', 'local_dixeo'),
+            'normal' => get_string('tutor_usage_report_column_standard', 'local_dixeo'),
+            default => get_string('tutor_usage_report_column_' . $key, 'local_dixeo'),
+        };
     }
 
     /**
@@ -776,6 +892,8 @@ class tutor_usage_report_service {
      * @param int $timestart Period start.
      * @param int $timeend Period end.
      * @param int[] $roleids Role filter.
+     * @param string $sort Column key to sort by.
+     * @param string $sortdir Sort direction (asc|desc).
      * @return array<int, array<string, string|int>>
      */
     public function get_export_rows(
@@ -784,15 +902,32 @@ class tutor_usage_report_service {
         int $userid,
         int $timestart,
         int $timeend,
-        array $roleids
+        array $roleids,
+        string $sort = self::SORT_DEFAULT,
+        string $sortdir = ''
     ): array {
-        $result = $this->get_rows($level, $courseid, $userid, $timestart, $timeend, $roleids, 0, PHP_INT_MAX);
+        $result = $this->get_rows(
+            $level,
+            $courseid,
+            $userid,
+            $timestart,
+            $timeend,
+            $roleids,
+            0,
+            PHP_INT_MAX,
+            [],
+            $sort,
+            $sortdir
+        );
         $export = [];
 
         foreach ($result['rows'] as $row) {
             $item = [
                 'name' => $row['namelabel'],
             ];
+            if ($level !== self::LEVEL_USER) {
+                $item['engagement'] = $row['engagementformatted'] ?? '';
+            }
             if ($level === self::LEVEL_SITE) {
                 $item['adoption'] = $row['adoptionformatted'] ?? '';
             }
@@ -804,7 +939,9 @@ class tutor_usage_report_service {
             $item['guide'] = $row['guideformatted'];
             $item['quiz'] = $row['quizformatted'];
             $item['teach'] = $row['teachformatted'];
-            $item['sessions'] = $row['sessionsformatted'];
+            if ($level !== self::LEVEL_USER) {
+                $item['sessions'] = $row['sessionsformatted'];
+            }
             $item['lastactive'] = $row['lastactiveformatted'];
             $export[] = $item;
         }
@@ -856,19 +993,19 @@ class tutor_usage_report_service {
         $lessoncreated = 0;
         $activeusers = [];
         $activedays = [];
+        $activedaysbyuser = [];
         $lastactive = 0;
         $messagesbyuser = array_fill_keys($scopeusers, 0);
 
         foreach ($events as $event) {
             $uid = (int) $event->userid;
             $eventtime = (int) $event->timecreated;
+            $isactivity = false;
             if ($event->eventtype === tutor_usage_recorder::EVENT_MESSAGE) {
                 $messages++;
                 $mode = tutor_message::normalize_mode((string) $event->mode);
                 $modecounts[$mode] = ($modecounts[$mode] ?? 0) + 1;
-                $activeusers[$uid] = true;
-                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
-                $lastactive = max($lastactive, $eventtime);
+                $isactivity = true;
                 if (array_key_exists($uid, $messagesbyuser)) {
                     $messagesbyuser[$uid]++;
                 }
@@ -877,13 +1014,17 @@ class tutor_usage_report_service {
                 }
             } else if ($event->eventtype === tutor_usage_recorder::EVENT_QUIZ_CREATED) {
                 $quizcreated++;
-                $activeusers[$uid] = true;
-                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
-                $lastactive = max($lastactive, $eventtime);
+                $isactivity = true;
             } else if ($event->eventtype === tutor_usage_recorder::EVENT_LESSON_CREATED) {
                 $lessoncreated++;
+                $isactivity = true;
+            }
+
+            if ($isactivity) {
+                $day = userdate($eventtime, '%Y-%m-%d');
                 $activeusers[$uid] = true;
-                $activedays[userdate($eventtime, '%Y-%m-%d')] = true;
+                $activedays[$day] = true;
+                $activedaysbyuser[$uid][$day] = true;
                 $lastactive = max($lastactive, $eventtime);
             }
         }
@@ -905,6 +1046,7 @@ class tutor_usage_report_service {
         $sessionsperuser = $this->build_per_user_values($activeuserids, $sessionsbyuser);
         $durationperuser = $this->build_per_user_values($activeuserids, $durationbyuser);
         $messagesperuser = $this->build_per_user_values($activeuserids, $messagesbyuser);
+        $activedaysperuser = $this->build_per_user_values($activeuserids, array_map('count', $activedaysbyuser));
 
         // Mode avg/median among users who sent that mode (standard / guide).
         $modeavg = array_fill_keys(self::MESSAGE_MODES, 0.0);
@@ -918,6 +1060,8 @@ class tutor_usage_report_service {
         return [
             'adoption' => $adoption,
             'activedays' => count($activedays),
+            'avgactivedays' => $this->average($activedaysperuser),
+            'medianactivedays' => $this->median($activedaysperuser),
             'lastactive' => $lastactive,
             'activeusers' => count($activeusers),
             'totalusers' => $totalusers,
@@ -944,9 +1088,15 @@ class tutor_usage_report_service {
      * @param array $current Current period metrics.
      * @param array|null $previous Previous period metrics.
      * @param string $view Active view mode (week|month|custom).
+     * @param string $level Report level, which decides how engagement is expressed.
      * @return array
      */
-    protected function format_kpis(array $current, ?array $previous, string $view = self::VIEW_WEEK): array {
+    protected function format_kpis(
+        array $current,
+        ?array $previous,
+        string $view = self::VIEW_WEEK,
+        string $level = self::LEVEL_SITE
+    ): array {
         $changesuffix = '';
         if ($view === self::VIEW_WEEK) {
             $changesuffix = ' ' . get_string('tutor_usage_report_change_since_week', 'local_dixeo');
@@ -978,6 +1128,17 @@ class tutor_usage_report_service {
             return $item;
         };
 
+        $isuserlevel = $level === self::LEVEL_USER;
+
+        // A single user's median and average are the KPI value itself, so that tooltip is dropped.
+        $addstatstooltip = static function (array $item, string $stringkey, array $args) use ($isuserlevel): array {
+            $item['hastooltip'] = !$isuserlevel;
+            if ($item['hastooltip']) {
+                $item['tooltip'] = get_string($stringkey, 'local_dixeo', (object) $args);
+            }
+            return $item;
+        };
+
         $activeformatted = number_format((int) ($current['activeusers'] ?? 0));
         $totalformatted = number_format((int) ($current['totalusers'] ?? 0));
         $inactiveformatted = number_format(max(
@@ -992,41 +1153,74 @@ class tutor_usage_report_service {
         $medianduration = self::format_duration((int) round((float) ($current['medianduration'] ?? 0)));
 
         $adoption = $build('adoption', static fn($v) => number_format($v, 1) . '%');
+        $adoption['info'] = get_string('tutor_usage_report_kpi_adoption_info', 'local_dixeo');
+        $adoption['hastooltip'] = true;
         $adoption['tooltip'] = get_string('tutor_usage_report_kpi_adoption_secondary', 'local_dixeo', (object) [
             'active' => $activeformatted,
             'inactive' => $inactiveformatted,
             'total' => $totalformatted,
         ]);
 
-        $activedays = (int) ($current['activedays'] ?? 0);
-        $engagement = $build('activedays', static function ($v) {
-            $days = (int) $v;
-            return get_string('tutor_usage_report_kpi_engagement_value', 'local_dixeo', $days);
-        });
-        $lastactive = (int) ($current['lastactive'] ?? 0);
-        $lastactiveformatted = $lastactive > 0
-            ? userdate($lastactive, get_string('strftimedatetime', 'langconfig'))
-            : get_string('tutor_usage_report_performance_na', 'local_dixeo');
-        $engagement['tooltip'] = get_string(
-            'tutor_usage_report_kpi_engagement_secondary',
-            'local_dixeo',
-            $lastactiveformatted
+        // A single user has their own active days; above that, days are averaged per active user so the
+        // number stays comparable instead of saturating at the number of days in the period.
+        $engagement = $build(
+            $isuserlevel ? 'activedays' : 'avgactivedays',
+            static function ($v) use ($isuserlevel) {
+                $days = $isuserlevel ? number_format((int) $v) : number_format((float) $v, 1);
+                return get_string('tutor_usage_report_kpi_engagement_value', 'local_dixeo', $days);
+            }
         );
+        $engagement['info'] = get_string(
+            $isuserlevel ? 'tutor_usage_report_kpi_engagement_info_user' : 'tutor_usage_report_kpi_engagement_info',
+            'local_dixeo'
+        );
+        $engagement['hastooltip'] = true;
+        if ($isuserlevel) {
+            $lastactive = (int) ($current['lastactive'] ?? 0);
+            $lastactiveformatted = $lastactive > 0
+                ? userdate($lastactive, get_string('strftimedatetime', 'langconfig'))
+                : get_string('tutor_usage_report_performance_na', 'local_dixeo');
+            $engagement['tooltip'] = get_string(
+                'tutor_usage_report_kpi_engagement_secondary',
+                'local_dixeo',
+                $lastactiveformatted
+            );
+        } else {
+            $engagement['tooltip'] = get_string(
+                'tutor_usage_report_kpi_engagement_secondary_aggregate',
+                'local_dixeo',
+                (object) [
+                    'median' => number_format((float) ($current['medianactivedays'] ?? 0), 1),
+                    'average' => number_format((float) ($current['avgactivedays'] ?? 0), 1),
+                ]
+            );
+        }
 
         $messages = $build('messages', static fn($v) => number_format((int) $v));
-        $messages['tooltip'] = get_string('tutor_usage_report_kpi_messages_secondary', 'local_dixeo', (object) [
+        $messages['info'] = get_string('tutor_usage_report_kpi_messages_info', 'local_dixeo');
+        $messages = $addstatstooltip($messages, 'tutor_usage_report_kpi_messages_secondary', [
             'median' => $medianmessages,
             'average' => $avgmessages,
         ]);
 
         $sessions = $build('sessions', static fn($v) => number_format((int) $v));
-        $sessions['tooltip'] = get_string('tutor_usage_report_kpi_sessions_secondary', 'local_dixeo', (object) [
+        $sessions['info'] = get_string(
+            'tutor_usage_report_kpi_sessions_info',
+            'local_dixeo',
+            format_time(tutor_usage_aggregator::SESSION_TIMEOUT)
+        );
+        $sessions = $addstatstooltip($sessions, 'tutor_usage_report_kpi_sessions_secondary', [
             'median' => $mediansessions,
             'average' => $avgsessions,
         ]);
 
         $duration = $build('duration', static fn($v) => self::format_duration((int) $v));
-        $duration['tooltip'] = get_string('tutor_usage_report_kpi_duration_secondary', 'local_dixeo', (object) [
+        $duration['info'] = get_string(
+            'tutor_usage_report_kpi_duration_info',
+            'local_dixeo',
+            format_time(tutor_usage_aggregator::SESSION_BASE_DURATION)
+        );
+        $duration = $addstatstooltip($duration, 'tutor_usage_report_kpi_duration_secondary', [
             'median' => $medianduration,
             'average' => $avgduration,
         ]);
@@ -1049,11 +1243,11 @@ class tutor_usage_report_service {
             'messages' => $messages,
             'sessions' => $sessions,
             'duration' => $duration,
-            'modes' => array_map(function (string $mode) use ($current, $previous, $formatchange) {
+            'modes' => array_map(function (string $mode) use ($current, $previous, $formatchange, $isuserlevel) {
                 $value = (int) ($current['modecounts'][$mode] ?? 0);
                 $tooltip = '';
                 $description = get_string('tutor_usage_report_kpi_mode_desc_messages', 'local_dixeo');
-                if ($mode === tutor_message::MODE_NORMAL || $mode === tutor_message::MODE_GUIDE) {
+                if (($mode === tutor_message::MODE_NORMAL || $mode === tutor_message::MODE_GUIDE) && !$isuserlevel) {
                     $tooltip = get_string('tutor_usage_report_kpi_messages_secondary', 'local_dixeo', (object) [
                         'median' => number_format((float) ($current['modemedian'][$mode] ?? 0), 1),
                         'average' => number_format((float) ($current['modeavg'][$mode] ?? 0), 1),
@@ -1066,11 +1260,7 @@ class tutor_usage_report_service {
                     );
                     $description = get_string('tutor_usage_report_kpi_mode_desc_quiz', 'local_dixeo');
                 } else if ($mode === tutor_message::MODE_TEACH) {
-                    $tooltip = get_string(
-                        'tutor_usage_report_kpi_mode_secondary_lesson',
-                        'local_dixeo',
-                        number_format((int) ($current['lessoncreated'] ?? 0))
-                    );
+                    // No tooltip: the lesson count it would show always equals the card value.
                     $description = get_string('tutor_usage_report_kpi_mode_desc_lesson', 'local_dixeo');
                 }
 
@@ -1082,6 +1272,7 @@ class tutor_usage_report_service {
                     'isquiz' => $mode === tutor_message::MODE_QUIZ,
                     'isteach' => $mode === tutor_message::MODE_TEACH,
                     'description' => $description,
+                    'info' => get_string('tutor_usage_report_kpi_mode_info_' . $mode, 'local_dixeo'),
                     'tooltip' => $tooltip,
                     'hastooltip' => $tooltip !== '',
                 ];
@@ -1244,12 +1435,12 @@ class tutor_usage_report_service {
                 } else if ($mode === tutor_message::MODE_TEACH) {
                     $aggregates[$key]['teach']++;
                 }
-                $this->mark_row_active_user($aggregates, $key, $eventuserid);
+                $this->mark_row_active_user($aggregates, $key, $eventuserid, (int) $event->timecreated);
             } else if (
                 $event->eventtype === tutor_usage_recorder::EVENT_QUIZ_CREATED
                 || $event->eventtype === tutor_usage_recorder::EVENT_LESSON_CREATED
             ) {
-                $this->mark_row_active_user($aggregates, $key, $eventuserid);
+                $this->mark_row_active_user($aggregates, $key, $eventuserid, (int) $event->timecreated);
             }
             $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], (int) $event->timecreated);
         }
@@ -1532,6 +1723,7 @@ class tutor_usage_report_service {
      * @param array $metrics Row metrics.
      * @param int $courseid Course id for user level labels.
      * @param int[] $roleids Role filter (used for site-level adoption).
+     * @param array $linkparams Extra URL parameters to carry into the drill-down link.
      * @return array
      */
     protected function format_summary_row(
@@ -1539,7 +1731,8 @@ class tutor_usage_report_service {
         int|string $key,
         array $metrics,
         int $courseid,
-        array $roleids = []
+        array $roleids = [],
+        array $linkparams = []
     ): array {
         global $DB;
 
@@ -1559,10 +1752,10 @@ class tutor_usage_report_service {
             $course = $DB->get_record('course', ['id' => (int) $key], '*', IGNORE_MISSING);
             if ($course) {
                 $namelabel = format_string($course->fullname);
-                $url = self::build_report_url([
+                $url = self::build_report_url(array_merge($linkparams, [
                     'level' => self::LEVEL_COURSE,
                     'courseid' => (int) $course->id,
-                ]);
+                ]));
             }
             $adoptionstats = $this->get_course_adoption_stats((int) $key, $metrics, $roleids);
             $adoption = $adoptionstats['adoption'];
@@ -1577,11 +1770,11 @@ class tutor_usage_report_service {
             $user = \core_user::get_user((int) $key, '*', IGNORE_MISSING);
             if ($user) {
                 $namelabel = fullname($user);
-                $url = self::build_report_url([
+                $url = self::build_report_url(array_merge($linkparams, [
                     'level' => self::LEVEL_USER,
                     'courseid' => $courseid,
                     'userid' => (int) $user->id,
-                ]);
+                ]));
             }
         } else {
             $cmid = (int) $key;
@@ -1610,12 +1803,24 @@ class tutor_usage_report_service {
         $duration = (int) ($metrics['duration'] ?? 0);
         $avgduration = $sessions > 0 ? (int) round($duration / $sessions) : 0;
 
+        // Active days averaged over the users active in this row; a user row holds a single user.
+        $activedays = array_map('count', $metrics['activedaysbyuser'] ?? []);
+        $engagement = $activedays !== [] ? array_sum($activedays) / count($activedays) : 0.0;
+
         return [
             'key' => (int) $key,
             'namelabel' => $namelabel,
             'url' => $url,
             'isuserlevel' => $isuserlevel,
             'issitelevel' => $issitelevel,
+            'engagement' => $engagement,
+            'engagementformatted' => get_string(
+                'tutor_usage_report_kpi_engagement_value',
+                'local_dixeo',
+                $level === self::LEVEL_COURSE
+                    ? number_format((int) round($engagement))
+                    : number_format($engagement, 1)
+            ),
             'moduletype' => $moduletype,
             'moduletypelabel' => $moduletypelabel,
             'adoption' => $adoption,
@@ -1640,7 +1845,10 @@ class tutor_usage_report_service {
             'sessionstooltip' => get_string(
                 'tutor_usage_report_cell_tooltip_sessions',
                 'local_dixeo',
-                self::format_duration($avgduration)
+                (object) [
+                    'average' => self::format_duration($avgduration),
+                    'total' => self::format_duration($duration),
+                ]
             ),
             'lastactive' => (int) $metrics['lastactive'],
             'lastactiveformatted' => !empty($metrics['lastactive'])
@@ -1689,8 +1897,14 @@ class tutor_usage_report_service {
      * @param array $aggregates Aggregates keyed by entity id (by reference).
      * @param int $key Entity key.
      * @param int $userid User id.
+     * @param int|null $activetime Activity timestamp to count as an active day, or null to skip.
      */
-    protected function mark_row_active_user(array &$aggregates, int $key, int $userid): void {
+    protected function mark_row_active_user(
+        array &$aggregates,
+        int $key,
+        int $userid,
+        ?int $activetime = null
+    ): void {
         if ($userid < 1) {
             return;
         }
@@ -1698,6 +1912,11 @@ class tutor_usage_report_service {
             $aggregates[$key] = $this->empty_row_metrics();
         }
         $aggregates[$key]['activeuserids'][$userid] = true;
+        // Only activity events count towards active days, matching the Engagement KPI.
+        if ($activetime !== null) {
+            $day = userdate($activetime, '%Y-%m-%d');
+            $aggregates[$key]['activedaysbyuser'][$userid][$day] = true;
+        }
     }
 
     /**
@@ -1863,6 +2082,7 @@ class tutor_usage_report_service {
             'duration' => 0,
             'lastactive' => 0,
             'activeuserids' => [],
+            'activedaysbyuser' => [],
         ];
     }
 
@@ -1944,14 +2164,29 @@ class tutor_usage_report_service {
      * @return string
      */
     public static function format_duration(int $seconds): string {
-        if ($seconds < 60) {
+        $seconds = max(0, $seconds);
+        if ($seconds < MINSECS) {
             return get_string('tutor_usage_duration_seconds', 'local_dixeo', $seconds);
         }
-        if ($seconds < 3600) {
-            return get_string('tutor_usage_duration_minutes', 'local_dixeo', (int) round($seconds / 60));
+
+        // Truncating instead of rounding keeps units from overflowing, e.g. no "1h 60m".
+        $minutesperhour = intdiv(HOURSECS, MINSECS);
+        $minutesperday = intdiv(DAYSECS, MINSECS);
+        $totalminutes = intdiv($seconds, MINSECS);
+        if ($totalminutes < $minutesperhour) {
+            return get_string('tutor_usage_duration_minutes', 'local_dixeo', $totalminutes);
         }
-        $hours = floor($seconds / 3600);
-        $minutes = (int) round(($seconds % 3600) / 60);
+
+        $days = intdiv($totalminutes, $minutesperday);
+        $hours = intdiv($totalminutes % $minutesperday, $minutesperhour);
+        $minutes = $totalminutes % $minutesperhour;
+        if ($days > 0) {
+            return get_string('tutor_usage_duration_days', 'local_dixeo', (object) [
+                'days' => $days,
+                'hours' => $hours,
+                'minutes' => $minutes,
+            ]);
+        }
         return get_string('tutor_usage_duration_hours', 'local_dixeo', (object) [
             'hours' => $hours,
             'minutes' => $minutes,

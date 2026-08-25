@@ -56,6 +56,12 @@ final class tutor_usage_report_request {
     /** @var int Rows per page. */
     public int $perpage;
 
+    /** @var string Summary table column sorted. */
+    public string $sort;
+
+    /** @var string Sort direction (asc|desc). */
+    public string $sortdir;
+
     /**
      * Require report access for the current level.
      */
@@ -100,7 +106,7 @@ final class tutor_usage_report_request {
             optional_param('dateto', '', PARAM_TEXT)
         );
         $request->rolescope = tutor_usage_report_service::normalize_role_scope(
-            optional_param('rolescope', tutor_usage_report_service::ROLE_SCOPE_ALL, PARAM_ALPHA)
+            optional_param('rolescope', tutor_usage_report_service::ROLE_SCOPE_DEFAULT, PARAM_ALPHA)
         );
         $request->page = optional_param('page', 0, PARAM_INT);
         $request->perpage = optional_param('perpage', 50, PARAM_INT);
@@ -128,7 +134,34 @@ final class tutor_usage_report_request {
             $request->userid = 0;
         }
 
+        // Sortable columns depend on the level, so validate once the level is settled.
+        $request->set_sort(
+            optional_param('sort', tutor_usage_report_service::SORT_DEFAULT, PARAM_ALPHA),
+            optional_param('sortdir', '', PARAM_ALPHA)
+        );
+
         return $request;
+    }
+
+    /**
+     * Store a validated sort column and direction for the current level.
+     *
+     * @param string $sort Raw column key.
+     * @param string $sortdir Raw direction.
+     */
+    protected function set_sort(string $sort, string $sortdir): void {
+        $this->sort = tutor_usage_report_service::normalize_sort($sort, $this->level);
+        $this->sortdir = tutor_usage_report_service::normalize_sort_direction($sortdir, $this->sort);
+    }
+
+    /**
+     * Whether the request sorts the table the same way an unsorted request would.
+     *
+     * @return bool
+     */
+    public function has_default_sort(): bool {
+        return $this->sort === tutor_usage_report_service::SORT_DEFAULT
+            && $this->sortdir === tutor_usage_report_service::default_sort_direction($this->sort);
     }
 
     /**
@@ -147,10 +180,14 @@ final class tutor_usage_report_request {
         $request->datefrom = (int) ($params['datefrom'] ?? 0);
         $request->dateto = (int) ($params['dateto'] ?? 0);
         $request->rolescope = tutor_usage_report_service::normalize_role_scope(
-            (string) ($params['rolescope'] ?? tutor_usage_report_service::ROLE_SCOPE_ALL)
+            (string) ($params['rolescope'] ?? tutor_usage_report_service::ROLE_SCOPE_DEFAULT)
         );
         $request->page = (int) ($params['page'] ?? 0);
         $request->perpage = (int) ($params['perpage'] ?? 50);
+        $request->set_sort(
+            (string) ($params['sort'] ?? tutor_usage_report_service::SORT_DEFAULT),
+            (string) ($params['sortdir'] ?? '')
+        );
         return $request;
     }
 
@@ -171,6 +208,8 @@ final class tutor_usage_report_request {
             'rolescope' => $this->rolescope,
             'page' => $this->page,
             'perpage' => $this->perpage,
+            'sort' => $this->sort,
+            'sortdir' => $this->sortdir,
         ];
     }
 
@@ -192,11 +231,13 @@ final class tutor_usage_report_request {
             'dateto' => $this->view === tutor_usage_report_service::VIEW_CUSTOM && $this->dateto
                 ? tutor_usage_report_service::format_date_param($this->dateto)
                 : null,
-            'rolescope' => $this->rolescope !== tutor_usage_report_service::ROLE_SCOPE_ALL
+            'rolescope' => $this->rolescope !== tutor_usage_report_service::ROLE_SCOPE_DEFAULT
                 ? $this->rolescope
                 : null,
             'page' => $this->page ?: null,
             'perpage' => $this->perpage !== 50 ? $this->perpage : null,
+            'sort' => !$this->has_default_sort() ? $this->sort : null,
+            'sortdir' => !$this->has_default_sort() ? $this->sortdir : null,
         ], static fn($value) => $value !== null && $value !== '');
     }
 
@@ -237,8 +278,12 @@ final class tutor_usage_report_request {
                 $params['dateto'] = tutor_usage_report_service::format_date_param($this->dateto);
             }
         }
-        if ($this->rolescope !== tutor_usage_report_service::ROLE_SCOPE_ALL) {
+        if ($this->rolescope !== tutor_usage_report_service::ROLE_SCOPE_DEFAULT) {
             $params['rolescope'] = $this->rolescope;
+        }
+        if (!$this->has_default_sort()) {
+            $params['sort'] = $this->sort;
+            $params['sortdir'] = $this->sortdir;
         }
 
         $hidden = [];
