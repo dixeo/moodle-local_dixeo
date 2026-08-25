@@ -49,14 +49,16 @@ $period = $service->resolve_period(
     $request->dateto ?: null
 );
 $roleids = $request->resolved_roleids();
-$columns = $service->get_export_columns($request->level);
+$columns = $service->get_columns($request->level);
 $rows = $service->get_export_rows(
     $request->level,
     $request->courseid,
     $request->userid,
     (int) $period['timestart'],
     (int) $period['timeend'],
-    $roleids
+    $roleids,
+    $request->sort,
+    $request->sortdir
 );
 
 tutor_usage_report_exported::create_for_request($request, count($rows), $dataformat)->trigger();

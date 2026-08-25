@@ -116,6 +116,7 @@ class tutor_usage_report_page implements renderable, templatable {
 
         $page = max(0, $request->page);
         $perpage = max(1, $request->perpage);
+        $baseparams = $this->base_url_params($view, $period);
         $rowsresult = $reportservice->get_rows(
             $request->level,
             $request->courseid,
@@ -124,10 +125,12 @@ class tutor_usage_report_page implements renderable, templatable {
             (int) $period['timeend'],
             $roleids,
             $page,
-            $perpage
+            $perpage,
+            $baseparams,
+            $request->sort,
+            $request->sortdir
         );
 
-        $baseparams = $this->base_url_params($view, $period);
         $totalpages = $perpage > 0 ? (int) ceil($rowsresult['total'] / $perpage) : 1;
         $haspagination = $totalpages > 1;
 
@@ -144,7 +147,7 @@ class tutor_usage_report_page implements renderable, templatable {
         }
 
         $exportselector = $this->build_export_selector($output, $request);
-        $breadcrumbs = $this->build_breadcrumbs($request);
+        $breadcrumbs = $this->build_breadcrumbs($request, $baseparams);
 
         $performanceservice = new tutor_usage_performance_service();
         $performance = $performanceservice->get_section_context(
@@ -173,11 +176,9 @@ class tutor_usage_report_page implements renderable, templatable {
                 'prevurl' => $period['prevanchor']
                     ? $this->report_url(array_merge($baseparams, ['anchor' => $period['prevanchor']]))
                     : null,
-                'prevanchor' => $period['prevanchor'] ?? null,
                 'nexturl' => $period['nextanchor']
                     ? $this->report_url(array_merge($baseparams, ['anchor' => $period['nextanchor']]))
                     : null,
-                'nextanchor' => $period['nextanchor'] ?? null,
                 'hasprev' => !empty($period['prevanchor']),
                 'hasnext' => !empty($period['nextanchor']),
             ],
@@ -219,6 +220,7 @@ class tutor_usage_report_page implements renderable, templatable {
                     'active' => $view === tutor_usage_report_service::VIEW_CUSTOM,
                 ],
             ],
+            'rolescopes' => $this->build_role_scope_items($reportservice, $baseparams),
             'filters' => [
                 'action' => $this->report_url([]),
                 'datefromformatted' => tutor_usage_report_service::format_date_param(
@@ -228,12 +230,10 @@ class tutor_usage_report_page implements renderable, templatable {
                     $request->dateto ?: $period['timeend']
                 ),
                 'view' => $view,
-                'anchor' => $request->anchor,
                 'level' => $request->level,
                 'courseid' => $request->courseid,
                 'userid' => $request->userid,
                 'rolescope' => $request->rolescope,
-                'rolescopes' => $reportservice->get_role_scope_options($request->rolescope),
             ],
             'breadcrumbs' => $breadcrumbs,
             'hasbreadcrumbs' => $breadcrumbs !== [],
@@ -242,16 +242,12 @@ class tutor_usage_report_page implements renderable, templatable {
             'stackedbardata' => json_encode($stackedbar),
             'heatmapdata' => json_encode($heatmap),
             'haschartdata' => $haschartdata,
+            'columns' => $this->build_column_items($reportservice, $baseparams),
             'rows' => $rowsresult['rows'],
             'hasrows' => !empty($rowsresult['rows']),
             'paginationbar' => $paginationbar,
             'haspagination' => $haspagination,
             'exportselector' => $exportselector,
-            'reseturl' => $this->report_url([
-                'level' => $request->level,
-                'courseid' => $request->courseid ?: null,
-                'userid' => $request->userid ?: null,
-            ]),
             'tabletitle' => $this->get_table_title($request),
             'hasperformance' => $performance !== null,
             'performance' => $performance,
@@ -274,7 +270,11 @@ class tutor_usage_report_page implements renderable, templatable {
             'perpage' => $request->perpage,
         ], $params);
 
-        if ($request->rolescope !== tutor_usage_report_service::ROLE_SCOPE_ALL) {
+        // An explicit rolescope param (including null) wins over the active request scope.
+        if (
+            !array_key_exists('rolescope', $params)
+            && $request->rolescope !== tutor_usage_report_service::ROLE_SCOPE_DEFAULT
+        ) {
             $merged['rolescope'] = $request->rolescope;
         }
 
@@ -311,6 +311,70 @@ class tutor_usage_report_page implements renderable, templatable {
     }
 
     /**
+     * Build the user role-scope selector links, keeping the active period.
+     *
+     * @param tutor_usage_report_service $service Report service.
+     * @param array $baseparams Base URL params for the active period.
+     * @return array
+     */
+    protected function build_role_scope_items(tutor_usage_report_service $service, array $baseparams): array {
+        $items = [];
+        foreach ($service->get_role_scope_options($this->request->rolescope) as $option) {
+            $scope = $option['id'];
+            $items[] = [
+                'id' => $scope,
+                'name' => $option['name'],
+                'url' => $this->report_url(array_merge($baseparams, [
+                    // The default scope stays out of the URL so it reads as the plain report URL.
+                    'rolescope' => $scope === tutor_usage_report_service::ROLE_SCOPE_DEFAULT ? null : $scope,
+                ])),
+                'active' => !empty($option['selected']),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Build the sortable summary table headers for the active level.
+     *
+     * @param tutor_usage_report_service $service Report service.
+     * @param array $baseparams Base URL params for the active period and filters.
+     * @return array
+     */
+    protected function build_column_items(tutor_usage_report_service $service, array $baseparams): array {
+        $request = $this->request;
+        $items = [];
+
+        foreach ($service->get_columns($request->level) as $key => $label) {
+            $active = $key === $request->sort;
+            $ascending = $active && $request->sortdir === tutor_usage_report_service::SORT_ASC;
+            // Clicking the sorted column reverses it; any other column starts in its natural direction.
+            $nextdir = $active
+                ? ($ascending ? tutor_usage_report_service::SORT_DESC : tutor_usage_report_service::SORT_ASC)
+                : tutor_usage_report_service::default_sort_direction($key);
+
+            $items[] = [
+                'key' => $key,
+                'label' => $label,
+                'url' => $this->report_url(array_merge($baseparams, [
+                    'sort' => $key,
+                    'sortdir' => $nextdir,
+                ])),
+                'sortlabel' => get_string('sortby') . ' ' . $label . ' ' . get_string(
+                    $nextdir === tutor_usage_report_service::SORT_ASC ? 'asc' : 'desc'
+                ),
+                'active' => $active,
+                'ascending' => $ascending,
+                'descending' => $active && !$ascending,
+                'ariasort' => $active ? ($ascending ? 'ascending' : 'descending') : 'none',
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * Build base URL params preserving active filters.
      *
      * @param string $view View mode.
@@ -323,8 +387,13 @@ class tutor_usage_report_page implements renderable, templatable {
             'perpage' => $this->request->perpage,
         ];
 
-        if ($this->request->rolescope !== tutor_usage_report_service::ROLE_SCOPE_ALL) {
+        if ($this->request->rolescope !== tutor_usage_report_service::ROLE_SCOPE_DEFAULT) {
             $params['rolescope'] = $this->request->rolescope;
+        }
+
+        if (!$this->request->has_default_sort()) {
+            $params['sort'] = $this->request->sort;
+            $params['sortdir'] = $this->request->sortdir;
         }
 
         if ($view === tutor_usage_report_service::VIEW_CUSTOM) {
@@ -345,9 +414,10 @@ class tutor_usage_report_page implements renderable, templatable {
      * Build breadcrumb navigation for drill-down levels.
      *
      * @param tutor_usage_report_request $request Current request.
+     * @param array $baseparams Base URL params for the active period and filters.
      * @return array
      */
-    protected function build_breadcrumbs(tutor_usage_report_request $request): array {
+    protected function build_breadcrumbs(tutor_usage_report_request $request, array $baseparams = []): array {
         global $DB;
 
         // Site level has no drill-down crumbs (avoids leftover courseid from prior navigation).
@@ -357,11 +427,11 @@ class tutor_usage_report_page implements renderable, templatable {
 
         $items = [[
             'label' => get_string('tutor_usage_report_level_site', 'local_dixeo'),
-            'url' => $this->report_url([
+            'url' => $this->report_url(array_merge($baseparams, [
                 'level' => tutor_usage_report_service::LEVEL_SITE,
                 'courseid' => null,
                 'userid' => null,
-            ]),
+            ])),
             'active' => false,
         ]];
 
@@ -370,11 +440,11 @@ class tutor_usage_report_page implements renderable, templatable {
             $items[] = [
                 'label' => $course ? format_string($course->fullname) : get_string('course'),
                 'url' => $request->level === tutor_usage_report_service::LEVEL_USER
-                    ? $this->report_url([
+                    ? $this->report_url(array_merge($baseparams, [
                         'level' => tutor_usage_report_service::LEVEL_COURSE,
                         'courseid' => $request->courseid,
                         'userid' => null,
-                    ])
+                    ]))
                     : null,
                 'active' => $request->level === tutor_usage_report_service::LEVEL_COURSE,
             ];

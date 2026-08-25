@@ -23,21 +23,24 @@
     * error - string|false - Error message if any.
     * hasbreadcrumbs - bool - Whether breadcrumb navigation is shown.
     * breadcrumbs - array - Breadcrumb items with label, url, and active.
-    * period - object - Active period label and navigation anchors.
+    * period - object - Active period label and prev/next navigation URLs.
     * views - array - Period view toggle links.
-    * filters - object - Filter form values and options.
-    * kpis - object - Summary KPI values and mode breakdown.
+    * rolescopes - array - User scope selector items with name, url, and active.
+    * filters - object - Custom range form values.
+    * kpis - object - Summary KPI values and mode breakdown. Each KPI carries value, info
+      (description shown by the corner icon), and hastooltip with an optional tooltip.
     * haschange - bool - Whether period-over-period change is shown.
     * haschartdata - bool - Whether chart JSON payloads are available.
     * stackedbardata - string - JSON stacked bar chart data.
     * heatmapdata - string - JSON heatmap chart data.
     * tabletitle - string - Summary table heading.
     * exportselector - string - Rendered Moodle dataformat export selector HTML.
+    * columns - array - Sortable summary table headers with label, url, sortlabel, ariasort,
+      and the active/ascending/descending state of the sorted column.
     * rows - array - Paginated summary rows.
     * hasrows - bool - Whether table rows are available.
     * paginationbar - string - Rendered Moodle paging bar HTML.
     * haspagination - bool - Whether pagination should be shown.
-    * reseturl - string - URL to reset filters.
     * issite - bool - Site-level report.
     * iscourse - bool - Course-level report.
     * isuser - bool - User-level report.
@@ -60,11 +63,16 @@
             "isweek": true,
             "ismonth": false,
             "iscustom": false,
-            "prevanchor": "2026-07-07",
-            "nextanchor": "2026-07-21",
+            "prevurl": "https://example.com/local/dixeo/tutor_usage_report.php?anchor=2026-07-07",
+            "nexturl": "https://example.com/local/dixeo/tutor_usage_report.php?anchor=2026-07-21",
             "hasprev": true,
             "hasnext": true
         },
+        "rolescopes": [
+            {"id": "all", "name": "All", "url": "https://example.com/local/dixeo/tutor_usage_report.php?rolescope=all", "active": false},
+            {"id": "teachers", "name": "Teachers", "url": "https://example.com/local/dixeo/tutor_usage_report.php?rolescope=teachers", "active": false},
+            {"id": "students", "name": "Students", "url": "https://example.com/local/dixeo/tutor_usage_report.php", "active": true}
+        ],
         "views": [
             {
                 "id": "week",
@@ -91,38 +99,43 @@
             "courseid": 0,
             "userid": 0,
             "view": "week",
-            "anchor": "",
+            "rolescope": "all",
             "datefromformatted": "2026-07-14",
-            "datetoformatted": "2026-07-20",
-            "rolescopes": [
-                {"id": "all", "name": "All users", "selected": true},
-                {"id": "teachers", "name": "Teachers only", "selected": false},
-                {"id": "students", "name": "Students only", "selected": false}
-            ]
+            "datetoformatted": "2026-07-20"
         },
         "kpis": {
             "adoption": {
                 "value": "42.5%",
+                "info": "Share of the users in scope who used the tutor at least once during the period.",
+                "hastooltip": true,
                 "tooltip": "17 active / 23 inactive / 40 total",
                 "change": {"value": "+5.0% since last week", "positive": true, "negative": false}
             },
             "engagement": {
-                "value": "3 days",
-                "tooltip": "Last active: 20 Jul 2026, 10:00",
+                "value": "3.2 days",
+                "info": "Average number of distinct days each active user used the tutor during the period.",
+                "hastooltip": true,
+                "tooltip": "Median 3.0 / Average 3.2 active days per active user",
                 "change": {"value": "+50.0% since last week", "positive": true, "negative": false}
             },
             "messages": {
                 "value": "120",
+                "info": "Number of messages sent to the tutor during the period.",
+                "hastooltip": true,
                 "tooltip": "Median 3.0 / Average 4.5",
                 "change": {"value": "+10.0% since last week", "positive": true, "negative": false}
             },
             "sessions": {
                 "value": "35",
+                "info": "Number of tutor sessions. A session starts with the first message and closes after 15 mins without a new one.",
+                "hastooltip": true,
                 "tooltip": "Median 1.0 / Average 1.5",
                 "change": {"value": "+2.0% since last week", "positive": true, "negative": false}
             },
             "duration": {
-                "value": "2h 15m",
+                "value": "1d 2h 15m",
+                "info": "Total time spent in tutor sessions. Each session counts the time between its first and last message, plus 5 mins.",
+                "hastooltip": true,
                 "tooltip": "Median 12 min / Average 15 min",
                 "change": {"value": "-1.0% since last week", "positive": false, "negative": true}
             },
@@ -132,6 +145,7 @@
                     "label": "Standard",
                     "value": "50",
                     "description": "messages sent",
+                    "info": "Messages sent in Standard mode, where the tutor answers questions directly.",
                     "tooltip": "Median 2.0 / Average 2.5",
                     "hastooltip": true,
                     "change": {"value": "+4.0% since last week", "positive": true, "negative": false}
@@ -141,6 +155,7 @@
                     "label": "Guide",
                     "value": "40",
                     "description": "messages sent",
+                    "info": "Messages sent in Guide mode, where the tutor leads the learner to the answer instead of giving it.",
                     "tooltip": "Median 1.0 / Average 1.5",
                     "hastooltip": true
                 },
@@ -149,6 +164,7 @@
                     "label": "Quiz",
                     "value": "20",
                     "description": "quizzes submitted",
+                    "info": "Messages sent in Quiz mode, quiz results are submitted to the tutor for analysis.",
                     "tooltip": "Quizzes created: 3",
                     "hastooltip": true,
                     "isquiz": true
@@ -158,8 +174,8 @@
                     "label": "Teach",
                     "value": "10",
                     "description": "lessons created",
-                    "tooltip": "Lessons created: 1",
-                    "hastooltip": true,
+                    "info": "Messages sent in Teach mode, the generated lessons become part of the conversation.",
+                    "hastooltip": false,
                     "isteach": true
                 }
             ]
@@ -186,13 +202,35 @@
         },
         "tabletitle": "Courses",
         "exportselector": "<div class=\"form-inline\"><label>Download as</label></div>",
-        "reseturl": "https://example.com/local/dixeo/tutor_usage_report.php",
+        "columns": [
+            {
+                "key": "name",
+                "label": "Name",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?sort=name&sortdir=asc",
+                "sortlabel": "Sort by Name Ascending",
+                "active": false,
+                "ascending": false,
+                "descending": false,
+                "ariasort": "none"
+            },
+            {
+                "key": "messages",
+                "label": "Messages",
+                "url": "https://example.com/local/dixeo/tutor_usage_report.php?sort=messages&sortdir=asc",
+                "sortlabel": "Sort by Messages Ascending",
+                "active": true,
+                "ascending": false,
+                "descending": true,
+                "ariasort": "descending"
+            }
+        ],
         "rows": [
             {
                 "namelabel": "Sample course",
                 "url": "https://example.com/local/dixeo/tutor_usage_report.php?level=course&courseid=3",
                 "issitelevel": true,
                 "isuserlevel": false,
+                "engagementformatted": "2.4 days",
                 "adoptionformatted": "50.0%",
                 "adoptiontooltip": "10 out of 20 users",
                 "messagesformatted": "40",
@@ -205,7 +243,7 @@
                 "teachformatted": "5",
                 "teachtooltip": "12.5%",
                 "sessionsformatted": "12",
-                "sessionstooltip": "Average duration: 15 min",
+                "sessionstooltip": "Average duration: 15 min · Total: 3h 0m",
                 "lastactiveformatted": "20 Jul 2026, 10:00"
             }
         ],
@@ -233,88 +271,87 @@
     </nav>
     {{/hasbreadcrumbs}}
 
-    <div class="card mb-4 local-dixeo-tutor-usage-report">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h4 class="mb-0">{{#str}}tutor_usage_report_filters, local_dixeo{{/str}}</h4>
-            <div class="btn-group" role="group" aria-label="{{#str}}tutor_usage_report_period, local_dixeo{{/str}}">
-                {{#views}}
-                    <a href="{{url}}" class="btn btn-sm {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}">{{label}}</a>
-                {{/views}}
-            </div>
+    <div class="d-flex flex-wrap align-items-center mb-4 local-dixeo-tutor-usage-report-controls">
+        {{! The role filter has no effect on a single user, so it is hidden at user level. }}
+        {{^isuser}}
+        <div class="btn-group" role="group" aria-label="{{#str}}tutor_usage_report_filter_roles, local_dixeo{{/str}}">
+            {{#rolescopes}}
+                <a href="{{url}}" class="btn {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}" {{#active}}aria-current="true"{{/active}}>{{name}}</a>
+            {{/rolescopes}}
         </div>
-        <div class="card-body">
-            <form method="get" action="{{filters.action}}" class="row g-3">
-                <input type="hidden" name="level" value="{{filters.level}}">
-                {{#filters.courseid}}<input type="hidden" name="courseid" value="{{filters.courseid}}">{{/filters.courseid}}
-                {{#filters.userid}}<input type="hidden" name="userid" value="{{filters.userid}}">{{/filters.userid}}
-                <input type="hidden" name="view" value="{{filters.view}}">
-                <input type="hidden" name="anchor" id="tutor-usage-report-anchor" value="{{filters.anchor}}">
+        {{/isuser}}
 
-                {{^period.iscustom}}
-                    <div class="d-flex flex-wrap justify-content-center align-items-center mb-3 col-12">
-                        {{#period.hasprev}}
-                            <button type="submit" class="btn btn-outline-secondary btn-sm me-4" data-tutor-usage-report-anchor="{{period.prevanchor}}" aria-label="{{#str}}tutor_usage_report_prev_period, local_dixeo{{/str}}">&larr;</button>
-                        {{/period.hasprev}}
-                        {{^period.hasprev}}
-                            <span class="btn btn-outline-secondary btn-sm me-4 disabled" aria-hidden="true">&larr;</span>
-                        {{/period.hasprev}}
-                        <p class="h5 mb-0 mx-2">{{period.label}}</p>
-                        {{#period.hasnext}}
-                            <button type="submit" class="btn btn-outline-secondary btn-sm ms-4" data-tutor-usage-report-anchor="{{period.nextanchor}}" aria-label="{{#str}}tutor_usage_report_next_period, local_dixeo{{/str}}">&rarr;</button>
-                        {{/period.hasnext}}
-                        {{^period.hasnext}}
-                            <span class="btn btn-outline-secondary btn-sm ms-4 disabled" aria-hidden="true">&rarr;</span>
-                        {{/period.hasnext}}
-                    </div>
-                {{/period.iscustom}}
+        <div class="flex-grow-1 d-flex flex-wrap justify-content-center align-items-center dixeo-tutor-usage-report-period">
+            {{^period.iscustom}}
+                {{#period.hasprev}}
+                    <a href="{{period.prevurl}}" class="btn btn-outline-secondary" aria-label="{{#str}}tutor_usage_report_prev_period, local_dixeo{{/str}}">&larr;</a>
+                {{/period.hasprev}}
+                {{^period.hasprev}}
+                    <span class="btn btn-outline-secondary disabled" aria-hidden="true">&larr;</span>
+                {{/period.hasprev}}
+                <span class="h5 mb-0">{{period.label}}</span>
+                {{#period.hasnext}}
+                    <a href="{{period.nexturl}}" class="btn btn-outline-secondary" aria-label="{{#str}}tutor_usage_report_next_period, local_dixeo{{/str}}">&rarr;</a>
+                {{/period.hasnext}}
+                {{^period.hasnext}}
+                    <span class="btn btn-outline-secondary disabled" aria-hidden="true">&rarr;</span>
+                {{/period.hasnext}}
+            {{/period.iscustom}}
 
-                {{#period.iscustom}}
-                    <div class="col-12 mb-4">
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="dixeo-tutor-usage-report-filter-label" for="datefrom">{{#str}}from{{/str}}</label>
-                                <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="dixeo-tutor-usage-report-filter-label" for="dateto">{{#str}}to{{/str}}</label>
-                                <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
-                            </div>
-                        </div>
-                    </div>
-                {{/period.iscustom}}
+            {{#period.iscustom}}
+                <form method="get"
+                      action="{{filters.action}}"
+                      class="d-flex flex-wrap align-items-center mb-0 dixeo-tutor-usage-report-dates"
+                      data-tutor-usage-report-dates>
+                    <input type="hidden" name="level" value="{{filters.level}}">
+                    {{#filters.courseid}}<input type="hidden" name="courseid" value="{{filters.courseid}}">{{/filters.courseid}}
+                    {{#filters.userid}}<input type="hidden" name="userid" value="{{filters.userid}}">{{/filters.userid}}
+                    <input type="hidden" name="view" value="{{filters.view}}">
+                    <input type="hidden" name="rolescope" value="{{filters.rolescope}}">
+                    <label for="datefrom">{{#str}}from{{/str}}</label>
+                    <input type="date" class="form-control" id="datefrom" name="datefrom" value="{{filters.datefromformatted}}">
+                    <label for="dateto">{{#str}}to{{/str}}</label>
+                    <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
+                </form>
+            {{/period.iscustom}}
+        </div>
 
-                <div class="col-md-4">
-                    <label class="dixeo-tutor-usage-report-filter-label" for="rolescope">{{#str}}tutor_usage_report_filter_roles, local_dixeo{{/str}}</label>
-                    <select class="form-control" id="rolescope" name="rolescope">
-                        {{#filters.rolescopes}}
-                            <option value="{{id}}" {{#selected}}selected{{/selected}}>{{name}}</option>
-                        {{/filters.rolescopes}}
-                    </select>
-                </div>
-
-                <div class="col-12 d-flex justify-content-end align-items-center mt-2 pt-2">
-                    <button type="submit" class="btn btn-primary me-2">{{#str}}tutor_usage_report_apply_filters, local_dixeo{{/str}}</button>
-                    <a href="{{reseturl}}" class="btn btn-secondary">{{#str}}tutor_usage_report_reset_filters, local_dixeo{{/str}}</a>
-                </div>
-            </form>
+        <div class="btn-group" role="group" aria-label="{{#str}}tutor_usage_report_period, local_dixeo{{/str}}">
+            {{#views}}
+                <a href="{{url}}" class="btn {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}" {{#active}}aria-current="true"{{/active}}>{{label}}</a>
+            {{/views}}
         </div>
     </div>
 
     <div class="card mb-4 local-dixeo-tutor-usage-report-summary">
-        <div class="card-header">
-            <h4 class="mb-0">{{#str}}tutor_usage_report_summary, local_dixeo{{/str}}</h4>
+        <div class="card-header d-flex align-items-center">
+            <button type="button"
+                    class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
+                    data-toggle="collapse"
+                    data-target="#dixeo-tutor-usage-report-summary"
+                    aria-expanded="true"
+                    aria-controls="dixeo-tutor-usage-report-summary"
+                    aria-labelledby="dixeo-tutor-usage-report-summary-title">
+                {{#pix}}t/expanded, core{{/pix}}
+            </button>
+            <h4 class="mb-0" id="dixeo-tutor-usage-report-summary-title">{{#str}}tutor_usage_report_summary, local_dixeo{{/str}}</h4>
         </div>
-        <div class="card-body">
-            <p class="h5 mb-4">{{period.label}}</p>
-
+        <div class="card-body collapse show" id="dixeo-tutor-usage-report-summary">
             <div class="row mb-4 g-3">
                 <div class="col-md-6 col-xl-3">
-                    {{#isuser}}
                     <div class="card h-100 dixeo-tutor-usage-report-kpi"
                          tabindex="0"
+                         {{#kpis.engagement.hastooltip}}
                          data-toggle="tooltip"
                          data-placement="bottom"
-                         title="{{kpis.engagement.tooltip}}">
+                         title="{{kpis.engagement.tooltip}}"
+                         {{/kpis.engagement.hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{kpis.engagement.info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
                         <div class="card-body">
                             <div class="text-muted">{{#str}}tutor_usage_report_kpi_engagement, local_dixeo{{/str}}</div>
                             <div class="h4 mb-1">{{kpis.engagement.value}}</div>
@@ -323,13 +360,45 @@
                             {{/kpis.engagement.change}}{{/haschange}}
                         </div>
                     </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    {{#isuser}}
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         {{#kpis.sessions.hastooltip}}
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.sessions.tooltip}}"
+                         {{/kpis.sessions.hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{kpis.sessions.info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_sessions, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.sessions.value}}</div>
+                            {{#haschange}}{{#kpis.sessions.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.sessions.change}}{{/haschange}}
+                        </div>
+                    </div>
                     {{/isuser}}
                     {{^isuser}}
                     <div class="card h-100 dixeo-tutor-usage-report-kpi"
                          tabindex="0"
+                         {{#kpis.adoption.hastooltip}}
                          data-toggle="tooltip"
                          data-placement="bottom"
-                         title="{{kpis.adoption.tooltip}}">
+                         title="{{kpis.adoption.tooltip}}"
+                         {{/kpis.adoption.hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{kpis.adoption.info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
                         <div class="card-body">
                             <div class="text-muted">{{#str}}tutor_usage_report_kpi_adoption, local_dixeo{{/str}}</div>
                             <div class="h4 mb-1">{{kpis.adoption.value}}</div>
@@ -343,45 +412,46 @@
                 <div class="col-md-6 col-xl-3">
                     <div class="card h-100 dixeo-tutor-usage-report-kpi"
                          tabindex="0"
+                         {{#kpis.duration.hastooltip}}
                          data-toggle="tooltip"
                          data-placement="bottom"
-                         title="{{kpis.messages.tooltip}}">
-                        <div class="card-body">
-                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_messages, local_dixeo{{/str}}</div>
-                            <div class="h4 mb-1">{{kpis.messages.value}}</div>
-                            {{#haschange}}{{#kpis.messages.change}}
-                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
-                            {{/kpis.messages.change}}{{/haschange}}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-xl-3">
-                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
-                         tabindex="0"
-                         data-toggle="tooltip"
-                         data-placement="bottom"
-                         title="{{kpis.sessions.tooltip}}">
-                        <div class="card-body">
-                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_sessions, local_dixeo{{/str}}</div>
-                            <div class="h4 mb-1">{{kpis.sessions.value}}</div>
-                            {{#haschange}}{{#kpis.sessions.change}}
-                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
-                            {{/kpis.sessions.change}}{{/haschange}}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-xl-3">
-                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
-                         tabindex="0"
-                         data-toggle="tooltip"
-                         data-placement="bottom"
-                         title="{{kpis.duration.tooltip}}">
+                         title="{{kpis.duration.tooltip}}"
+                         {{/kpis.duration.hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{kpis.duration.info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
                         <div class="card-body">
                             <div class="text-muted">{{#str}}tutor_usage_report_kpi_duration, local_dixeo{{/str}}</div>
                             <div class="h4 mb-1">{{kpis.duration.value}}</div>
                             {{#haschange}}{{#kpis.duration.change}}
                                 <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
                             {{/kpis.duration.change}}{{/haschange}}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card h-100 dixeo-tutor-usage-report-kpi"
+                         tabindex="0"
+                         {{#kpis.messages.hastooltip}}
+                         data-toggle="tooltip"
+                         data-placement="bottom"
+                         title="{{kpis.messages.tooltip}}"
+                         {{/kpis.messages.hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{kpis.messages.info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
+                        <div class="card-body">
+                            <div class="text-muted">{{#str}}tutor_usage_report_kpi_messages, local_dixeo{{/str}}</div>
+                            <div class="h4 mb-1">{{kpis.messages.value}}</div>
+                            {{#haschange}}{{#kpis.messages.change}}
+                                <div class="small {{#positive}}text-success{{/positive}}{{#negative}}text-danger{{/negative}}">{{value}}</div>
+                            {{/kpis.messages.change}}{{/haschange}}
                         </div>
                     </div>
                 </div>
@@ -397,6 +467,12 @@
                          data-placement="bottom"
                          title="{{tooltip}}"
                          {{/hastooltip}}>
+                        <button type="button"
+                                class="dixeo-tutor-usage-report-info dixeo-tutor-usage-report-kpi-info btn btn-link text-muted p-0"
+                                aria-label="{{#str}}moreinfo, core{{/str}}"
+                                data-info="{{info}}">
+                            {{#pix}}i/circleinfo, core{{/pix}}
+                        </button>
                         <div class="card-body">
                             <div class="text-muted">{{label}}</div>
                             <div class="h4 mb-1">{{value}} <span class="small text-muted">{{description}}</span></div>
@@ -424,7 +500,15 @@
                     <div class="col-lg-4">
                         <div class="card h-100">
                             <div class="card-body">
-                                <h5 class="dixeo-tutor-usage-report-chart-title">{{#str}}tutor_usage_report_heatmap, local_dixeo{{/str}}</h5>
+                                <h5 class="dixeo-tutor-usage-report-chart-title">
+                                    {{#str}}tutor_usage_report_heatmap, local_dixeo{{/str}}
+                                    <button type="button"
+                                            class="dixeo-tutor-usage-report-info btn btn-link text-muted p-0"
+                                            aria-label="{{#str}}moreinfo, core{{/str}}"
+                                            data-info="{{#str}}tutor_usage_report_heatmap_info, local_dixeo{{/str}}">
+                                        {{#pix}}i/circleinfo, core{{/pix}}
+                                    </button>
+                                </h5>
                                 <div class="dixeo-tutor-usage-report-heatmap-wrap">
                                     <table class="table table-sm dixeo-tutor-usage-report-heatmap" id="tutorUsageHeatmap">
                                         <thead>
@@ -452,10 +536,19 @@
 
     {{#hasperformance}}
     <div class="card mb-4 local-dixeo-tutor-usage-report-performance">
-        <div class="card-header">
-            <h4 class="mb-0">{{#str}}tutor_usage_report_performance, local_dixeo{{/str}}</h4>
+        <div class="card-header d-flex align-items-center">
+            <button type="button"
+                    class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
+                    data-toggle="collapse"
+                    data-target="#dixeo-tutor-usage-report-performance"
+                    aria-expanded="true"
+                    aria-controls="dixeo-tutor-usage-report-performance"
+                    aria-labelledby="dixeo-tutor-usage-report-performance-title">
+                {{#pix}}t/expanded, core{{/pix}}
+            </button>
+            <h4 class="mb-0" id="dixeo-tutor-usage-report-performance-title">{{#str}}tutor_usage_report_performance, local_dixeo{{/str}}</h4>
         </div>
-        <div class="card-body">
+        <div class="card-body collapse show" id="dixeo-tutor-usage-report-performance">
             <div class="row g-4">
                 <div class="col-12 col-lg-6">
                     <h5 class="dixeo-tutor-usage-report-chart-title">
@@ -517,30 +610,40 @@
     {{/hasperformance}}
 
     <div class="card">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h4 class="mb-0">{{tabletitle}}</h4>
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <button type="button"
+                        class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
+                        data-toggle="collapse"
+                        data-target="#dixeo-tutor-usage-report-table"
+                        aria-expanded="true"
+                        aria-controls="dixeo-tutor-usage-report-table"
+                        aria-labelledby="dixeo-tutor-usage-report-table-title">
+                    {{#pix}}t/expanded, core{{/pix}}
+                </button>
+                <h4 class="mb-0" id="dixeo-tutor-usage-report-table-title">{{tabletitle}}</h4>
+            </div>
             <div class="dixeo-tutor-usage-report-export">{{{exportselector}}}</div>
         </div>
-        <div class="card-body">
+        <div class="card-body collapse show" id="dixeo-tutor-usage-report-table">
             {{#hasrows}}
                 <div class="table-responsive">
                     <table class="table table-striped dixeo-tutor-usage-report-summary-table">
                         <thead>
                             <tr>
-                                <th>{{#str}}tutor_usage_report_column_name, local_dixeo{{/str}}</th>
-                                {{#issite}}
-                                <th>{{#str}}tutor_usage_report_kpi_adoption, local_dixeo{{/str}}</th>
-                                {{/issite}}
-                                {{#isuser}}
-                                <th>{{#str}}tutor_usage_report_column_moduletype, local_dixeo{{/str}}</th>
-                                {{/isuser}}
-                                <th>{{#str}}tutor_usage_report_column_messages, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_standard, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_guide, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_quiz, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_teach, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_sessions, local_dixeo{{/str}}</th>
-                                <th>{{#str}}tutor_usage_report_column_lastactive, local_dixeo{{/str}}</th>
+                                {{#columns}}
+                                <th scope="col" aria-sort="{{ariasort}}">
+                                    <a href="{{url}}"
+                                       role="button"
+                                       class="dixeo-tutor-usage-report-sort"
+                                       data-sortby="{{key}}">
+                                        {{label}}
+                                        <span class="sr-only">{{sortlabel}}</span>
+                                        {{#ascending}}{{#pix}}t/sort_asc, core{{/pix}}{{/ascending}}
+                                        {{#descending}}{{#pix}}t/sort_desc, core{{/pix}}{{/descending}}
+                                    </a>
+                                </th>
+                                {{/columns}}
                             </tr>
                         </thead>
                         <tbody>
@@ -550,6 +653,9 @@
                                         {{#url}}<a href="{{url}}">{{namelabel}}</a>{{/url}}
                                         {{^url}}{{namelabel}}{{/url}}
                                     </td>
+                                    {{^isuserlevel}}
+                                    <td>{{engagementformatted}}</td>
+                                    {{/isuserlevel}}
                                     {{#issitelevel}}
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
@@ -576,10 +682,12 @@
                                         data-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{teachtooltip}}">{{teachformatted}}</td>
+                                    {{^isuserlevel}}
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{sessionstooltip}}">{{sessionsformatted}}</td>
+                                    {{/isuserlevel}}
                                     <td><span class="text-nowrap">{{lastactiveformatted}}</span></td>
                                 </tr>
                             {{/rows}}
