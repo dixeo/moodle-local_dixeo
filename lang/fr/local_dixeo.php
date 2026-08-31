@@ -195,7 +195,9 @@ $string['eventfilesynctriggered'] = 'Synchronisation des fichiers Dixeo du cours
 $string['eventfilesynctriggereddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a déclenché la synchronisation des fichiers Dixeo pour le cours avec l\'id \'{$a->courseid}\'.';
 $string['eventjobcancelled'] = 'Tâche Dixeo annulée';
 $string['eventjobcancelleddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a annulé la tâche Dixeo \'{$a->jobid}\' pour le cours avec l\'id \'{$a->courseid}\'.';
-$string['feedback_correct'] = 'Correct !';
+$string['feedback_correct'] = 'Bravo, vous avez trouvé la bonne réponse. Continuez comme ça !';
+$string['feedback_incorrect'] = 'Pas tout à fait cette fois. Revoir le sujet vous aidera à progresser.';
+$string['feedback_partial'] = 'Vous êtes sur la bonne voie. Révisez le sujet et vous y arriverez.';
 $string['files'] = 'fichiers';
 $string['filesync_disable_remove'] = 'Désactiver et effacer les données de synchronisation';
 $string['filesync_enable'] = 'Activer la synchronisation';
@@ -216,6 +218,7 @@ $string['filesync_status_synchronized'] = 'Fichiers synchronisés';
 $string['filesync_status_syncing'] = 'Synchronisation en cours...';
 $string['filesync_timeout'] = 'La synchronisation des fichiers a expiré avant l\'indexation des fichiers du cours';
 $string['filesync_title'] = 'Synchronisation de fichiers Dixeo';
+$string['generation_output_language'] = 'LANGUE : Générez tout le contenu destiné aux apprenants (questions, réponses, texte de leçon et titres) en {$a->language}.';
 $string['image_generation'] = 'Génération d\'images';
 $string['image_generation_content_mode'] = 'Images de contenu';
 $string['image_generation_content_mode_desc'] = 'Contrôle les actions d\'image IA pour les images dans le contenu des activités, comme les Pages et les Livres.';
@@ -243,6 +246,26 @@ $string['period_month'] = 'Mensuel';
 $string['period_week'] = 'Hebdomadaire';
 $string['pluginname'] = 'Dixeo AI';
 $string['pluginname_desc'] = 'Intégration Dixeo AI pour la génération et l\'édition intelligente de contenu.';
+$string['practice_quiz_default_title'] = 'Quiz d\'entraînement';
+$string['practice_quiz_difficulty_easy'] = 'facile (rappel de base, concepts simples, adapté aux débutants)';
+$string['practice_quiz_difficulty_hard'] = 'difficile (application exigeante, analyse ou synthèse de concepts avancés)';
+$string['practice_quiz_difficulty_medium'] = 'moyen (profondeur modérée nécessitant une compréhension au-delà du simple rappel)';
+$string['practice_quiz_error_invalid_result'] = 'Résultat du travail non valide.';
+$string['practice_quiz_error_job_not_completed'] = 'Le travail n\'est pas terminé. Statut : {$a->status}';
+$string['practice_quiz_error_no_questions'] = 'Aucune question dans le résultat du travail.';
+$string['practice_quiz_error_wrong_module_type'] = 'Le travail n\'est pas une génération simplequiz2.';
+$string['practice_quiz_instructions'] = 'Générez un quiz d\'entraînement pour {$a->scopedescription}.
+
+EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
+1. NOMBRE DE QUESTIONS : Le tableau « questions » DOIT contenir exactement {$a->count} questions. Ne produisez pas {$a->count} moins un, {$a->count} plus un, ni aucun autre nombre — exactement {$a->count}.
+2. NIVEAU DE DIFFICULTÉ : Chaque question DOIT être de difficulté {$a->difficultylabel}.
+3. FORMAT : Chaque question DOIT être à choix multiples avec 3 ou 4 options de réponse et exactement une bonne réponse.
+
+Avant de terminer, vérifiez que la longueur du tableau questions est égale à {$a->count} et que toutes les questions correspondent au niveau de difficulté {$a->difficulty}.
+Concentrez-vous sur le contexte de cours fourni.';
+$string['practice_quiz_scope_activity_description'] = 'l\'activité « {$a->name} »';
+$string['practice_quiz_scope_course_description'] = 'l\'ensemble du cours « {$a->name} »';
+$string['practice_quiz_scope_section_description'] = 'la section « {$a->name} »';
 $string['privacy:metadata'] = 'Le plugin Dixeo stocke des identifiants opérationnels pour la synchronisation des fichiers de cours et envoie le contenu des cours, les messages du tuteur, le contexte de génération et des identifiants associés à l\'API Dixeo AI. La conservation et la suppression des données chez Dixeo sont contrôlées par ce service externe.';
 $string['privacy:metadata:course_ai'] = 'Configuration et statut de synchronisation des fichiers IA par cours.';
 $string['privacy:metadata:course_ai:courseid'] = 'Le cours auquel appartient cette configuration de synchronisation.';
@@ -324,6 +347,24 @@ $string['task_poll_image'] = 'Interroger la tâche d\'image Dixeo';
 $string['task_poll_image_generation'] = 'Interroger la tâche de génération d\'images Dixeo';
 $string['task_process_file_sync'] = 'Traiter la synchronisation des fichiers Dixeo';
 $string['task_process_remote_file_deletion'] = 'Réessayer la suppression distante des fichiers Dixeo';
+$string['teach_lesson_default_title'] = 'Leçon personnalisée';
+$string['teach_lesson_error_invalid_result'] = 'Résultat du travail non valide.';
+$string['teach_lesson_error_job_not_completed'] = 'Le travail n\'est pas terminé. Statut : {$a->status}';
+$string['teach_lesson_error_no_content'] = 'Aucun contenu dans le résultat du travail.';
+$string['teach_lesson_error_wrong_module_type'] = 'Le travail n\'est pas une génération de page.';
+$string['teach_lesson_instructions'] = 'Générez une leçon de module Page personnalisée pour {$a->scopedescription}.
+
+L\'apprenant a demandé :
+"{$a->learnerrequest}"
+
+EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
+1. TYPE DE MODULE : Produisez un module Page avec un nom clair et descriptif, un bref résumé d\'introduction (intro) et un contenu principal riche (content).
+2. STRUCTURE : Organisez la leçon avec des titres clairs et des sections logiques. Utilisez des exemples lorsque c\'est utile.
+3. DEMANDE DE L\'APPRENANT : Répondez directement à la demande de l\'apprenant — approfondissez le sujet ou expliquez-le en termes plus simples comme il l\'a demandé.
+4. ALIGNEMENT : Basez la leçon sur le contexte de cours fourni. N\'inventez pas de faits qui contredisent le matériel source.
+5. TEXTE UNIQUEMENT : Produisez uniquement du texte. N\'incluez pas d\'images, d\'illustrations, de balises <img> ni d\'espaces réservés [img-gen ...]. Les leçons personnalisées ne traitent pas les espaces réservés d\'image.
+
+Avant de terminer, vérifiez que le champ content est substantiel, uniquement textuel, et répond directement à la demande de l\'apprenant.';
 $string['this_week_usage'] = 'Cette semaine';
 $string['total_used'] = 'Total utilisé';
 $string['transaction_type_deduction'] = 'Utilisation';

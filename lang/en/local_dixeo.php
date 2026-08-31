@@ -195,7 +195,9 @@ $string['eventfilesynctriggered'] = 'Dixeo course file sync triggered';
 $string['eventfilesynctriggereddesc'] = 'The user with id \'{$a->userid}\' triggered Dixeo file synchronisation for the course with id \'{$a->courseid}\'.';
 $string['eventjobcancelled'] = 'Dixeo job cancelled';
 $string['eventjobcancelleddesc'] = 'The user with id \'{$a->userid}\' cancelled Dixeo job \'{$a->jobid}\' for the course with id \'{$a->courseid}\'.';
-$string['feedback_correct'] = 'Correct!';
+$string['feedback_correct'] = 'Well done, you got this one right. Keep it up!';
+$string['feedback_incorrect'] = 'Not quite this time. Reviewing the topic will help you improve.';
+$string['feedback_partial'] = 'You\'re on the right track. Review the material and you\'ll get there.';
 $string['files'] = 'files';
 $string['filesync_disable_remove'] = 'Turn off & clear sync data';
 $string['filesync_enable'] = 'Enable sync';
@@ -216,6 +218,7 @@ $string['filesync_status_synchronized'] = 'Files synchronized';
 $string['filesync_status_syncing'] = 'Syncing files...';
 $string['filesync_timeout'] = 'File sync timed out before course files were indexed';
 $string['filesync_title'] = 'Dixeo File Sync';
+$string['generation_output_language'] = 'LANGUAGE: Generate all learner-facing content (questions, answers, lesson text, and titles) in {$a->language}.';
 $string['image_generation'] = 'Image generation';
 $string['image_generation_content_mode'] = 'Content images';
 $string['image_generation_content_mode_desc'] = 'Controls AI image actions for images in activity content, such as Pages and Books.';
@@ -243,6 +246,26 @@ $string['period_month'] = 'Monthly';
 $string['period_week'] = 'Weekly';
 $string['pluginname'] = 'Dixeo AI';
 $string['pluginname_desc'] = 'Dixeo AI integration for intelligent content generation and editing.';
+$string['practice_quiz_default_title'] = 'Practice quiz';
+$string['practice_quiz_difficulty_easy'] = 'easy (basic recall, straightforward concepts, suitable for beginners)';
+$string['practice_quiz_difficulty_hard'] = 'hard (challenging application, analysis, or synthesis of advanced concepts)';
+$string['practice_quiz_difficulty_medium'] = 'medium (moderate depth requiring understanding beyond simple recall)';
+$string['practice_quiz_error_invalid_result'] = 'Invalid job result.';
+$string['practice_quiz_error_job_not_completed'] = 'Job is not completed. Status: {$a->status}';
+$string['practice_quiz_error_no_questions'] = 'No questions in job result.';
+$string['practice_quiz_error_wrong_module_type'] = 'Job is not a simplequiz2 generation.';
+$string['practice_quiz_instructions'] = 'Generate a practice quiz for {$a->scopedescription}.
+
+MANDATORY REQUIREMENTS — you MUST follow these exactly:
+1. QUESTION COUNT: The "questions" array MUST contain exactly {$a->count} questions. Do not output {$a->count} minus one, {$a->count} plus one, or any other number — exactly {$a->count}.
+2. DIFFICULTY LEVEL: Every question MUST be at {$a->difficultylabel} difficulty.
+3. FORMAT: Each question MUST be multiple-choice with 3 or 4 answer options and exactly one correct answer.
+
+Before finishing, verify the questions array length equals {$a->count} and that all questions match the {$a->difficulty} difficulty level.
+Focus on the provided course context.';
+$string['practice_quiz_scope_activity_description'] = 'the activity "{$a->name}"';
+$string['practice_quiz_scope_course_description'] = 'the entire course "{$a->name}"';
+$string['practice_quiz_scope_section_description'] = 'the section "{$a->name}"';
 $string['privacy:metadata'] = 'The Dixeo plugin stores operational identifiers for course file synchronisation and sends course content, tutor messages, generation context and related identifiers to the Dixeo AI API for processing. Retention and deletion of data held by Dixeo are controlled by that external service.';
 $string['privacy:metadata:course_ai'] = 'Per-course AI file synchronisation configuration and status.';
 $string['privacy:metadata:course_ai:courseid'] = 'The course this synchronisation configuration belongs to.';
@@ -324,6 +347,24 @@ $string['task_poll_image'] = 'Poll Dixeo image job';
 $string['task_poll_image_generation'] = 'Poll Dixeo image generation job';
 $string['task_process_file_sync'] = 'Process Dixeo file synchronization';
 $string['task_process_remote_file_deletion'] = 'Retry Dixeo remote file deletion';
+$string['teach_lesson_default_title'] = 'Custom lesson';
+$string['teach_lesson_error_invalid_result'] = 'Invalid job result.';
+$string['teach_lesson_error_job_not_completed'] = 'Job is not completed. Status: {$a->status}';
+$string['teach_lesson_error_no_content'] = 'No content in job result.';
+$string['teach_lesson_error_wrong_module_type'] = 'Job is not a page generation.';
+$string['teach_lesson_instructions'] = 'Generate a custom Page module lesson for {$a->scopedescription}.
+
+The learner has asked:
+"{$a->learnerrequest}"
+
+MANDATORY REQUIREMENTS — you MUST follow these exactly:
+1. MODULE TYPE: Output a Page module with a clear, descriptive name, a brief introductory summary (intro), and rich main content (content).
+2. STRUCTURE: Organize the lesson with clear headings and logical sections. Use examples where helpful.
+3. LEARNER REQUEST: Address the learner\'s request directly — go deeper into the subject or explain it in simpler terms as they asked.
+4. ALIGNMENT: Base the lesson on the provided course context. Do not invent facts that contradict the source material.
+5. TEXT ONLY: Produce text only. Do not include images, illustrations, <img> tags, or [img-gen ...] placeholders. Custom lessons do not process image placeholders.
+
+Before finishing, verify the content field is substantive, text-only, and directly responds to the learner\'s request.';
 $string['this_week_usage'] = 'This Week';
 $string['total_used'] = 'Total Used';
 $string['transaction_type_deduction'] = 'Usage';
