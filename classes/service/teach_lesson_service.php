@@ -234,7 +234,29 @@ class teach_lesson_service {
 
         $contenthtml = trim(format_text($content, FORMAT_HTML, $formatoptions, $courseid));
 
+        $this->record_lesson_created_usage($jobid, $courseid);
+
         return $this->teach_lesson_result(true, $title, $introhtml, $contenthtml);
+    }
+
+    /**
+     * Record analytics for a successfully finalized teach lesson.
+     *
+     * @param string $jobid Job UUID.
+     * @param int $courseid Course id.
+     */
+    private function record_lesson_created_usage(string $jobid, int $courseid): void {
+        $job = $this->jobservice->get_job_repository()->get_by_jobid($jobid);
+        if ($job === null) {
+            return;
+        }
+        $userid = (int) ($job->userid ?? 0);
+        $resolvedcourseid = $courseid > 0 ? $courseid : (int) ($job->courseid ?? 0);
+        $cmid = (int) ($job->cmid ?? 0);
+        if ($userid < 1 || $resolvedcourseid < 1) {
+            return;
+        }
+        (new tutor_usage_recorder())->record_lesson_created($userid, $resolvedcourseid, $cmid);
     }
 
     /**
