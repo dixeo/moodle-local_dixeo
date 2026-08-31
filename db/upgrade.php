@@ -380,5 +380,91 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026081100, 'local', 'dixeo');
     }
 
+    // Create local_dixeo_image_job for async content/structure image generation.
+    if ($oldversion < 2026081900) {
+        $table = new xmldb_table('local_dixeo_image_job');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('placeholderid', XMLDB_TYPE_CHAR, '36', null, null, null, null);
+        $table->add_field('contextid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('component', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('filearea', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('itemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('filepath', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('filename', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('locationhash', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('targettable', XMLDB_TYPE_CHAR, '64', null, null, null, null);
+        $table->add_field('targetfield', XMLDB_TYPE_CHAR, '64', null, null, null, null);
+        $table->add_field('targetid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('origin', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'shortcode');
+        $table->add_field('prompt', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('quality', XMLDB_TYPE_CHAR, '10', null, null, null, null);
+        $table->add_field('mode', XMLDB_TYPE_CHAR, '20', null, null, null, null);
+        $table->add_field('jobid', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('status', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('errormessage', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_index('placeholderid_idx', XMLDB_INDEX_NOTUNIQUE, ['placeholderid']);
+        $table->add_index('locationhash_uix', XMLDB_INDEX_UNIQUE, ['locationhash']);
+        $table->add_index('status_idx', XMLDB_INDEX_NOTUNIQUE, ['status']);
+        $table->add_index('courseid_idx', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        $field = new xmldb_field('target_kind', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'content', 'id');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('objectid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'target_kind');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $index = new xmldb_index('target_kind_idx', XMLDB_INDEX_NOTUNIQUE, ['target_kind']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026081900, 'local', 'dixeo');
+    }
+
+    // Repair local_dixeo_jobs schema drift from early dev deploys (orphan timemodified, missing columns).
+    if ($oldversion < 2026081901) {
+        $table = new xmldb_table('local_dixeo_jobs');
+
+        if ($dbman->table_exists($table)) {
+            $field = new xmldb_field('timemodified');
+            if ($dbman->field_exists($table, $field)) {
+                $dbman->drop_field($table, $field);
+            }
+
+            $field = new xmldb_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+
+            $field = new xmldb_field('namespace', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, 'default');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+
+            $field = new xmldb_field('operation', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, 'unknown');
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026081901, 'local', 'dixeo');
+    }
+
     return true;
 }

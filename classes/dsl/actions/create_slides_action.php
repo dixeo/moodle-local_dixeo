@@ -30,6 +30,7 @@ namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\value_resolver;
+use local_dixeo\external\service_factory;
 
 /**
  * Action handler for creating slideshow slides.
@@ -57,7 +58,7 @@ class create_slides_action {
      * @throws dsl_exception If creation fails.
      */
     public function execute(array $action, value_resolver $resolver): array {
-        global $DB;
+        global $DB, $USER;
 
         $this->validate_action($action);
 
@@ -99,6 +100,9 @@ class create_slides_action {
         $fieldsspec = $action['fields'] ?? [];
         $createdids = [];
         $now = time();
+        $modulecontext = \context_module::instance($cmid);
+        $shortcodeservice = service_factory::get_content_image_shortcode_service();
+        $userid = (int) ($resolver->get_context()['userid'] ?? $USER->id);
 
         foreach ($slides as $index => $slideitem) {
             $itemdata = is_object($slideitem) ? (array) $slideitem : $slideitem;
@@ -127,6 +131,18 @@ class create_slides_action {
 
             // Insert the slide.
             $slideid = $DB->insert_record('slideshow_slide', $record);
+
+            $record->id = $slideid;
+            $shortcodeservice->process_and_persist(
+                'slideshow_slide',
+                $slideid,
+                $modulecontext->id,
+                (int) $cm->course,
+                $cmid,
+                $record,
+                $userid
+            );
+
             $createdids[] = $slideid;
         }
 

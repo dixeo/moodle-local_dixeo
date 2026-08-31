@@ -35,6 +35,7 @@ use local_dixeo\service\job_service;
 use local_dixeo\service\module_generation_service;
 use local_dixeo\service\module_types_service;
 use local_dixeo\service\file_sync_service;
+use local_dixeo\service\image\content\shortcode_service;
 use local_dixeo\service\image_generation_service;
 use local_dixeo\service\manual_upload_service;
 use local_dixeo\service\tutor_service;
@@ -72,6 +73,9 @@ class service_factory {
 
     /** @var image_generation_service|null Mock image generation service for unit testing. */
     private static ?image_generation_service $testimagegenerationservice = null;
+
+    /** @var shortcode_service|null Mock content image shortcode service for unit testing. */
+    private static ?shortcode_service $testcontentimageshortcodeservice = null;
 
     /** @var client|null Mock client instance for unit testing. */
     private static ?client $testclient = null;
@@ -214,7 +218,20 @@ class service_factory {
      *
      * @return client The client instance.
      */
-    public static function get_client(): client {
+    /**
+     * Get a content_image shortcode_service instance.
+     *
+     * @return shortcode_service
+     */
+    public static function get_content_image_shortcode_service(): shortcode_service {
+        if (self::$testcontentimageshortcodeservice !== null) {
+            return self::$testcontentimageshortcodeservice;
+        }
+
+        return new shortcode_service(self::get_image_generation_service());
+    }
+
+        public static function get_client(): client {
         if (self::$testclient !== null) {
             return self::$testclient;
         }
@@ -322,7 +339,16 @@ class service_factory {
      *
      * @param client|null $client The test client, or null to clear.
      */
-    public static function set_test_client(?client $client): void {
+    /**
+     * Set a mock content image shortcode service for unit testing.
+     *
+     * @param shortcode_service|null $service
+     */
+    public static function set_test_content_image_shortcode_service(?shortcode_service $service): void {
+        self::$testcontentimageshortcodeservice = $service;
+    }
+
+        public static function set_test_client(?client $client): void {
         self::$testclient = $client;
     }
 

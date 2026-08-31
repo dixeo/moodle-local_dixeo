@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Tests for course_image_writer (course overview + Dixeo section images, cache).
+ * Tests for structure_image writer (course overview + Dixeo section images, cache).
  *
  * @package    local_dixeo
  * @category   test
@@ -27,11 +27,12 @@ namespace local_dixeo;
 
 use context_course;
 use core_course\external\course_summary_exporter;
-use local_dixeo\service\course_image_writer;
-use local_dixeo\service\image_poll_manager;
+use local_dixeo\service\image\structure\scope;
+use local_dixeo\service\image\structure\writer;
+
+
 
 defined('MOODLE_INTERNAL') || die();
-
 global $CFG;
 require_once($CFG->dirroot . '/course/lib.php');
 $formatdixeolib = $CFG->dirroot . '/course/format/dixeo/lib.php';
@@ -40,11 +41,10 @@ if (is_readable($formatdixeolib)) {
 }
 
 /**
- * Unit tests for course image writer.
- *
- * @covers \local_dixeo\service\course_image_writer
+ * Tests for writer_test.
+ * @covers \local_dixeo\service\image\structure\writer
  */
-final class course_image_writer_test extends \advanced_testcase {
+final class writer_test extends \advanced_testcase {
     /**
      * Core filestorage fixture: PNG overview / first generation.
      *
@@ -75,11 +75,19 @@ final class course_image_writer_test extends \advanced_testcase {
         }
     }
 
+    /**
+     * Reset after each test.
+     */
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
     }
 
+    /**
+
+     * Test apply course overview on fresh course sets image and url.
+
+     */
     public function test_apply_course_overview_on_fresh_course_sets_image_and_url(): void {
         global $USER;
 
@@ -88,7 +96,7 @@ final class course_image_writer_test extends \advanced_testcase {
         $course = $gen->create_course(['format' => 'topics'], ['createsections' => true]);
         $binary = self::fixture_png_bytes();
 
-        course_image_writer::apply_image_binary_to_course_overview((int) $course->id, $binary, (int) $USER->id);
+        writer::apply_image_binary_to_course_overview((int) $course->id, $binary, (int) $USER->id);
 
         $fresh = get_course($course->id);
         $url = course_summary_exporter::get_course_image($fresh);
@@ -101,6 +109,11 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertCount(1, $files);
     }
 
+    /**
+
+     * Test apply section on fresh section sets pluginfile url.
+
+     */
     public function test_apply_section_on_fresh_section_sets_pluginfile_url(): void {
         global $USER;
 
@@ -111,8 +124,8 @@ final class course_image_writer_test extends \advanced_testcase {
         $section = $this->get_section_one($course->id);
         $binary = self::fixture_png_bytes();
 
-        course_image_writer::apply_from_job_result(
-            image_poll_manager::SCOPE_FORMAT_SECTION,
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
             (int) $section->id,
             ['image_base64' => base64_encode($binary)],
             (int) $USER->id
@@ -140,6 +153,11 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertCount(1, $files);
     }
 
+    /**
+
+     * Test apply course overview clears stale course image cache.
+
+     */
     public function test_apply_course_overview_clears_stale_course_image_cache(): void {
         global $USER;
 
@@ -152,7 +170,7 @@ final class course_image_writer_test extends \advanced_testcase {
         \cache::make('core', 'course_image')->set($courseid, $stale);
         $this->assertSame($stale, course_summary_exporter::get_course_image(get_course($courseid)));
 
-        course_image_writer::apply_image_binary_to_course_overview($courseid, self::fixture_png_bytes(), (int) $USER->id);
+        writer::apply_image_binary_to_course_overview($courseid, self::fixture_png_bytes(), (int) $USER->id);
 
         $url = course_summary_exporter::get_course_image(get_course($courseid));
         $this->assertNotSame($stale, $url);
@@ -160,6 +178,11 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertStringContainsString('pluginfile.php', (string) $url);
     }
 
+    /**
+
+     * Test apply section clears stale course image cache.
+
+     */
     public function test_apply_section_clears_stale_course_image_cache(): void {
         global $USER;
 
@@ -174,8 +197,8 @@ final class course_image_writer_test extends \advanced_testcase {
         \cache::make('core', 'course_image')->set($courseid, $stale);
         $this->assertSame($stale, course_summary_exporter::get_course_image(get_course($courseid)));
 
-        course_image_writer::apply_from_job_result(
-            image_poll_manager::SCOPE_FORMAT_SECTION,
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
             (int) $section->id,
             ['image_base64' => base64_encode(self::fixture_png_bytes())],
             (int) $USER->id
@@ -187,6 +210,11 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertTrue($url === false || (is_string($url) && str_contains($url, 'pluginfile.php')));
     }
 
+    /**
+
+     * Test regenerate course overview replaces file content.
+
+     */
     public function test_regenerate_course_overview_replaces_file_content(): void {
         global $USER;
 
@@ -198,19 +226,24 @@ final class course_image_writer_test extends \advanced_testcase {
         $second = self::fixture_jpeg_bytes();
         $this->assertNotSame(sha1($first), sha1($second));
 
-        course_image_writer::apply_image_binary_to_course_overview($courseid, $first, (int) $USER->id);
+        writer::apply_image_binary_to_course_overview($courseid, $first, (int) $USER->id);
         $context = context_course::instance($courseid);
         $fs = get_file_storage();
         $files = $fs->get_area_files($context->id, 'course', 'overviewfiles', 0, 'id', false);
         $this->assertCount(1, $files);
         $hashafterfirst = reset($files)->get_contenthash();
 
-        course_image_writer::apply_image_binary_to_course_overview($courseid, $second, (int) $USER->id);
+        writer::apply_image_binary_to_course_overview($courseid, $second, (int) $USER->id);
         $files = $fs->get_area_files($context->id, 'course', 'overviewfiles', 0, 'id', false);
         $this->assertCount(1, $files);
         $this->assertNotSame($hashafterfirst, reset($files)->get_contenthash());
     }
 
+    /**
+
+     * Test regenerate section replaces file content.
+
+     */
     public function test_regenerate_section_replaces_file_content(): void {
         global $USER;
 
@@ -224,8 +257,8 @@ final class course_image_writer_test extends \advanced_testcase {
         $second = self::fixture_jpeg_bytes();
         $this->assertNotSame(sha1($first), sha1($second));
 
-        course_image_writer::apply_from_job_result(
-            image_poll_manager::SCOPE_FORMAT_SECTION,
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
             $sid,
             ['image_base64' => base64_encode($first)],
             (int) $USER->id
@@ -237,8 +270,8 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertCount(1, $files);
         $hashafterfirst = reset($files)->get_contenthash();
 
-        course_image_writer::apply_from_job_result(
-            image_poll_manager::SCOPE_FORMAT_SECTION,
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
             $sid,
             ['image_base64' => base64_encode($second)],
             (int) $USER->id
@@ -248,6 +281,11 @@ final class course_image_writer_test extends \advanced_testcase {
         $this->assertNotSame($hashafterfirst, reset($files)->get_contenthash());
     }
 
+    /**
+
+     * Test apply from job result course scope matches direct overview apply.
+
+     */
     public function test_apply_from_job_result_course_scope_matches_direct_overview_apply(): void {
         global $USER;
 
@@ -256,8 +294,8 @@ final class course_image_writer_test extends \advanced_testcase {
         $course = $gen->create_course(['format' => 'topics'], ['createsections' => true]);
         $binary = self::fixture_png_bytes();
 
-        course_image_writer::apply_from_job_result(
-            image_poll_manager::SCOPE_COURSE_OVERVIEW,
+        writer::apply_from_job_result(
+            scope::SCOPE_COURSE_OVERVIEW,
             (int) $course->id,
             ['image_base64' => base64_encode($binary)],
             (int) $USER->id

@@ -284,4 +284,111 @@ final class job_binding_test extends \advanced_testcase {
         $this->assertFalse(local_dixeo_is_valid_job_uuid(''));
         $this->assertFalse(local_dixeo_is_valid_job_uuid('<script>'));
     }
+
+    public function test_repository_register_and_belongs_to_course(): void {
+        $repo = new job_repository();
+        $repo->register('job-a', 10, 5, 'default', 'module_generate');
+
+        $this->assertTrue($repo->belongs_to_course('job-a', 10));
+        $this->assertFalse($repo->belongs_to_course('job-a', 99));
+        $this->assertFalse($repo->belongs_to_course('missing', 10));
+
+        $record = $repo->get_by_jobid('job-a');
+        $this->assertNotNull($record);
+        $this->assertEquals(5, (int) $record->userid);
+        $this->assertEquals('module_generate', $record->operation);
+    }
+
+    public function test_get_job_status_rejects_foreign_course(): void {
+        $repo = new job_repository();
+        $repo->register('job-bound', 11, 3, 'default', 'tutor_message');
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('get');
+
+        $service = new job_service($client, null, $repo);
+
+        $this->expectException(\moodle_exception::class);
+        $service->get_job_status('job-bound', 99);
+    }
+
+    public function test_get_job_status_allows_same_course_other_user(): void {
+        // Course-work model: any caller who may operate in the course can poll a peer's job.
+        $repo = new job_repository();
+        $repo->register('job-peer', 15, 3, 'default', 'module_generate');
+
+        $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+        $poller->expects($this->once())
+            ->method('get_job_status')
+            ->with('job-peer')
+            ->willReturn(new job_status(
+                jobid: 'job-peer',
+                type: 'module',
+                status: 'processing',
+                progress: 40,
+                createdat: time()
+            ));
+
+        $service = new job_service(null, $poller, $repo);
+        $status = $service->get_job_status('job-peer', 15);
+        $this->assertEquals('job-peer', $status->jobid);
+        $this->assertEquals(40, $status->progress);
+    }
+
+    public function test_get_job_status_allows_matching_course(): void {
+        $repo = new job_repository();
+        $repo->register('job-ok', 15, 3, 'default', 'tutor_message');
+
+        $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+        $poller->expects($this->once())
+            ->method('get_job_status')
+            ->with('job-ok')
+            ->willReturn(new job_status(
+                jobid: 'job-ok',
+                type: 'tutor',
+                status: 'completed',
+                progress: 100,
+                createdat: time()
+            ));
+
+        $service = new job_service(null, $poller, $repo);
+        $status = $service->get_job_status('job-ok', 15);
+        $this->assertEquals('job-ok', $status->jobid);
+        $this->assertTrue($status->is_completed());
+    }
+
+    public function test_get_job_status_rejects_same_course_peer_when_userid_required(): void {
+        $repo = new job_repository();
+        $repo->register('job-peer', 20, 3, 'default', 'module_edit');
+
+        $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+        $poller->expects($this->never())->method('get_job_status');
+
+        $service = new job_service(null, $poller, $repo);
+
+        $this->expectException(\moodle_exception::class);
+        $service->get_job_status('job-peer', 20, 99);
+    }
+
+    public function test_cancel_job_rejects_same_course_peer_when_userid_required(): void {
+        $repo = new job_repository();
+        $repo->register('job-cancel-peer', 20, 3, 'default', 'module_edit');
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('post');
+
+        $service = new job_service($client, null, $repo);
+
+        $this->expectException(\moodle_exception::class);
+        $service->cancel_job('job-cancel-peer', 20, 99);
+    }
 }

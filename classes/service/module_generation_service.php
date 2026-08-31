@@ -32,8 +32,8 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\job_binding_metadata;
-use local_dixeo\job_access_mode;
 use local_dixeo\dto\operation_result;
+use local_dixeo\job_access_mode;
 
 /**
  * Service for module generation and fill operations.
@@ -72,6 +72,9 @@ class module_generation_service {
     /** @var job_binding_metadata|null Optional metadata override for job bindings. */
     private ?job_binding_metadata $jobmetadata = null;
 
+    /** @var bool Whether to append content-image shortcode instructions. */
+    private bool $includeimageprompt = true;
+
     /**
      * Constructor.
      *
@@ -108,6 +111,17 @@ class module_generation_service {
      */
     public function set_job_metadata(?job_binding_metadata $metadata): self {
         $this->jobmetadata = $metadata;
+        return $this;
+    }
+
+    /**
+     * Whether subsequent generate/edit payloads include [img-gen] shortcode instructions.
+     *
+     * @param bool $include False for ephemeral outputs that never process image placeholders.
+     * @return self
+     */
+    public function set_include_image_prompt(bool $include): self {
+        $this->includeimageprompt = $include;
         return $this;
     }
 
@@ -411,6 +425,57 @@ class module_generation_service {
     }
 
     /**
+     * Edit module content from a pre-built payload (blocking).
+     *
+     * Companion to {@see build_edit_payload()} for callers that post-process the
+     * payload (e.g. the content editor encodes images into it) but must still go
+     * through the canonical edit endpoint and job type.
+     *
+     * @param array $payload Payload from build_edit_payload().
+     * @return operation_result The operation result (completed or pending).
+     * @throws api_exception If an API error occurs.
+     */
+    public function edit_module_content_with_payload(array $payload): operation_result {
+        $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
+
+        return $this->jobservice->submit_and_wait(
+            self::EDIT_ENDPOINT,
+            $payload,
+            self::JOB_TYPE_EDIT,
+            $this->component,
+            job_binding_metadata::resolve_for_submit(
+                $payload,
+                $courseid > 0 ? $courseid : null,
+                $this->jobmetadata
+            )
+        );
+    }
+
+    /**
+     * Submit an edit job from a pre-built payload without polling.
+     *
+     * Returns immediately with jobid. Use job_service::get_job_status() to poll.
+     *
+     * @param array $payload Payload from build_edit_payload().
+     * @return operation_result Pending operation result with jobid.
+     * @throws api_exception If the API request fails.
+     */
+    public function submit_edit_job(array $payload): operation_result {
+        $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
+
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit(
+                $payload,
+                $courseid > 0 ? $courseid : null,
+                $this->jobmetadata
+            )
+        );
+    }
+
+    /**
      * Set a custom namespace for subsequent requests.
      *
      * @param string|null $namespace The namespace to use.
@@ -450,6 +515,25 @@ class module_generation_service {
      * @return array The request payload.
      * @throws \invalid_parameter_exception If required parameters are empty.
      */
+    public function build_edit_payload(
+        string $moduletype,
+        string $instructions,
+        string $context,
+        ?int $courseid = null
+    ): array {
+        return $this->build_payload($moduletype, $instructions, $context, $courseid);
+    }
+
+    /**
+     * Build the API request payload.
+     *
+     * @param string $moduletype The module type.
+     * @param string $instructions The AI instructions.
+     * @param string $context The context markdown.
+     * @param int|null $courseid Optional course ID for RAG file search.
+     * @return array The request payload.
+     * @throws \invalid_parameter_exception If required parameters are empty.
+     */
     private function build_payload(string $moduletype, string $instructions, string $context, ?int $courseid = null): array {
         if (empty(trim($moduletype))) {
             throw new \invalid_parameter_exception('Module type is required');
@@ -470,6 +554,17 @@ class module_generation_service {
 
         if ($this->namespace !== null) {
             $payload['namespace'] = $this->namespace;
+        }
+
+        if (
+            $this->includeimageprompt
+            && \local_dixeo\service\image\policy::is_enabled(
+                \local_dixeo\service\image\policy::ENTITY_CONTENT,
+                \local_dixeo\service\image\policy::ACTION_GENERATE
+            )
+        ) {
+            $payload['instructions'] = rtrim($payload['instructions']) . "\n\n" .
+                \local_dixeo\service\image\content\shortcode_service::get_image_prompt_for_module($moduletype);
         }
 
         return $payload;
