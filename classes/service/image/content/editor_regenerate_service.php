@@ -20,7 +20,6 @@ namespace local_dixeo\service\image\content;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\job_orchestrator;
-use local_dixeo\service\image\policy;
 use local_dixeo\service\module_generation_service;
 
 /**
@@ -122,15 +121,10 @@ final class editor_regenerate_service {
 
         $contextmarkdown = self::build_api_context($cmid, $subid, $drafthtml, $imagecontext, $userid);
 
-        $fullinstructions = $instructions;
-        if (policy::is_enabled(policy::ENTITY_CONTENT, policy::ACTION_GENERATE)) {
-            $fullinstructions = rtrim($fullinstructions) . "\n\n" . shortcode_service::get_editor_keep_image_prompt();
-        }
-
         $service = new module_generation_service();
         $payload = $service->build_edit_payload(
             $cm->modname,
-            $fullinstructions,
+            $instructions,
             $contextmarkdown,
             (int) $cm->course
         );
