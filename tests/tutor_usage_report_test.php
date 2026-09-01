@@ -547,8 +547,12 @@ final class tutor_usage_report_test extends \advanced_testcase {
             tutor_usage_report_service::normalize_sort('sessions', tutor_usage_report_service::LEVEL_USER)
         );
         $this->assertSame(
-            'sessions',
+            tutor_usage_report_service::SORT_DEFAULT,
             tutor_usage_report_service::normalize_sort('sessions', tutor_usage_report_service::LEVEL_COURSE)
+        );
+        $this->assertSame(
+            'duration',
+            tutor_usage_report_service::normalize_sort('duration', tutor_usage_report_service::LEVEL_COURSE)
         );
     }
 
@@ -591,19 +595,19 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertSame('none', $columns['name']['ariasort']);
         $this->assertStringContainsString('sort=name', $columns['name']['url']);
         $this->assertStringContainsString('sortdir=asc', $columns['name']['url']);
-        $this->assertStringContainsString('sortdir=desc', $columns['sessions']['url']);
+        $this->assertStringContainsString('sortdir=desc', $columns['duration']['url']);
 
         // A non-default sort rides along with the other report links.
         $sorted = new tutor_usage_report_page($params + [
-            'sort' => 'sessions',
+            'sort' => 'duration',
             'sortdir' => tutor_usage_report_service::SORT_ASC,
         ]);
         $sorteddata = $sorted->export_for_template($PAGE->get_renderer('core'));
-        $this->assertStringContainsString('sort=sessions', $sorteddata['period']['prevurl']);
+        $this->assertStringContainsString('sort=duration', $sorteddata['period']['prevurl']);
         $this->assertStringContainsString('sortdir=asc', $sorteddata['period']['prevurl']);
-        $this->assertStringContainsString('sort=sessions', $sorteddata['rolescopes'][0]['url']);
+        $this->assertStringContainsString('sort=duration', $sorteddata['rolescopes'][0]['url']);
         foreach ($sorteddata['columns'] as $column) {
-            if ($column['key'] === 'sessions') {
+            if ($column['key'] === 'duration') {
                 $this->assertTrue($column['ascending']);
                 $this->assertSame('ascending', $column['ariasort']);
                 $this->assertStringContainsString('sortdir=desc', $column['url']);
@@ -612,7 +616,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
     }
 
     /**
-     * Summary rows expose engagement per level and total session duration in the sessions tooltip.
+     * Summary rows expose engagement per level, total duration in the cell, and median/average in the tooltip.
      */
     public function test_summary_rows_report_engagement_and_total_duration(): void {
         $this->resetAfterTest();
@@ -662,9 +666,11 @@ final class tutor_usage_report_test extends \advanced_testcase {
         // Three active days over two active users.
         $this->assertSame(1.5, (float) $siterow['engagement']);
         $this->assertStringContainsString('1.5', $siterow['engagementformatted']);
-        // Three sessions of 600 + 300, 300, and 300 seconds.
-        $this->assertSame(3, (int) $siterow['sessions']);
-        $this->assertStringContainsString('25 min', $siterow['sessionstooltip']);
+        // Three sessions of 600 + 300, 300, and 300 seconds (25 min total).
+        $this->assertSame(1500, (int) $siterow['duration']);
+        $this->assertSame('25 min', $siterow['durationformatted']);
+        $this->assertStringContainsString('5 min', $siterow['durationtooltip']);
+        $this->assertStringContainsString('8 min', $siterow['durationtooltip']);
 
         $courserows = $service->get_rows(
             tutor_usage_report_service::LEVEL_COURSE,
@@ -686,9 +692,9 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertStringContainsString('2', $byuser[(int) $frequent->id]['engagementformatted']);
         $this->assertStringNotContainsString('.', $byuser[(int) $frequent->id]['engagementformatted']);
         $this->assertSame(1.0, (float) $byuser[(int) $occasional->id]['engagement']);
-        // Two sessions of 900 and 300 seconds: 10 minutes on average, 20 in total.
-        $this->assertStringContainsString('10 min', $byuser[(int) $frequent->id]['sessionstooltip']);
-        $this->assertStringContainsString('20 min', $byuser[(int) $frequent->id]['sessionstooltip']);
+        // Two sessions of 900 and 300 seconds: 20 min total, 10 min median and average.
+        $this->assertSame('20 min', $byuser[(int) $frequent->id]['durationformatted']);
+        $this->assertStringContainsString('10 min', $byuser[(int) $frequent->id]['durationtooltip']);
     }
 
     /**

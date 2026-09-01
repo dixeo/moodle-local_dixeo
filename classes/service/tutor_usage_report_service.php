@@ -104,7 +104,7 @@ class tutor_usage_report_service {
         }
         array_push($keys, 'messages', 'normal', 'guide', 'quiz', 'teach');
         if ($level !== self::LEVEL_USER) {
-            $keys[] = 'sessions';
+            $keys[] = 'duration';
         }
         $keys[] = 'lastactive';
 
@@ -877,6 +877,7 @@ class tutor_usage_report_service {
         return match ($key) {
             'engagement' => get_string('tutor_usage_report_kpi_engagement', 'local_dixeo'),
             'adoption' => get_string('tutor_usage_report_kpi_adoption', 'local_dixeo'),
+            'duration' => get_string('tutor_usage_report_kpi_duration', 'local_dixeo'),
             'moduletype' => get_string('tutor_usage_report_column_moduletype', 'local_dixeo'),
             'normal' => get_string('tutor_usage_report_column_standard', 'local_dixeo'),
             default => get_string('tutor_usage_report_column_' . $key, 'local_dixeo'),
@@ -940,7 +941,7 @@ class tutor_usage_report_service {
             $item['quiz'] = $row['quizformatted'];
             $item['teach'] = $row['teachformatted'];
             if ($level !== self::LEVEL_USER) {
-                $item['sessions'] = $row['sessionsformatted'];
+                $item['duration'] = $row['durationformatted'];
             }
             $item['lastactive'] = $row['lastactiveformatted'];
             $export[] = $item;
@@ -1475,7 +1476,9 @@ class tutor_usage_report_service {
                 $aggregates[$key] = $this->empty_row_metrics();
             }
             $aggregates[$key]['sessions']++;
-            $aggregates[$key]['duration'] = ($aggregates[$key]['duration'] ?? 0) + (int) $session->duration;
+            $sessionduration = (int) $session->duration;
+            $aggregates[$key]['duration'] = ($aggregates[$key]['duration'] ?? 0) + $sessionduration;
+            $aggregates[$key]['sessiondurations'][] = $sessionduration;
             $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], (int) $session->timeend);
             $this->mark_row_active_user($aggregates, $key, (int) $session->userid);
         }
@@ -1676,6 +1679,7 @@ class tutor_usage_report_service {
 
             $aggregates[$key]['sessions']++;
             $aggregates[$key]['duration'] = ($aggregates[$key]['duration'] ?? 0) + $sessionduration;
+            $aggregates[$key]['sessiondurations'][] = $sessionduration;
             $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], $lastmessage);
             $this->mark_row_active_user($aggregates, $key, (int) $open->userid);
         }
@@ -1801,7 +1805,11 @@ class tutor_usage_report_service {
         $teach = (int) $metrics['teach'];
         $sessions = (int) $metrics['sessions'];
         $duration = (int) ($metrics['duration'] ?? 0);
-        $avgduration = $sessions > 0 ? (int) round($duration / $sessions) : 0;
+        $sessiondurations = array_map('intval', $metrics['sessiondurations'] ?? []);
+        $mediansessionduration = (int) round($this->median($sessiondurations));
+        $averagesessionduration = $sessiondurations !== []
+            ? (int) round(array_sum($sessiondurations) / count($sessiondurations))
+            : 0;
 
         // Active days averaged over the users active in this row; a user row holds a single user.
         $activedays = array_map('count', $metrics['activedaysbyuser'] ?? []);
@@ -1841,13 +1849,14 @@ class tutor_usage_report_service {
             'teachformatted' => number_format($teach),
             'teachtooltip' => $this->format_mode_pct($teach, $messages),
             'sessions' => $sessions,
-            'sessionsformatted' => number_format($sessions),
-            'sessionstooltip' => get_string(
-                'tutor_usage_report_cell_tooltip_sessions',
+            'duration' => $duration,
+            'durationformatted' => self::format_duration($duration),
+            'durationtooltip' => get_string(
+                'tutor_usage_report_kpi_duration_secondary',
                 'local_dixeo',
                 (object) [
-                    'average' => self::format_duration($avgduration),
-                    'total' => self::format_duration($duration),
+                    'median' => self::format_duration($mediansessionduration),
+                    'average' => self::format_duration($averagesessionduration),
                 ]
             ),
             'lastactive' => (int) $metrics['lastactive'],
@@ -2080,6 +2089,7 @@ class tutor_usage_report_service {
             'teach' => 0,
             'sessions' => 0,
             'duration' => 0,
+            'sessiondurations' => [],
             'lastactive' => 0,
             'activeuserids' => [],
             'activedaysbyuser' => [],
