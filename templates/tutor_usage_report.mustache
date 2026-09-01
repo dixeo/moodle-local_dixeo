@@ -113,14 +113,14 @@
             },
             "engagement": {
                 "value": "3.2 days",
-                "info": "Average number of distinct days each active user used the tutor during the period.",
+                "info": "The total of the number of days that users interacted with the tutor during the period",
                 "hastooltip": true,
                 "tooltip": "Median 3.0 / Average 3.2 active days per active user",
                 "change": {"value": "+50.0% since last week", "positive": true, "negative": false}
             },
             "messages": {
                 "value": "120",
-                "info": "Number of messages sent to the tutor during the period.",
+                "info": "Total number of messages sent to the tutor during the period.",
                 "hastooltip": true,
                 "tooltip": "Median 3.0 / Average 4.5",
                 "change": {"value": "+10.0% since last week", "positive": true, "negative": false}
@@ -134,7 +134,7 @@
             },
             "duration": {
                 "value": "1d 2h 15m",
-                "info": "Total time spent in tutor sessions. Each session counts the time between its first and last message, plus 5 mins.",
+                "info": "Total time spent interacting with the tutor during the period.",
                 "hastooltip": true,
                 "tooltip": "Median 12 min / Average 15 min",
                 "change": {"value": "-1.0% since last week", "positive": false, "negative": true}
@@ -242,8 +242,8 @@
                 "quiztooltip": "12.5%",
                 "teachformatted": "5",
                 "teachtooltip": "12.5%",
-                "sessionsformatted": "12",
-                "sessionstooltip": "Average duration: 15 min · Total: 3h 0m",
+                "durationformatted": "3h 0m",
+                "durationtooltip": "Median 12 min / Average 15 min",
                 "lastactiveformatted": "20 Jul 2026, 10:00"
             }
         ],
@@ -686,7 +686,7 @@
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
                                         data-placement="bottom"
-                                        title="{{sessionstooltip}}">{{sessionsformatted}}</td>
+                                        title="{{durationtooltip}}">{{durationformatted}}</td>
                                     {{/isuserlevel}}
                                     <td><span class="text-nowrap">{{lastactiveformatted}}</span></td>
                                 </tr>
