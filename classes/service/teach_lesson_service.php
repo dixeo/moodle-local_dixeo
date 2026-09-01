@@ -59,9 +59,7 @@ class teach_lesson_service {
     ) {
         $this->modulegeneration = $modulegeneration
             ?? (new module_generation_service())->set_component('block_dixeo_tutor');
-        if (method_exists($this->modulegeneration, 'set_include_image_prompt')) {
-            $this->modulegeneration->set_include_image_prompt(false);
-        }
+        $this->modulegeneration->set_generate_images(false);
         $this->jobservice = $jobservice ?? new job_service();
     }
 

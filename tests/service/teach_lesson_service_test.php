@@ -28,6 +28,7 @@ namespace local_dixeo;
 use local_dixeo\dto\job_status;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\job_service;
+use local_dixeo\service\module_generation_service;
 use local_dixeo\service\teach_lesson_service;
 
 
@@ -55,6 +56,22 @@ final class teach_lesson_service_test extends \advanced_testcase {
         $this->assertStringContainsString('Page module', $instructions);
         $this->assertStringContainsString('TEXT ONLY', $instructions);
         $this->assertStringContainsString('[img-gen', $instructions);
+    }
+
+    /**
+     * Teach lessons never ask the API for content images.
+     */
+    public function test_lesson_payloads_never_request_images(): void {
+        $this->resetAfterTest();
+        set_config('image_generation_enabled', 1, 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+
+        $modulegeneration = new module_generation_service();
+        new teach_lesson_service($modulegeneration);
+
+        $payload = $modulegeneration->build_edit_payload('page', 'Explain cells', 'Course context');
+
+        $this->assertArrayNotHasKey('generateImages', $payload);
     }
 
     /**

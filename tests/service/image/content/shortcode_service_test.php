@@ -162,14 +162,4 @@ final class shortcode_service_test extends \advanced_testcase {
         $this->assertSame(3, substr_count($processed, 'data-dixeo-img-gen='));
         $this->assertSame(3, $DB->count_records('local_dixeo_image_job'));
     }
-
-    /**
-     * Test glossary image prompt targets entry definitions.
-     */
-    public function test_glossary_image_prompt_targets_entry_definitions(): void {
-        $prompt = shortcode_service::get_image_prompt_for_module('glossary');
-        $this->assertStringContainsString('create_entries', $prompt);
-        $this->assertStringContainsString('definition', $prompt);
-        $this->assertStringContainsString('[img-gen', $prompt);
-    }
 }

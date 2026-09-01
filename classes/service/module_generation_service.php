@@ -72,8 +72,8 @@ class module_generation_service {
     /** @var job_binding_metadata|null Optional metadata override for job bindings. */
     private ?job_binding_metadata $jobmetadata = null;
 
-    /** @var bool Whether to append content-image shortcode instructions. */
-    private bool $includeimageprompt = true;
+    /** @var bool Whether generate/edit payloads ask the API for content images. */
+    private bool $generateimages = true;
 
     /**
      * Constructor.
@@ -115,13 +115,13 @@ class module_generation_service {
     }
 
     /**
-     * Whether subsequent generate/edit payloads include [img-gen] shortcode instructions.
+     * Whether subsequent generate/edit payloads ask the API for content images.
      *
-     * @param bool $include False for ephemeral outputs that never process image placeholders.
+     * @param bool $generateimages False for ephemeral outputs that never process image placeholders.
      * @return self
      */
-    public function set_include_image_prompt(bool $include): self {
-        $this->includeimageprompt = $include;
+    public function set_generate_images(bool $generateimages): self {
+        $this->generateimages = $generateimages;
         return $this;
     }
 
@@ -557,14 +557,13 @@ class module_generation_service {
         }
 
         if (
-            $this->includeimageprompt
+            $this->generateimages
             && \local_dixeo\service\image\policy::is_enabled(
                 \local_dixeo\service\image\policy::ENTITY_CONTENT,
                 \local_dixeo\service\image\policy::ACTION_GENERATE
             )
         ) {
-            $payload['instructions'] = rtrim($payload['instructions']) . "\n\n" .
-                \local_dixeo\service\image\content\shortcode_service::get_image_prompt_for_module($moduletype);
+            $payload['generateImages'] = true;
         }
 
         return $payload;
