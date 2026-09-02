@@ -224,6 +224,18 @@ class client {
 
         // Successful responses: unwrap the optional 'data' key when present.
         if ($httpcode >= 200 && $httpcode < 300) {
+            if (!is_array($data)) {
+                throw new api_exception(
+                    'invalid_response',
+                    'Invalid JSON response from Dixeo API',
+                    $httpcode,
+                    [
+                        'response_bytes' => $responsebytes,
+                        'json_error' => 'Decoded JSON was not an object/array',
+                        'content_type' => $contenttype,
+                    ]
+                );
+            }
             return $data['data'] ?? $data;
         }
 

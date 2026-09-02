@@ -30,8 +30,12 @@ class job_failed_exception extends api_exception {
     /** @var string The job ID that failed. */
     protected string $jobid;
 
-    /** @var string|null The error code from the job. */
-    protected ?string $errorcode;
+    /**
+     * Job-level error code from the Dixeo API (not Moodle's moodle_exception::$errorcode).
+     *
+     * @var string|null
+     */
+    protected ?string $joberrorcode;
 
     /**
      * Constructor.
@@ -48,7 +52,7 @@ class job_failed_exception extends api_exception {
         array $details = []
     ) {
         $this->jobid = $jobid;
-        $this->errorcode = $errorcode;
+        $this->joberrorcode = $errorcode;
         parent::__construct('job_processing_failed', $message, 500, $details);
     }
 
@@ -62,11 +66,20 @@ class job_failed_exception extends api_exception {
     }
 
     /**
-     * Get the error code.
+     * Get the job API error code when present, otherwise the RFC 7807 error type.
      *
-     * @return string|null The error code from the job, or null if not available.
+     * @return string
      */
-    public function get_error_code(): ?string {
-        return $this->errorcode;
+    public function get_error_code(): string {
+        return $this->joberrorcode ?? parent::get_error_code();
+    }
+
+    /**
+     * Get the raw job API error code.
+     *
+     * @return string|null
+     */
+    public function get_job_error_code(): ?string {
+        return $this->joberrorcode;
     }
 }
