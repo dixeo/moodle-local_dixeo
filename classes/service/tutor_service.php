@@ -394,21 +394,29 @@ class tutor_service {
     }
 
     /**
-     * Resolve instructions.
+     * Resolve course-structure markdown (and any leftover client brief) for the wire.
      * @param int $courseid
      * @param tutor_message $message
      * @return string|null
      */
     private function resolve_instructions(int $courseid, tutor_message $message): ?string {
-        if ($message->instructions !== null && trim($message->instructions) !== '') {
-            $instructions = $message->instructions;
-            if ($this->needs_course_structure_in_instructions($message)) {
-                $coursecontext = $this->build_instructions($courseid);
-                if (trim($coursecontext) !== '') {
-                    $instructions = trim($coursecontext) . "\n\n" . trim($instructions);
-                }
+        $brief = ($message->instructions !== null && trim($message->instructions) !== '')
+            ? trim($message->instructions)
+            : '';
+
+        if ($this->needs_course_structure_in_instructions($message)) {
+            $coursecontext = trim($this->build_instructions($courseid));
+            if ($coursecontext === '') {
+                return $brief !== '' ? $brief : null;
             }
-            return $instructions;
+            if ($brief === '') {
+                return $coursecontext;
+            }
+            return $coursecontext . "\n\n" . $brief;
+        }
+
+        if ($brief !== '') {
+            return $brief;
         }
 
         if (
