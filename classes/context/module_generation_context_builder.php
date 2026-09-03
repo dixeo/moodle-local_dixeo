@@ -75,7 +75,7 @@ class module_generation_context_builder extends abstract_context_builder {
         $lines[] = "## Course: {$this->course->fullname}";
         $lines[] = '';
 
-        $sectionname = $this->get_section_name($this->course, $this->section);
+        $sectionname = $this->get_section_name($this->section);
         $lines[] = "## Section: {$sectionname}";
         $lines[] = '';
 

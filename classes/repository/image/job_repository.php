@@ -218,6 +218,10 @@ final class job_repository {
 
     /**
      * Upsert job.
+     *
+     * The lock only guards against a different in-flight remote job on the same target:
+     * re-tracking the same jobid refreshes the row so repeat submissions stay idempotent.
+     *
      * @param array $fields Full job row fields.
      * @return \stdClass
      */
@@ -233,6 +237,7 @@ final class job_repository {
         if (
             $existing && in_array($existing->status, [self::STATUS_PENDING, self::STATUS_PROCESSING], true)
                 && (time() - (int) $existing->timecreated) <= self::TIMEOUT_SECONDS
+                && (string) $existing->jobid !== (string) ($fields['jobid'] ?? '')
         ) {
             throw new \moodle_exception('dixeo_image_job_locked', 'local_dixeo');
         }

@@ -21,6 +21,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\html_helper as content_html_helper;
+use local_dixeo\service\image\content\target_registry;
 use local_dixeo\service\image\content_target;
 
 /**
@@ -62,6 +63,8 @@ final class content_handler {
             return;
         }
 
+        self::bump_url_revision($jobrow);
+
         if ($jobrow && $jobrow->origin === job_repository::ORIGIN_SHORTCODE && !empty($jobrow->placeholderid)) {
             content_html_helper::update_target_html_class(
                 $jobrow,
@@ -69,6 +72,17 @@ final class content_handler {
                 'dixeo-img-gen-pending',
                 ''
             );
+        }
+    }
+
+    /**
+     * Bump the target's URL revision so browsers refetch the swapped image file.
+     * @param \stdClass|null $jobrow
+     * @return void
+     */
+    private static function bump_url_revision(?\stdClass $jobrow): void {
+        if ($jobrow && !empty($jobrow->targettable) && !empty($jobrow->targetid)) {
+            target_registry::bump_url_revision((string) $jobrow->targettable, (int) $jobrow->targetid);
         }
     }
 
@@ -90,6 +104,10 @@ final class content_handler {
 
         if (job_repository::is_editor_draft_job($jobrow)) {
             return;
+        }
+
+        if ($shouldreplacefile) {
+            self::bump_url_revision($jobrow);
         }
 
         if ($jobrow && !empty($jobrow->placeholderid)) {

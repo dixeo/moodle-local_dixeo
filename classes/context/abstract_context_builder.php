@@ -82,22 +82,21 @@ abstract class abstract_context_builder implements context_builder_interface {
     }
 
     /**
-     * Get section name using the course format's naming convention.
+     * Get the section name for the AI context.
      *
-     * Falls back to format-specific default if no custom name is set.
+     * Unnamed sections get a language-neutral label instead of Moodle's localized
+     * default ("General", "Généralités"...), which would leak the server or UI
+     * language into the context and bias the generated language.
      *
-     * @param object $course The course object.
      * @param object $section The section object or section_info.
-     * @return string The formatted section name.
+     * @return string The section name.
      */
-    protected function get_section_name(object $course, object $section): string {
+    protected function get_section_name(object $section): string {
         if (!empty($section->name)) {
             return format_string($section->name);
         }
 
-        $format = course_get_format($course);
-
-        return $format->get_section_name($section);
+        return "Section {$section->section}";
     }
 
     /**
@@ -237,12 +236,12 @@ abstract class abstract_context_builder implements context_builder_interface {
         $nextsection = $modinfo->get_section_info($sectionnum + 1);
 
         if ($prevsection && $prevsection->visible) {
-            $prevname = $this->get_section_name($course, $prevsection);
+            $prevname = $this->get_section_name($prevsection);
             $lines[] = "- Previous: {$prevname}";
         }
 
         if ($nextsection && $nextsection->visible) {
-            $nextname = $this->get_section_name($course, $nextsection);
+            $nextname = $this->get_section_name($nextsection);
             $lines[] = "- Next: {$nextname}";
         }
 

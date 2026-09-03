@@ -288,11 +288,9 @@ class image_generation_service {
     /**
      * Submit an image generation job for embedded content (async, non-blocking).
      *
-     * v1 uses scope "course" on the remote API with explicit title/summary; PHP gates on content policy.
-     *
      * @param int $courseid The course ID.
-     * @param string $title Human-readable title (e.g. activity name).
-     * @param string $summary User prompt mapped to API summary.
+     * @param string $title Human-readable title (e.g. activity name), used as fallback subject.
+     * @param string $prompt Visual description of the image to generate.
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
      * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
@@ -301,7 +299,7 @@ class image_generation_service {
     public function submit_content_image_generate_job(
         int $courseid,
         string $title,
-        string $summary,
+        string $prompt,
         string $size = self::DEFAULT_SIZE,
         string $quality = self::DEFAULT_QUALITY,
         ?job_binding_metadata $metadata = null
@@ -316,12 +314,13 @@ class image_generation_service {
         );
 
         $payload = $this->build_payload(
-            scope: 'course',
+            scope: 'content',
             title: $title,
-            summary: $summary,
+            summary: null,
             size: $size,
             quality: $quality,
             courseid: (string) $courseid,
+            prompt: $prompt,
         );
 
         return $this->jobservice->submit_job(
@@ -476,12 +475,13 @@ class image_generation_service {
     /**
      * Build the API request payload for image generation.
      *
-     * @param string $scope 'course' or 'section'.
+     * @param string $scope 'course', 'section' or 'content'.
      * @param string $title Human-readable title.
      * @param string|null $summary Optional HTML or plain text summary.
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
      * @param string|null $courseid Optional course identifier for tracking.
+     * @param string|null $prompt Optional visual description, sent as authored (the API validates it).
      * @return array The request payload.
      */
     private function build_payload(
@@ -490,7 +490,8 @@ class image_generation_service {
         ?string $summary,
         string $size,
         string $quality,
-        ?string $courseid
+        ?string $courseid,
+        ?string $prompt = null
     ): array {
         if (!in_array($size, self::SUPPORTED_SIZES, true)) {
             throw new \invalid_parameter_exception(
@@ -508,6 +509,10 @@ class image_generation_service {
         $cleansummary = $this->clean_summary($summary);
         if ($cleansummary !== null) {
             $payload['summary'] = $cleansummary;
+        }
+
+        if ($prompt !== null && trim($prompt) !== '') {
+            $payload['prompt'] = trim($prompt);
         }
 
         if ($courseid !== null) {

@@ -172,7 +172,7 @@ class course_context_builder extends abstract_context_builder {
             }
 
             $sectionnum = $section->section;
-            $sectionname = $this->get_section_name($this->course, $section);
+            $sectionname = $this->get_section_name($section);
             $detaillevel = $this->getSectionDetailLevel($sectionnum);
 
             // Mark target section clearly (only in teaching mode).

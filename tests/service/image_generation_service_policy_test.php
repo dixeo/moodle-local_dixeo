@@ -302,9 +302,9 @@ final class image_generation_service_policy_test extends \advanced_testcase {
     }
 
     /**
-     * Test submit content image generate job calls api with scope course.
+     * Test submit content image generate job calls api with scope content.
      */
-    public function test_submit_content_image_generate_job_calls_api_with_scope_course(): void {
+    public function test_submit_content_image_generate_job_calls_api_with_scope_content(): void {
         $this->apply_image_generation_settings(
             1,
             policy::MODE_DISABLED,
@@ -318,9 +318,10 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $jobmock->expects($this->once())->method('submit_job')->with(
             $this->equalTo('/v1/images/generate'),
             $this->callback(static function (array $payload): bool {
-                return ($payload['scope'] ?? '') === 'course'
+                return ($payload['scope'] ?? '') === 'content'
                     && ($payload['title'] ?? '') === 'Activity image'
-                    && ($payload['summary'] ?? '') === 'A sunny meadow';
+                    && ($payload['prompt'] ?? '') === 'A sunny meadow'
+                    && !array_key_exists('summary', $payload);
             })
         )->willReturn($this->pending_result('content-gen-1'));
 
