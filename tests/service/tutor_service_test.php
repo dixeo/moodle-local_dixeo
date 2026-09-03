@@ -205,6 +205,104 @@ final class tutor_service_test extends \advanced_testcase {
         );
     }
 
+    public function test_submit_practice_quiz_review_appends_course_structure(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'name' => 'VO2 Max Primer',
+            'content' => 'Intro',
+        ]);
+        $context = [
+            'schema' => 'practice_quiz_review',
+            'version' => 1,
+            'title' => 'Practice check',
+            'questions' => [],
+        ];
+        $this->stub_file_sync_service();
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_job')
+            ->with(
+                '/v1/tutor/messages',
+                $this->callback(function (array $payload): bool {
+                    $instructions = (string) ($payload['instructions'] ?? '');
+                    $structurepos = strrpos($instructions, '## Course Structure');
+                    $reviewpos = strrpos($instructions, '[Practice quiz review]');
+                    return ($payload['role'] ?? '') === 'system'
+                        && ($payload['mode'] ?? '') === tutor_message::MODE_QUIZ
+                        && ($payload['context']['schema'] ?? '') === 'practice_quiz_review'
+                        && $structurepos !== false
+                        && $reviewpos !== false
+                        && $structurepos < $reviewpos
+                        && str_contains($instructions, 'VO2 Max Primer');
+                })
+            )
+            ->willReturn(operation_result::pending('job-review', 'pending', 0));
+
+        $service = new tutor_service($mockjob);
+        $service->submit(
+            (int) $course->id,
+            2,
+            tutor_message::system(
+                $context,
+                'Practice check',
+                '[Practice quiz review] The learner finished. Recommend one activity.',
+                true
+            ),
+            tutor_message::MODE_QUIZ
+        );
+    }
+
+    public function test_submit_proactive_system_message_appends_course_structure(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'name' => 'Endurance Basics',
+            'content' => 'Intro',
+        ]);
+        $context = [
+            'schema' => 'proactive',
+            'version' => 1,
+            'events' => [['type' => 'quiz_graded', 'quizname' => 'Unit quiz', 'grade' => '8', 'maxgrade' => '10']],
+        ];
+        $this->stub_file_sync_service();
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_job')
+            ->with(
+                '/v1/tutor/messages',
+                $this->callback(function (array $payload): bool {
+                    $instructions = (string) ($payload['instructions'] ?? '');
+                    $structurepos = strrpos($instructions, '## Course Structure');
+                    $briefpos = strrpos($instructions, 'The learner completed the quiz');
+                    return ($payload['role'] ?? '') === 'system'
+                        && ($payload['requireResponse'] ?? null) === true
+                        && ($payload['context']['schema'] ?? '') === 'proactive'
+                        && $structurepos !== false
+                        && $briefpos !== false
+                        && $structurepos < $briefpos
+                        && str_contains($instructions, 'Endurance Basics');
+                })
+            )
+            ->willReturn(operation_result::pending('job-proactive', 'pending', 0));
+
+        $service = new tutor_service($mockjob);
+        $service->submit(
+            (int) $course->id,
+            2,
+            tutor_message::system(
+                $context,
+                '',
+                'The learner completed the quiz "Unit quiz" with a grade of 8/10. Acknowledge their result.',
+                true
+            )
+        );
+    }
+
     public function test_get_conversation_maps_system_fields(): void {
         $mockclient = $this->createMock(client::class);
         $mockclient->method('get')->willReturn([

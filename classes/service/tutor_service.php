@@ -401,7 +401,14 @@ class tutor_service {
      */
     private function resolve_instructions(int $courseid, tutor_message $message): ?string {
         if ($message->instructions !== null && trim($message->instructions) !== '') {
-            return $message->instructions;
+            $instructions = $message->instructions;
+            if ($this->needs_course_structure_in_instructions($message)) {
+                $coursecontext = $this->build_instructions($courseid);
+                if (trim($coursecontext) !== '') {
+                    $instructions = trim($coursecontext) . "\n\n" . trim($instructions);
+                }
+            }
+            return $instructions;
         }
 
         if (
@@ -412,6 +419,16 @@ class tutor_service {
         }
 
         return null;
+    }
+
+    /**
+     * Whether system instructions must be paired with course structure markdown.
+     *
+     * @param tutor_message $message
+     * @return bool
+     */
+    private function needs_course_structure_in_instructions(tutor_message $message): bool {
+        return $message->role === tutor_message::ROLE_SYSTEM && $message->requireresponse;
     }
 
     /**
