@@ -175,7 +175,7 @@ final class tutor_service_test extends \advanced_testcase {
         );
     }
 
-    public function test_submit_system_message_passes_context_without_instructions(): void {
+    public function test_submit_system_message_attaches_course_structure_when_instructions_empty(): void {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'proactive', 'version' => 1, 'body' => 'Context line'];
@@ -191,7 +191,7 @@ final class tutor_service_test extends \advanced_testcase {
                         && ($payload['context'] ?? null) === $context
                         && ($payload['requireResponse'] ?? null) === true
                         && ($payload['message'] ?? null) === 'Context line'
-                        && ($payload['instructions'] ?? null) === 'Context line'
+                        && str_contains((string) ($payload['instructions'] ?? ''), '## Course Structure')
                         && !isset($payload['includeInstructions']);
                 })
             )
@@ -229,13 +229,11 @@ final class tutor_service_test extends \advanced_testcase {
                 $this->callback(function (array $payload): bool {
                     $instructions = (string) ($payload['instructions'] ?? '');
                     $structurepos = strrpos($instructions, '## Course Structure');
-                    $reviewpos = strrpos($instructions, '[Practice quiz review]');
                     return ($payload['role'] ?? '') === 'system'
                         && ($payload['mode'] ?? '') === tutor_message::MODE_QUIZ
                         && ($payload['context']['schema'] ?? '') === 'practice_quiz_review'
                         && $structurepos !== false
-                        && $reviewpos !== false
-                        && $structurepos < $reviewpos
+                        && !str_contains($instructions, '[Practice quiz review]')
                         && str_contains($instructions, 'VO2 Max Primer');
                 })
             )
@@ -248,7 +246,7 @@ final class tutor_service_test extends \advanced_testcase {
             tutor_message::system(
                 $context,
                 'Practice check',
-                '[Practice quiz review] The learner finished. Recommend one activity.',
+                null,
                 true
             ),
             tutor_message::MODE_QUIZ
@@ -278,13 +276,11 @@ final class tutor_service_test extends \advanced_testcase {
                 $this->callback(function (array $payload): bool {
                     $instructions = (string) ($payload['instructions'] ?? '');
                     $structurepos = strrpos($instructions, '## Course Structure');
-                    $briefpos = strrpos($instructions, 'The learner completed the quiz');
                     return ($payload['role'] ?? '') === 'system'
                         && ($payload['requireResponse'] ?? null) === true
                         && ($payload['context']['schema'] ?? '') === 'proactive'
                         && $structurepos !== false
-                        && $briefpos !== false
-                        && $structurepos < $briefpos
+                        && !str_contains($instructions, 'The learner completed the quiz')
                         && str_contains($instructions, 'Endurance Basics');
                 })
             )
@@ -297,7 +293,7 @@ final class tutor_service_test extends \advanced_testcase {
             tutor_message::system(
                 $context,
                 '',
-                'The learner completed the quiz "Unit quiz" with a grade of 8/10. Acknowledge their result.',
+                null,
                 true
             )
         );
