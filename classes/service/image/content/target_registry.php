@@ -31,6 +31,13 @@ final class target_registry {
         'page' => 'revision',
     ];
 
+    /**
+     * HTML field => corresponding format field name map.
+     *
+     * Example: `content` => `contentformat`.
+     *
+     * @var array<string, string>
+     */
     private const FORMAT_FIELDS = [
         'intro' => 'introformat',
         'content' => 'contentformat',
@@ -125,14 +132,6 @@ final class target_registry {
     }
 
     /**
-     * Database table holding the HTML fields of an entity.
-     *
-     * Falls back to the module name (Moodle convention) for unmapped modules.
-     *
-     * @param string $modname Module plugin name or logical entity (slideshow_slide, glossary_entry).
-     * @return string
-     */
-    /**
      * Bump the URL revision of a target row after its image file changed.
      *
      * @param string $table Target table.
@@ -149,6 +148,14 @@ final class target_registry {
         $DB->execute("UPDATE {{$table}} SET {$field} = {$field} + 1 WHERE id = ?", [$id]);
     }
 
+    /**
+     * Database table holding the HTML fields of an entity.
+     *
+     * Falls back to the module name (Moodle convention) for unmapped modules.
+     *
+     * @param string $modname Module plugin name or logical entity (slideshow_slide, glossary_entry).
+     * @return string
+     */
     public static function get_table_for_entity(string $modname): string {
         foreach (self::HANDLERS[$modname] ?? [] as $handler) {
             return $handler['table'];
