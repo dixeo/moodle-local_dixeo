@@ -489,6 +489,36 @@ h2:has(.dixeo-sync-indicator),
     margin: 0;
 }
 
+/*
+ * Filters, KPIs, and charts use Bootstrap md/lg columns. With the right drawer open,
+ * usable width is tighter than the viewport, so adjust layout until 1280px.
+ */
+@media (max-width: 1279.98px) {
+    .local-dixeo-credit-report [class*="col-md-"] {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+
+    .local-dixeo-credit-report-summary [class*="col-md-"],
+    .local-dixeo-credit-report-summary [class*="col-lg-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+        /* Bootstrap gap utilities are unavailable here; space stacked Summary cards. */
+        margin-bottom: 1rem;
+    }
+
+    .local-dixeo-credit-report-summary .row.mb-4 {
+        margin-bottom: 1.5rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .local-dixeo-credit-report [class*="col-md-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
 /* ==========================================================================
    Tutor usage report
    ========================================================================== */
