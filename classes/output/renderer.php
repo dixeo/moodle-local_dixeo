@@ -37,4 +37,15 @@ class renderer extends plugin_renderer_base {
         $data = $page->export_for_template($this);
         return $this->render_from_template('local_dixeo/credit_report', $data);
     }
+
+    /**
+     * Render the tutor usage report page.
+     *
+     * @param tutor_usage_report_page $page The tutor usage report page renderable.
+     * @return string The rendered HTML.
+     */
+    public function render_tutor_usage_report_page(tutor_usage_report_page $page): string {
+        $data = $page->export_for_template($this);
+        return $this->render_from_template('local_dixeo/tutor_usage_report', $data);
+    }
 }

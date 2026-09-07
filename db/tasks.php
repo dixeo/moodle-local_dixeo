@@ -18,7 +18,7 @@
  * Scheduled task definitions for local_dixeo.
  *
  * @package    local_dixeo
- * @copyright  2026 Dixeo
+ * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -30,6 +30,15 @@ $tasks = [
         'blocking' => 0,
         'minute' => 'R',
         'hour' => 'R',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
+    [
+        'classname' => 'local_dixeo\task\aggregate_tutor_usage',
+        'blocking' => 0,
+        'minute' => '15',
+        'hour' => '1',
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*',

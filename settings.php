@@ -161,6 +161,13 @@ if ($hassiteconfig) {
         ['local/dixeo:manage', 'local/dixeo:viewusage']
     ));
 
+    $ADMIN->add('reports', new admin_externalpage(
+        'local_dixeo_tutor_usage',
+        get_string('tutor_usage_report_nav', 'local_dixeo'),
+        new moodle_url('/local/dixeo/tutor_usage_report.php'),
+        ['local/dixeo:viewtutorusagesite']
+    ));
+
     // Conditionally add the Dixeo Course Designer link if the block is installed.
     if (\local_dixeo\service\plugin_installation_service::is_component_installed('block_dixeo_designer')) {
         $ADMIN->add(

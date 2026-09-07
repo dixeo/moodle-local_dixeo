@@ -269,12 +269,36 @@ class practice_quiz_service {
             }
         }
 
+        $this->record_quiz_created_usage($jobid, $courseid);
+
         return $this->practice_quiz_result(
             true,
             $title,
             $introhtml,
             json_encode($questionlist)
         );
+    }
+
+    /**
+     * Record analytics for a successfully finalized practice quiz.
+     *
+     * @param string $jobid Job UUID.
+     * @param int|null $courseid Optional course id override.
+     */
+    private function record_quiz_created_usage(string $jobid, ?int $courseid): void {
+        $job = $this->jobservice->get_job_repository()->get_by_jobid($jobid);
+        if ($job === null) {
+            return;
+        }
+        $userid = (int) ($job->userid ?? 0);
+        $resolvedcourseid = $courseid !== null && $courseid > 0
+            ? (int) $courseid
+            : (int) ($job->courseid ?? 0);
+        $cmid = (int) ($job->cmid ?? 0);
+        if ($userid < 1 || $resolvedcourseid < 1) {
+            return;
+        }
+        (new tutor_usage_recorder())->record_quiz_created($userid, $resolvedcourseid, $cmid);
     }
 
     /**
