@@ -142,7 +142,7 @@ class slide_edit_context_builder extends abstract_context_builder {
         $lines[] = "- **Format:** {$this->course->format}";
         $lines[] = '';
 
-        $sectionname = $this->get_section_name($this->course, $this->section);
+        $sectionname = $this->get_section_name($this->section);
         $lines[] = "### Current Section: {$sectionname} (Section {$this->section->section})";
         if (!empty($this->section->summary)) {
             $lines[] = $this->htmlhelper->clean_html($this->section->summary);

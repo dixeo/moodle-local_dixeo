@@ -26,6 +26,11 @@ namespace local_dixeo\service\image\content;
  */
 final class target_registry {
     /** @var array<string, string> HTML field => format field suffix map. */
+    /** Columns embedded in the pluginfile URL, bumped after a file swap so browsers refetch. */
+    private const URL_REVISION_FIELDS = [
+        'page' => 'revision',
+    ];
+
     private const FORMAT_FIELDS = [
         'intro' => 'introformat',
         'content' => 'contentformat',
@@ -127,6 +132,23 @@ final class target_registry {
      * @param string $modname Module plugin name or logical entity (slideshow_slide, glossary_entry).
      * @return string
      */
+    /**
+     * Bump the URL revision of a target row after its image file changed.
+     *
+     * @param string $table Target table.
+     * @param int $id Target row id.
+     */
+    public static function bump_url_revision(string $table, int $id): void {
+        global $DB;
+
+        $field = self::URL_REVISION_FIELDS[$table] ?? null;
+        if ($field === null) {
+            return;
+        }
+
+        $DB->execute("UPDATE {{$table}} SET {$field} = {$field} + 1 WHERE id = ?", [$id]);
+    }
+
     public static function get_table_for_entity(string $modname): string {
         foreach (self::HANDLERS[$modname] ?? [] as $handler) {
             return $handler['table'];

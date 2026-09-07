@@ -110,7 +110,7 @@ class module_edit_context_builder extends abstract_context_builder {
         $lines[] = '';
 
         // Current section info.
-        $sectionname = $this->get_section_name($this->course, $this->section);
+        $sectionname = $this->get_section_name($this->section);
         $lines[] = "### Current Section: {$sectionname} (Section {$this->section->section})";
 
         if (!empty($this->section->summary)) {

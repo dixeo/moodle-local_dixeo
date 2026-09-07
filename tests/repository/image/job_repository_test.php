@@ -127,4 +127,38 @@ final class job_repository_test extends \advanced_testcase {
         $status = job_repository::get_location_status($location);
         $this->assertSame(job_repository::STATUS_PENDING, $status['status']);
     }
+
+    /**
+     * Re-tracking the same remote job inside the lock window refreshes the row; another job still locks.
+     */
+    public function test_reupsert_same_jobid_inside_lock_window_is_idempotent(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $location = new location(3, 'mod_page', 'content', 0, '/', 'pic.png', 2);
+        $fields = array_merge($location->to_record_fields(), [
+            'jobid' => 'job-same',
+            'status' => job_repository::STATUS_PENDING,
+            'origin' => job_repository::ORIGIN_STRUCTURE,
+            'userid' => (int) $USER->id,
+        ]);
+        $record = job_repository::upsert_job($fields);
+
+        $DB->set_field(job_repository::TABLE, 'timecreated', time() - 120, ['id' => $record->id]);
+
+        $refreshed = job_repository::upsert_job($fields);
+        $this->assertSame((int) $record->id, (int) $refreshed->id);
+        $this->assertSame('job-same', $refreshed->jobid);
+        $this->assertSame(job_repository::STATUS_PENDING, $refreshed->status);
+        $this->assertGreaterThan(time() - 10, (int) $refreshed->timecreated);
+
+        try {
+            job_repository::upsert_job(array_merge($fields, ['jobid' => 'job-other']));
+            $this->fail('Expected dixeo_image_job_locked');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('dixeo_image_job_locked', $e->errorcode);
+        }
+    }
 }

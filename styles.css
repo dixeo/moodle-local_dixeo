@@ -391,6 +391,21 @@ h2:has(.dixeo-sync-indicator),
     height: auto;
 }
 
+.dixeo-img-gen-pending {
+    animation: dixeo-img-gen-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dixeo-img-gen-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.55;
+    }
+}
+
 /* ==========================================================================
    Accessibility — reduced motion (sync indicator + content images)
    ========================================================================== */
@@ -402,6 +417,10 @@ h2:has(.dixeo-sync-indicator),
     }
 
     .dixeo-sync-btn--syncing .dixeo-sync-btn__dot {
+        animation: none;
+    }
+
+    .dixeo-img-gen-pending {
         animation: none;
     }
 }
