@@ -146,7 +146,7 @@ class job_service {
      * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return job_status The current job status.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function get_job_status(
         string $jobid,
@@ -171,7 +171,7 @@ class job_service {
      * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return array The cancellation response from the API.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function cancel_job(
         string $jobid,
@@ -209,7 +209,7 @@ class job_service {
      * @param int|null $userid Acting user for initiator-scoped jobs.
      * @return operation_result The operation result.
      * @throws api_exception If an API error occurs.
-     * @throws \moodle_exception If the job binding check fails.
+     * @throws \moodle_exception If the job is not bound to the given course and/or user.
      */
     public function wait_for_job(
         string $jobid,
@@ -273,7 +273,7 @@ class job_service {
     /**
      * Ensure the job is registered to the given course and initiating user.
      *
-     * Uses the same error string as course-only checks to avoid leaking existence.
+     * Uses a single error string for missing and mismatched jobs to avoid leaking existence.
      *
      * @param string $jobid Remote job UUID.
      * @param int $courseid Expected course ID.

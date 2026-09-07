@@ -3,6 +3,10 @@
  *
  * Theme-agnostic styles designed to work across all Moodle themes.
  *
+ * Sections:
+ *   1. File sync indicator — course-page pill + dropdown (sync_indicator_injector)
+ *   2. Content image placeholders — [img-gen] shortcode pending/failed states
+ *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
  * @author     Pierre FACQ <pierre.facq@edunao.com>
@@ -14,7 +18,7 @@
    visibility utilities, display:none base state, and print defaults. */
 
 /* ==========================================================================
-   Sync Indicator - Inline with course title
+   1. File sync indicator — layout and placement
    ========================================================================== */
 
 /* Hidden by default until relocated by JS */
@@ -79,7 +83,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Branded Button - Dixeo + Status Dot
+   1. File sync indicator — pill button
    ========================================================================== */
 
 .dixeo-sync-btn {
@@ -132,7 +136,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Status Colors - Applied to the dot
+   1. File sync indicator — status dot colours
    ========================================================================== */
 
 /* None - gray dot */
@@ -173,7 +177,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Animation
+   1. File sync indicator — syncing pulse animation
    ========================================================================== */
 
 @keyframes dixeo-pulse {
@@ -189,7 +193,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Dropdown Panel
+   1. File sync indicator — dropdown panel
    ========================================================================== */
 
 .dixeo-sync-dropdown {
@@ -336,7 +340,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Responsive
+   1. File sync indicator — responsive
    ========================================================================== */
 
 @media (max-width: 576px) {
@@ -377,7 +381,18 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Accessibility
+   2. Content image placeholders — [img-gen] async pending state
+   ========================================================================== */
+
+/* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png. */
+.dixeo-img-gen-pending,
+.dixeo-img-gen-failed {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ==========================================================================
+   Accessibility — reduced motion (sync indicator + content images)
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
@@ -392,7 +407,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   Print
+   Print — hide sync indicator
    ========================================================================== */
 
 @media print {

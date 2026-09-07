@@ -31,6 +31,7 @@ namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\value_resolver;
+use local_dixeo\external\service_factory;
 
 /**
  * Action handler for creating child entity records.
@@ -86,7 +87,7 @@ class create_entries_action {
      * @throws dsl_exception If creation fails.
      */
     public function execute(array $action, value_resolver $resolver): array {
-        global $DB;
+        global $DB, $USER;
 
         $this->validate_action($action);
 
@@ -109,6 +110,8 @@ class create_entries_action {
         }
 
         $createdids = [];
+        $shortcodeservice = service_factory::get_content_image_shortcode_service();
+        $userid = (int) ($resolver->get_context()['userid'] ?? $USER->id);
 
         foreach ($collection as $index => $item) {
             // Convert item to array if it's an object.
@@ -131,6 +134,25 @@ class create_entries_action {
 
             // Insert the record.
             $recordid = $DB->insert_record($table, $record);
+
+            if ($entity === 'glossary_entry' && property_exists($record, 'definition')) {
+                $glossaryid = (int) ($record->glossaryid ?? 0);
+                if ($glossaryid > 0) {
+                    $cm = get_coursemodule_from_instance('glossary', $glossaryid, 0, false, MUST_EXIST);
+                    $modulecontext = \context_module::instance($cm->id);
+                    $record->id = $recordid;
+                    $shortcodeservice->process_and_persist(
+                        'glossary_entry',
+                        $recordid,
+                        $modulecontext->id,
+                        (int) $cm->course,
+                        (int) $cm->id,
+                        $record,
+                        $userid
+                    );
+                }
+            }
+
             $createdids[] = $recordid;
         }
 

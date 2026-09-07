@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ namespace local_dixeo;
 
 use local_dixeo\dto\operation_result;
 use local_dixeo\service\html_helper;
-use local_dixeo\service\image_generation_policy;
+use local_dixeo\service\image\policy;
 use local_dixeo\service\image_generation_service;
 use local_dixeo\service\job_service;
 
@@ -41,6 +41,9 @@ final class image_generation_service_policy_test extends \advanced_testcase {
     /** @var string Non-null namespace avoids loading Dixeo lib.php in unit context. */
     private const TEST_NAMESPACE = 'phpunit';
 
+    /**
+     * SetUp.
+     */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
@@ -52,11 +55,20 @@ final class image_generation_service_policy_test extends \advanced_testcase {
      * @param int|string|bool $global Global image_generation_enabled config value.
      * @param string $coursemode Course-level image generation mode.
      * @param string $sectionmode Section-level image generation mode.
+     * @param string $contentmode Content-level image generation mode (optional).
      */
-    private function apply_image_generation_settings($global, string $coursemode, string $sectionmode): void {
+    private function apply_image_generation_settings(
+        $global,
+        string $coursemode,
+        string $sectionmode,
+        string $contentmode = ''
+    ): void {
         set_config('image_generation_enabled', $global, 'local_dixeo');
         set_config('image_generation_course_mode', $coursemode, 'local_dixeo');
         set_config('image_generation_section_mode', $sectionmode, 'local_dixeo');
+        if ($contentmode !== '') {
+            set_config('image_generation_content_mode', $contentmode, 'local_dixeo');
+        }
     }
 
     /**
@@ -79,12 +91,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         return operation_result::pending($jobid, 'pending', 0);
     }
 
+    /**
+     * Test submit course image job rejected when globally disabled and does not call api.
+     */
     public function test_submit_course_image_job_rejected_when_globally_disabled_and_does_not_call_api(): void {
-        $this->apply_image_generation_settings(
-            0,
-            image_generation_policy::MODE_GENERATE_EDIT,
-            image_generation_policy::MODE_GENERATE_EDIT
-        );
+        $this->apply_image_generation_settings(0, policy::MODE_GENERATE_EDIT, policy::MODE_GENERATE_EDIT);
 
         $jobmock = $this->createMock(job_service::class);
         $jobmock->expects($this->never())->method('submit_job');
@@ -95,12 +106,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->make_service_with_mock_jobs($jobmock)->submit_course_image_job((int) $course->id);
     }
 
+    /**
+     * Test submit course image job rejected when course mode disabled.
+     */
     public function test_submit_course_image_job_rejected_when_course_mode_disabled(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_DISABLED,
-            image_generation_policy::MODE_GENERATE_EDIT
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_DISABLED, policy::MODE_GENERATE_EDIT);
 
         $jobmock = $this->createMock(job_service::class);
         $jobmock->expects($this->never())->method('submit_job');
@@ -111,12 +121,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->make_service_with_mock_jobs($jobmock)->submit_course_image_job((int) $course->id);
     }
 
+    /**
+     * Test submit course image job calls api when allowed.
+     */
     public function test_submit_course_image_job_calls_api_when_allowed(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_GENERATE_EDIT,
-            image_generation_policy::MODE_DISABLED
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_DISABLED);
 
         $course = $this->getDataGenerator()->create_course(['fullname' => 'Policy course']);
 
@@ -133,12 +142,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->assertSame('remote-job-1', $result->jobid);
     }
 
+    /**
+     * Test submit course image edit job rejected when course generate only.
+     */
     public function test_submit_course_image_edit_job_rejected_when_course_generate_only(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_GENERATE,
-            image_generation_policy::MODE_GENERATE_EDIT
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE, policy::MODE_GENERATE_EDIT);
 
         $jobmock = $this->createMock(job_service::class);
         $jobmock->expects($this->never())->method('submit_job');
@@ -153,12 +161,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         );
     }
 
+    /**
+     * Test submit course image edit job calls api when allowed.
+     */
     public function test_submit_course_image_edit_job_calls_api_when_allowed(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_GENERATE_EDIT,
-            image_generation_policy::MODE_DISABLED
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_DISABLED);
 
         $course = $this->getDataGenerator()->create_course(['fullname' => 'Policy course']);
 
@@ -181,12 +188,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->assertSame('edit-job-1', $result->jobid);
     }
 
+    /**
+     * Test submit section image job rejected when section mode disabled.
+     */
     public function test_submit_section_image_job_rejected_when_section_mode_disabled(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_GENERATE_EDIT,
-            image_generation_policy::MODE_DISABLED
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_DISABLED);
 
         global $DB;
         $course = $this->getDataGenerator()->create_course();
@@ -199,12 +205,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->make_service_with_mock_jobs($jobmock)->submit_section_image_job($sectionid);
     }
 
+    /**
+     * Test submit section image job calls api when allowed.
+     */
     public function test_submit_section_image_job_calls_api_when_allowed(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_DISABLED,
-            image_generation_policy::MODE_GENERATE
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_DISABLED, policy::MODE_GENERATE);
 
         global $DB;
         $course = $this->getDataGenerator()->create_course();
@@ -222,12 +227,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         $this->assertSame('sec-gen-1', $result->jobid);
     }
 
+    /**
+     * Test submit section image edit job rejected when section generate only.
+     */
     public function test_submit_section_image_edit_job_rejected_when_section_generate_only(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_GENERATE_EDIT,
-            image_generation_policy::MODE_GENERATE
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_GENERATE);
 
         global $DB;
         $course = $this->getDataGenerator()->create_course();
@@ -244,12 +248,11 @@ final class image_generation_service_policy_test extends \advanced_testcase {
         );
     }
 
+    /**
+     * Test submit section image edit job calls api when allowed.
+     */
     public function test_submit_section_image_edit_job_calls_api_when_allowed(): void {
-        $this->apply_image_generation_settings(
-            1,
-            image_generation_policy::MODE_DISABLED,
-            image_generation_policy::MODE_GENERATE_EDIT
-        );
+        $this->apply_image_generation_settings(1, policy::MODE_DISABLED, policy::MODE_GENERATE_EDIT);
 
         global $DB;
         $course = $this->getDataGenerator()->create_course();
@@ -272,5 +275,84 @@ final class image_generation_service_policy_test extends \advanced_testcase {
             'Change background'
         );
         $this->assertSame('sec-edit-1', $result->jobid);
+    }
+
+    /**
+     * Test submit content image generate job rejected when content mode disabled.
+     */
+    public function test_submit_content_image_generate_job_rejected_when_content_mode_disabled(): void {
+        $this->apply_image_generation_settings(
+            1,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_DISABLED
+        );
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $this->expectException(\moodle_exception::class);
+        $this->make_service_with_mock_jobs($jobmock)->submit_content_image_generate_job(
+            (int) $course->id,
+            'Activity image',
+            'A sunny meadow'
+        );
+    }
+
+    /**
+     * Test submit content image generate job calls api with scope course.
+     */
+    public function test_submit_content_image_generate_job_calls_api_with_scope_course(): void {
+        $this->apply_image_generation_settings(
+            1,
+            policy::MODE_DISABLED,
+            policy::MODE_DISABLED,
+            policy::MODE_GENERATE
+        );
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->once())->method('submit_job')->with(
+            $this->equalTo('/v1/images/generate'),
+            $this->callback(static function (array $payload): bool {
+                return ($payload['scope'] ?? '') === 'course'
+                    && ($payload['title'] ?? '') === 'Activity image'
+                    && ($payload['summary'] ?? '') === 'A sunny meadow';
+            })
+        )->willReturn($this->pending_result('content-gen-1'));
+
+        $result = $this->make_service_with_mock_jobs($jobmock)->submit_content_image_generate_job(
+            (int) $course->id,
+            'Activity image',
+            'A sunny meadow'
+        );
+        $this->assertSame('content-gen-1', $result->jobid);
+    }
+
+    /**
+     * Test submit content image edit job rejected when content generate only.
+     */
+    public function test_submit_content_image_edit_job_rejected_when_content_generate_only(): void {
+        $this->apply_image_generation_settings(
+            1,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE
+        );
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Content course']);
+
+        $this->expectException(\moodle_exception::class);
+        $this->make_service_with_mock_jobs($jobmock)->submit_content_image_edit_job(
+            (int) $course->id,
+            ['Ym9n'],
+            'Brighten the image'
+        );
     }
 }

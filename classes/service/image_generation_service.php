@@ -17,10 +17,9 @@
 /**
  * Service for AI-powered image generation and editing.
  *
- * Exposes library-level methods to submit async image generation/edit jobs
- * for a course or a section. Consumers (blocks, format overrides, etc.)
- * call these methods, poll the returned job via job_service, and decide
- * themselves what to do with the resulting base64 WebP payload.
+ * Shared Dixeo image API client: submits async generate/edit jobs for course banners,
+ * section chapter images, and embedded content images. Callers poll via job_service and
+ * apply bytes through structure_image\writer or content_image\file_service.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -33,9 +32,10 @@ namespace local_dixeo\service;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
+use local_dixeo\service\image\policy;
 
 /**
- * Service for course/section image generation and edit operations.
+ * Shared API client for course, section, and embedded content image jobs.
  */
 class image_generation_service {
     /** @var string API endpoint for image generation. */
@@ -100,7 +100,7 @@ class image_generation_service {
      * @param string|null $title When non-null, sent as payload title instead of course.fullname (e.g. draft before DB update).
      * @param string|null $summary When non-null, sent instead of course.summary (same use-case).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If image generation is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If image generation is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -115,9 +115,9 @@ class image_generation_service {
 
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, summary', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_COURSE,
-            image_generation_policy::ACTION_GENERATE
+        policy::assert_enabled(
+            policy::ENTITY_COURSE,
+            policy::ACTION_GENERATE
         );
 
         $resolvedtitle = $title !== null ? $title : $course->fullname;
@@ -150,7 +150,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (low/medium/high, default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If section image generation is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If section image generation is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -163,9 +163,9 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, section, name, summary', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_SECTION,
-            image_generation_policy::ACTION_GENERATE
+        policy::assert_enabled(
+            policy::ENTITY_SECTION,
+            policy::ACTION_GENERATE
         );
 
         $title = $this->resolve_section_title($section);
@@ -196,7 +196,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If course image editing is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If course image editing is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -215,9 +215,9 @@ class image_generation_service {
 
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_COURSE,
-            image_generation_policy::ACTION_EDIT
+        policy::assert_enabled(
+            policy::ENTITY_COURSE,
+            policy::ACTION_EDIT
         );
 
         $payload = $this->build_edit_payload(
@@ -245,7 +245,7 @@ class image_generation_service {
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
-     * @throws \moodle_exception If section image editing is disabled by {@see image_generation_policy}.
+     * @throws \moodle_exception If section image editing is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -264,9 +264,9 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course', MUST_EXIST);
 
-        image_generation_policy::assert_enabled(
-            image_generation_policy::ENTITY_SECTION,
-            image_generation_policy::ACTION_EDIT
+        policy::assert_enabled(
+            policy::ENTITY_SECTION,
+            policy::ACTION_EDIT
         );
 
         $payload = $this->build_edit_payload(
@@ -283,6 +283,156 @@ class image_generation_service {
             $this->component,
             job_binding_metadata::for_course((int) $section->course)
         );
+    }
+
+    /**
+     * Submit an image generation job for embedded content (async, non-blocking).
+     *
+     * v1 uses scope "course" on the remote API with explicit title/summary; PHP gates on content policy.
+     *
+     * @param int $courseid The course ID.
+     * @param string $title Human-readable title (e.g. activity name).
+     * @param string $summary User prompt mapped to API summary.
+     * @param string $size Image dimensions.
+     * @param string $quality Quality level.
+     * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
+     * @return operation_result
+     */
+    public function submit_content_image_generate_job(
+        int $courseid,
+        string $title,
+        string $summary,
+        string $size = self::DEFAULT_SIZE,
+        string $quality = self::DEFAULT_QUALITY,
+        ?job_binding_metadata $metadata = null
+    ): operation_result {
+        global $DB;
+
+        $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
+
+        policy::assert_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_GENERATE
+        );
+
+        $payload = $this->build_payload(
+            scope: 'course',
+            title: $title,
+            summary: $summary,
+            size: $size,
+            quality: $quality,
+            courseid: (string) $courseid,
+        );
+
+        return $this->jobservice->submit_job(
+            self::GENERATE_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
+        );
+    }
+
+    /**
+     * Submit an image edit job for embedded content (async, non-blocking).
+     *
+     * @param int $courseid The course ID.
+     * @param array $imagesbase64 Raw base64-encoded source images.
+     * @param string $instructions Change to apply (required).
+     * @param string $size Image dimensions.
+     * @param string $quality Quality level.
+     * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
+     * @return operation_result
+     */
+    public function submit_content_image_edit_job(
+        int $courseid,
+        array $imagesbase64,
+        string $instructions,
+        string $size = self::DEFAULT_SIZE,
+        string $quality = self::DEFAULT_QUALITY,
+        ?job_binding_metadata $metadata = null
+    ): operation_result {
+        if ($imagesbase64 === []) {
+            throw new \invalid_parameter_exception('At least one source image is required for editing');
+        }
+        if (trim($instructions) === '') {
+            throw new \invalid_parameter_exception('Edit instructions are required');
+        }
+
+        policy::assert_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_EDIT
+        );
+
+        global $DB;
+        $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
+
+        $payload = $this->build_edit_payload(
+            $imagesbase64,
+            $instructions,
+            $size,
+            $quality,
+            (string) $courseid,
+        );
+
+        return $this->jobservice->submit_job(
+            self::EDIT_ENDPOINT,
+            $payload,
+            $this->component,
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
+        );
+    }
+
+    /**
+     * Derive a human-readable title for an embedded content image from its file context.
+     *
+     * @param \stored_file $file
+     * @return string
+     */
+    public static function resolve_title_for_stored_file(\stored_file $file): string {
+        global $DB;
+
+        $context = \context::instance_by_id($file->get_contextid(), IGNORE_MISSING);
+        if (!$context) {
+            return get_string('contentimagetitlefallback', 'local_dixeo');
+        }
+
+        if ($context->contextlevel === CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id(null, $context->instanceid, 0, false, IGNORE_MISSING);
+            if ($cm && !empty($cm->name)) {
+                return (string) $cm->name;
+            }
+        }
+
+        if ($context->contextlevel === CONTEXT_BLOCK) {
+            $block = $DB->get_record(
+                'block_instances',
+                ['id' => $context->instanceid],
+                'id, blockname, configdata',
+                IGNORE_MISSING
+            );
+            if ($block) {
+                $blocktitle = '';
+                if (!empty($block->configdata)) {
+                    $config = @unserialize($block->configdata);
+                    if (is_object($config) && !empty($config->title)) {
+                        $blocktitle = (string) $config->title;
+                    }
+                }
+                if ($blocktitle !== '') {
+                    return $blocktitle;
+                }
+            }
+        }
+
+        $coursecontext = $context->get_course_context(false);
+        if ($coursecontext) {
+            $course = $DB->get_record('course', ['id' => $coursecontext->instanceid], 'fullname', IGNORE_MISSING);
+            if ($course && !empty($course->fullname)) {
+                return (string) $course->fullname;
+            }
+        }
+
+        return get_string('contentimagetitlefallback', 'local_dixeo');
     }
 
     /**
