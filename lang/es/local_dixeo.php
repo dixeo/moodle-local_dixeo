@@ -195,7 +195,9 @@ $string['eventfilesynctriggered'] = 'Sincronización de archivos Dixeo del curso
 $string['eventfilesynctriggereddesc'] = 'El usuario con id \'{$a->userid}\' disparó la sincronización de archivos Dixeo para el curso con id \'{$a->courseid}\'.';
 $string['eventjobcancelled'] = 'Trabajo Dixeo cancelado';
 $string['eventjobcancelleddesc'] = 'El usuario con id \'{$a->userid}\' canceló el trabajo Dixeo \'{$a->jobid}\' del curso con id \'{$a->courseid}\'.';
-$string['feedback_correct'] = '¡Correcto!';
+$string['feedback_correct'] = 'Bien hecho, has acertado esta respuesta. ¡Sigue así!';
+$string['feedback_incorrect'] = 'No del todo esta vez. Repasar el tema te ayudará a mejorar.';
+$string['feedback_partial'] = 'Vas por buen camino. Repasa el material y lo conseguirás.';
 $string['files'] = 'archivos';
 $string['filesync_disable_remove'] = 'Desactivar y borrar datos de sincronización';
 $string['filesync_enable'] = 'Activar sincronización';
@@ -216,6 +218,7 @@ $string['filesync_status_synchronized'] = 'Archivos sincronizados';
 $string['filesync_status_syncing'] = 'Sincronizando archivos...';
 $string['filesync_timeout'] = 'La sincronización de archivos ha caducado antes de indexar los archivos del curso';
 $string['filesync_title'] = 'Sincronización de archivos Dixeo';
+$string['generation_output_language'] = 'IDIOMA: Genere todo el contenido para el alumno (preguntas, respuestas, texto de la lección y títulos) en {$a->language}.';
 $string['image_generation'] = 'Generación de imágenes';
 $string['image_generation_content_mode'] = 'Imágenes de contenido';
 $string['image_generation_content_mode_desc'] = 'Controla las acciones de imagen por IA para imágenes en el contenido de actividades, como Páginas y Libros.';
@@ -243,6 +246,26 @@ $string['period_month'] = 'Mensual';
 $string['period_week'] = 'Semanal';
 $string['pluginname'] = 'Dixeo AI';
 $string['pluginname_desc'] = 'Integración Dixeo AI para generación y edición inteligente de contenido.';
+$string['practice_quiz_default_title'] = 'Cuestionario de práctica';
+$string['practice_quiz_difficulty_easy'] = 'fácil (recuerdo básico, conceptos sencillos, adecuado para principiantes)';
+$string['practice_quiz_difficulty_hard'] = 'difícil (aplicación exigente, análisis o síntesis de conceptos avanzados)';
+$string['practice_quiz_difficulty_medium'] = 'medio (profundidad moderada que requiere comprensión más allá del simple recuerdo)';
+$string['practice_quiz_error_invalid_result'] = 'Resultado del trabajo no válido.';
+$string['practice_quiz_error_job_not_completed'] = 'El trabajo no está completado. Estado: {$a->status}';
+$string['practice_quiz_error_no_questions'] = 'No hay preguntas en el resultado del trabajo.';
+$string['practice_quiz_error_wrong_module_type'] = 'El trabajo no es una generación simplequiz2.';
+$string['practice_quiz_instructions'] = 'Genera un cuestionario de práctica para {$a->scopedescription}.
+
+REQUISITOS OBLIGATORIOS — debes seguirlos exactamente:
+1. NÚMERO DE PREGUNTAS: El array "questions" DEBE contener exactamente {$a->count} preguntas. No generes {$a->count} menos uno, {$a->count} más uno ni ningún otro número — exactamente {$a->count}.
+2. NIVEL DE DIFICULTAD: Cada pregunta DEBE tener una dificultad {$a->difficultylabel}.
+3. FORMATO: Cada pregunta DEBE ser de opción múltiple con 3 o 4 opciones de respuesta y exactamente una respuesta correcta.
+
+Antes de terminar, verifica que la longitud del array questions sea {$a->count} y que todas las preguntas coincidan con el nivel de dificultad {$a->difficulty}.
+Céntrate en el contexto del curso proporcionado.';
+$string['practice_quiz_scope_activity_description'] = 'la actividad «{$a->name}»';
+$string['practice_quiz_scope_course_description'] = 'el curso completo «{$a->name}»';
+$string['practice_quiz_scope_section_description'] = 'la sección «{$a->name}»';
 $string['privacy:metadata'] = 'El plugin Dixeo almacena identificadores operativos de la sincronización de archivos del curso y envía contenido del curso, mensajes del tutor, contexto de generación e identificadores relacionados a la API Dixeo AI. La retención y eliminación de datos en Dixeo las controla ese servicio externo.';
 $string['privacy:metadata:course_ai'] = 'Configuración y estado de sincronización de archivos AI por curso.';
 $string['privacy:metadata:course_ai:courseid'] = 'El curso al que pertenece esta configuración de sincronización.';
@@ -324,6 +347,24 @@ $string['task_poll_image'] = 'Consultar la tarea de imagen de Dixeo';
 $string['task_poll_image_generation'] = 'Consultar la tarea de generación de imágenes de Dixeo';
 $string['task_process_file_sync'] = 'Procesar sincronización de archivos Dixeo';
 $string['task_process_remote_file_deletion'] = 'Reintentar eliminación remota de archivos Dixeo';
+$string['teach_lesson_default_title'] = 'Lección personalizada';
+$string['teach_lesson_error_invalid_result'] = 'Resultado del trabajo no válido.';
+$string['teach_lesson_error_job_not_completed'] = 'El trabajo no está completado. Estado: {$a->status}';
+$string['teach_lesson_error_no_content'] = 'No hay contenido en el resultado del trabajo.';
+$string['teach_lesson_error_wrong_module_type'] = 'El trabajo no es una generación de página.';
+$string['teach_lesson_instructions'] = 'Genera una lección de módulo Page personalizada para {$a->scopedescription}.
+
+El alumno ha preguntado:
+"{$a->learnerrequest}"
+
+REQUISITOS OBLIGATORIOS — DEBES seguirlos exactamente:
+1. TIPO DE MÓDULO: Genera un módulo Page con un nombre claro y descriptivo, un breve resumen introductorio (intro) y un contenido principal rico (content).
+2. ESTRUCTURA: Organiza la lección con encabezados claros y secciones lógicas. Usa ejemplos cuando sea útil.
+3. SOLICITUD DEL ALUMNO: Responde directamente a la solicitud del alumno — profundiza en el tema o explícalo en términos más sencillos como pidió.
+4. ALINEACIÓN: Basa la lección en el contexto del curso proporcionado. No inventes hechos que contradigan el material de origen.
+5. SOLO TEXTO: Produce únicamente texto. No incluyas imágenes, ilustraciones, etiquetas <img> ni marcadores [img-gen ...]. Las lecciones personalizadas no procesan marcadores de imagen.
+
+Antes de terminar, verifica que el campo content sea sustancial, solo texto, y responda directamente a la solicitud del alumno.';
 $string['this_week_usage'] = 'Esta semana';
 $string['total_used'] = 'Total utilizado';
 $string['transaction_type_deduction'] = 'Uso';

@@ -149,7 +149,7 @@ class section_context_builder extends abstract_context_builder {
             $fileannotation = $this->get_file_annotation($cm);
             $lines[] = "#### [{$cm->modname}] {$cm->name}{$fileannotation}";
 
-            $content = $this->contentextractor->get_preview($cm);
+            $content = $this->contentextractor->get_full_content($cm);
 
             if (!empty($content)) {
                 $lines[] = $content;
