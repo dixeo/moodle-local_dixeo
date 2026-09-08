@@ -40,6 +40,9 @@ final class asset_helper_test extends \advanced_testcase {
         $this->assertNotSame($placeholder, $error);
         $this->assertGreaterThan(1000, strlen($placeholder));
         $this->assertGreaterThan(1000, strlen($error));
+        $this->assertTrue(asset_helper::is_status_asset_hash(sha1($placeholder)));
+        $this->assertTrue(asset_helper::is_status_asset_hash(sha1($error)));
+        $this->assertFalse(asset_helper::is_status_asset_hash(sha1('not-a-status-asset')));
     }
 
     /**

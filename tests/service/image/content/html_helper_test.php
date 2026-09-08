@@ -69,6 +69,25 @@ final class html_helper_test extends \advanced_testcase {
     }
 
     /**
+     * Success clear also drops dixeo-img-gen-failed left from a prior failure.
+     */
+    public function test_swap_success_clears_failed_class(): void {
+        $id = 'abc-123';
+        $html = '<img src="@@PLUGINFILE@@/x.png" class="img-fluid dixeo-img-gen-failed" ' .
+            'data-dixeo-img-gen="' . $id . '" data-dixeo-contenthash="olderror" alt="" />';
+        $updated = html_helper::swap_img_class_for_placeholder(
+            $html,
+            $id,
+            'dixeo-img-gen-pending',
+            '',
+            'newhash'
+        );
+        $this->assertStringNotContainsString('dixeo-img-gen-failed', $updated);
+        $this->assertStringContainsString('data-dixeo-contenthash="newhash"', $updated);
+        $this->assertStringContainsString('class="img-fluid"', $updated);
+    }
+
+    /**
      * Test normalize legacy intro pluginfile urls.
      */
     public function test_normalize_legacy_intro_pluginfile_urls(): void {
