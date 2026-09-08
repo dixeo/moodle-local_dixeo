@@ -100,7 +100,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
      * @param {HTMLImageElement} img
      */
     const bustImageCache = (img) => {
-        const rev = img.dataset.dixeoContenthash ||
+        const wrap = img.closest(`.${WRAP_CLASS}`);
+        // Prefer the live file hash on the filter wrap over a stale error hash in HTML.
+        const rev = (wrap && wrap.dataset.contenthash) ||
+            img.dataset.dixeoContenthash ||
             (img.classList.contains('dixeo-img-gen-failed') ? 'failed' : '');
         if (!rev || !img.src) {
             return;

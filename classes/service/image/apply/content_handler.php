@@ -21,6 +21,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\html_helper as content_html_helper;
+use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\content\target_registry;
 use local_dixeo\service\image\content_target;
 
@@ -54,6 +55,7 @@ final class content_handler {
 
         if ($jobrow && $jobrow->origin === job_repository::ORIGIN_MODAL && $modalhandler !== null) {
             $modalhandler->apply_job_result($location, $result, $userid, $source);
+            self::clear_generation_status_after_success($location, $jobrow);
             return;
         }
 
@@ -64,22 +66,53 @@ final class content_handler {
             return;
         }
 
-        self::bump_url_revision($jobrow);
+        self::clear_generation_status_after_success($location, $jobrow);
+    }
 
-        if ($jobrow && $jobrow->origin === job_repository::ORIGIN_SHORTCODE && !empty($jobrow->placeholderid)) {
-            $contenthash = '';
-            $stored = $location->get_stored_file();
-            if ($stored) {
-                $contenthash = $stored->get_contenthash();
-            }
-            content_html_helper::update_target_html_class(
-                $jobrow,
-                (string) $jobrow->placeholderid,
-                'dixeo-img-gen-pending',
-                '',
-                $contenthash
-            );
+    /**
+     * Clear pending/failed gen classes and write the new contenthash into stored HTML.
+     *
+     * Modal jobs often lack targettable/placeholderid; resolve from the file location.
+     *
+     * @param location $location
+     * @param \stdClass|null $jobrow
+     * @return void
+     */
+    private static function clear_generation_status_after_success(location $location, ?\stdClass $jobrow): void {
+        $contenthash = '';
+        $stored = $location->get_stored_file();
+        if ($stored) {
+            $contenthash = $stored->get_contenthash();
         }
+
+        $placeholderid = trim((string) ($jobrow->placeholderid ?? ''));
+        if ($placeholderid === '') {
+            $placeholderid = file_service::placeholderid_from_stub_filename($location->filename) ?? '';
+        }
+
+        $jobmeta = $jobrow ? clone $jobrow : (object) [];
+        if (empty($jobmeta->targettable) || empty($jobmeta->targetfield) || empty($jobmeta->targetid)) {
+            $htmltarget = target_registry::resolve_from_location($location);
+            if ($htmltarget) {
+                $jobmeta->targettable = $htmltarget->targettable;
+                $jobmeta->targetfield = $htmltarget->targetfield;
+                $jobmeta->targetid = $htmltarget->targetid;
+            }
+        }
+
+        self::bump_url_revision($jobmeta);
+
+        if ($placeholderid === '' || empty($jobmeta->targettable) || empty($jobmeta->targetfield) || empty($jobmeta->targetid)) {
+            return;
+        }
+
+        content_html_helper::update_target_html_class(
+            $jobmeta,
+            $placeholderid,
+            'dixeo-img-gen-pending',
+            '',
+            $contenthash
+        );
     }
 
     /**

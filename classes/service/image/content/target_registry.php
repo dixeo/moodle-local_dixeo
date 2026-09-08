@@ -84,6 +84,51 @@ final class target_registry {
     ];
 
     /**
+     * Resolve an html_field_target from a content image location (modal apply path).
+     *
+     * @param location $location
+     * @return html_field_target|null
+     */
+    public static function resolve_from_location(location $location): ?html_field_target {
+        foreach (self::HANDLERS as $modname => $fields) {
+            foreach ($fields as $fieldname => $handler) {
+                if (
+                    $handler['component'] !== $location->component
+                    || $handler['filearea'] !== $location->filearea
+                ) {
+                    continue;
+                }
+
+                $context = \context::instance_by_id($location->contextid, IGNORE_MISSING);
+                if (!$context || $context->contextlevel !== CONTEXT_MODULE) {
+                    return null;
+                }
+
+                $cm = get_coursemodule_from_id(null, (int) $context->instanceid, 0, false, IGNORE_MISSING);
+                if (!$cm) {
+                    return null;
+                }
+
+                $instanceid = match ($handler['itemid']) {
+                    'record' => $location->itemid,
+                    default => (int) $cm->instance,
+                };
+
+                return self::resolve(
+                    $modname,
+                    $fieldname,
+                    $instanceid,
+                    $location->contextid,
+                    $location->courseid,
+                    (int) $cm->id
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve filearea html_field_target for a module HTML field after insert.
      *
      * @param string $modname Module plugin name or logical entity (slideshow_slide, glossary_entry).

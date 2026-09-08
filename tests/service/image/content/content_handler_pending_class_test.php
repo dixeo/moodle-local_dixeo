@@ -80,4 +80,54 @@ final class content_handler_pending_class_test extends \advanced_testcase {
         $fresh = $DB->get_record('page', ['id' => $page->id], 'content', MUST_EXIST);
         $this->assertStringNotContainsString('dixeo-img-gen-pending', $fresh->content);
     }
+
+    /**
+     * Success after failure must clear the failed class and refresh contenthash.
+     */
+    public function test_success_apply_clears_failed_class_and_updates_hash(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $placeholderid = 'failed-then-success-uuid';
+        $img = '<img src="@@PLUGINFILE@@/x.png" class="img-fluid dixeo-img-gen-failed" ' .
+            'data-dixeo-img-gen="' . $placeholderid . '" data-dixeo-contenthash="errorhash" alt="" />';
+        $page = $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'content' => '<p>' . $img . '</p>',
+            'contentformat' => FORMAT_HTML,
+        ]);
+        $context = \context_module::instance($page->cmid);
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $location = new location(
+            $context->id,
+            'mod_page',
+            'content',
+            0,
+            '/',
+            $filename,
+            (int) $course->id
+        );
+        file_service::create_stub($location, (int) $USER->id);
+
+        $target = content_target::from_location($location);
+        $jobrow = (object) [
+            'origin' => job_repository::ORIGIN_SHORTCODE,
+            'placeholderid' => $placeholderid,
+            'targettable' => 'page',
+            'targetfield' => 'content',
+            'targetid' => (int) $page->id,
+        ];
+
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8j0NgAAAABJRU5ErkJggg==');
+        content_handler::apply($target, ['image_base64' => base64_encode($png)], (int) $USER->id, 'generated', $jobrow, null);
+
+        $fresh = $DB->get_record('page', ['id' => $page->id], 'content', MUST_EXIST);
+        $this->assertStringNotContainsString('dixeo-img-gen-failed', $fresh->content);
+        $this->assertStringNotContainsString('data-dixeo-contenthash="errorhash"', $fresh->content);
+        $newhash = $location->get_stored_file()->get_contenthash();
+        $this->assertStringContainsString('data-dixeo-contenthash="' . $newhash . '"', $fresh->content);
+    }
 }
