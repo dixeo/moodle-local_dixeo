@@ -82,9 +82,14 @@ final class html_helper {
 
             if (preg_match('/\bclass="([^"]*)"/iu', $tag, $classmatch)) {
                 $classes = preg_split('/\s+/', trim($classmatch[1])) ?: [];
+                // Success clear (empty $toclass): drop both status classes so a retry after
+                // failure does not leave dixeo-img-gen-failed / stale error hash UI.
+                $droplist = $toclass === ''
+                    ? [$fromclass, 'dixeo-img-gen-pending', 'dixeo-img-gen-failed']
+                    : [$fromclass];
                 $classes = array_values(array_filter(
                     $classes,
-                    static fn(string $c): bool => $c !== '' && $c !== $fromclass
+                    static fn(string $c): bool => $c !== '' && !in_array($c, $droplist, true)
                 ));
                 if ($toclass !== '' && !in_array($toclass, $classes, true)) {
                     $classes[] = $toclass;
