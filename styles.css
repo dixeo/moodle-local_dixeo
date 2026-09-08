@@ -5,7 +5,8 @@
  *
  * Sections:
  *   1. File sync indicator — course-page pill + dropdown (sync_indicator_injector)
- *   2. Content image placeholders — [img-gen] shortcode pending/failed states
+ *   2. Content image placeholders — [img-gen] pending/failed + shared shimmer/status
+ *      (shimmer also used by filter_dixeo_imageeditor .is-generating overlays)
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -381,28 +382,104 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   2. Content image placeholders — [img-gen] async pending state
+   2. Content image placeholders — [img-gen] async pending + shared shimmer
    ========================================================================== */
 
-/* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png. */
+/* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png.
+   Display JS wraps a .dixeo-img-gen-frame (or reuses .dixeo-imageeditor-wrap) for ::before
+   and injects .dixeo-img-gen-status pills. Filter keeps its own .is-generating ::after label. */
+
+.dixeo-img-gen-frame {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: middle;
+    line-height: 0;
+    position: relative;
+}
+
 .dixeo-img-gen-pending,
 .dixeo-img-gen-failed {
     max-width: 100%;
     height: auto;
 }
 
-.dixeo-img-gen-pending {
-    animation: dixeo-img-gen-pulse 1.6s ease-in-out infinite;
+/* Shimmer hosts: pending shortcode frame/wrap, and filter generating states. */
+.dixeo-img-gen-frame:has(> img.dixeo-img-gen-pending),
+.dixeo-imageeditor-wrap:has(> img.dixeo-img-gen-pending),
+.dixeo-imageeditor-wrap.is-generating,
+.dixeo-imageeditor-modal__preview.is-generating {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
 }
 
-@keyframes dixeo-img-gen-pulse {
-    0%,
-    100% {
-        opacity: 1;
+.dixeo-img-gen-frame:has(> img.dixeo-img-gen-pending)::before,
+.dixeo-imageeditor-wrap:has(> img.dixeo-img-gen-pending)::before,
+.dixeo-imageeditor-wrap.is-generating::before,
+.dixeo-imageeditor-modal__preview.is-generating::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    /* Transparent outside the band so the loop reset is off-screen (no flash). */
+    background:
+        linear-gradient(
+            110deg,
+            transparent 0%,
+            transparent 20%,
+            rgba(255, 255, 255, 0.12) 35%,
+            rgba(255, 255, 255, 0.32) 42%,
+            rgba(255, 255, 255, 0.12) 49%,
+            transparent 64%,
+            transparent 100%
+        ),
+        linear-gradient(180deg, rgba(16, 27, 44, 0.24) 0%, rgba(16, 27, 44, 0.38) 100%);
+    background-size: 200% 100%, 100% 100%;
+    background-repeat: no-repeat, no-repeat;
+    animation: dixeo-shimmer 1.8s linear infinite;
+    pointer-events: none;
+}
+
+/* Failed hosts: position status pill only (no shimmer). */
+.dixeo-img-gen-frame:has(> img.dixeo-img-gen-failed),
+.dixeo-imageeditor-wrap:has(> img.dixeo-img-gen-failed) {
+    position: relative;
+}
+
+.dixeo-img-gen-status {
+    position: absolute;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    max-width: calc(100% - 2rem);
+    padding: 0.5rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(16, 27, 44, 0.72);
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
+.dixeo-img-gen-status.is-failed {
+    background: rgba(176, 42, 55, 0.92);
+}
+
+/* Filter owns the generating label on .is-generating wraps. */
+.dixeo-imageeditor-wrap.is-generating > .dixeo-img-gen-status {
+    display: none;
+}
+
+@keyframes dixeo-shimmer {
+    0% {
+        background-position: 100% 0, 0 0;
     }
 
-    50% {
-        opacity: 0.55;
+    100% {
+        background-position: -100% 0, 0 0;
     }
 }
 
@@ -420,7 +497,10 @@ h2:has(.dixeo-sync-indicator),
         animation: none;
     }
 
-    .dixeo-img-gen-pending {
+    .dixeo-img-gen-frame:has(> img.dixeo-img-gen-pending)::before,
+    .dixeo-imageeditor-wrap:has(> img.dixeo-img-gen-pending)::before,
+    .dixeo-imageeditor-wrap.is-generating::before,
+    .dixeo-imageeditor-modal__preview.is-generating::before {
         animation: none;
     }
 }
