@@ -18,7 +18,9 @@ namespace local_dixeo\service\image\poll;
 
 
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\apply\registry as apply_registry;
+use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\image_target;
 
 /**
@@ -54,6 +56,10 @@ final class client_poll {
             $job = job_repository::get_by_target($target);
             if ($job) {
                 job_repository::mark_failed((int) $job->id, $message);
+            }
+            // Must apply before adhoc poll sees STATUS_FAILED and exits early.
+            if ($target instanceof content_target) {
+                apply_content_handler::apply_failure($target, $userid, $job);
             }
             return ['status' => 'failed', 'errormessage' => $message];
         }
@@ -91,6 +97,9 @@ final class client_poll {
             $job = job_repository::get_by_target($target);
             if ($job) {
                 job_repository::mark_failed((int) $job->id, $message);
+            }
+            if ($target instanceof content_target) {
+                apply_content_handler::apply_failure($target, $userid, $job);
             }
 
             return ['status' => 'failed', 'errormessage' => $message];

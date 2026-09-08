@@ -59,6 +59,7 @@ final class content_handler {
 
         file_service::apply_job_result($location, $result, $userid);
 
+        // Editor drafts only replace the draft file; the editor polls and rewrites the live img.
         if (job_repository::is_editor_draft_job($jobrow)) {
             return;
         }
@@ -66,11 +67,17 @@ final class content_handler {
         self::bump_url_revision($jobrow);
 
         if ($jobrow && $jobrow->origin === job_repository::ORIGIN_SHORTCODE && !empty($jobrow->placeholderid)) {
+            $contenthash = '';
+            $stored = $location->get_stored_file();
+            if ($stored) {
+                $contenthash = $stored->get_contenthash();
+            }
             content_html_helper::update_target_html_class(
                 $jobrow,
                 (string) $jobrow->placeholderid,
                 'dixeo-img-gen-pending',
-                ''
+                '',
+                $contenthash
             );
         }
     }
@@ -111,11 +118,19 @@ final class content_handler {
         }
 
         if ($jobrow && !empty($jobrow->placeholderid)) {
+            $contenthash = '';
+            if ($shouldreplacefile) {
+                $stored = $location->get_stored_file();
+                if ($stored) {
+                    $contenthash = $stored->get_contenthash();
+                }
+            }
             content_html_helper::update_target_html_class(
                 $jobrow,
                 (string) $jobrow->placeholderid,
                 'dixeo-img-gen-pending',
-                'dixeo-img-gen-failed'
+                'dixeo-img-gen-failed',
+                $contenthash
             );
         }
     }

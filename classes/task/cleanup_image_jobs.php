@@ -48,6 +48,20 @@ class cleanup_image_jobs extends \core\task\scheduled_task {
 
         $now = time();
 
+        // Revive pending/processing jobs whose adhoc poll chain disappeared.
+        $orphans = $DB->get_records_select(
+            job_repository::TABLE,
+            'status IN (:pending, :processing) AND timecreated > :cutoff',
+            [
+                'pending' => job_repository::STATUS_PENDING,
+                'processing' => job_repository::STATUS_PROCESSING,
+                'cutoff' => $now - job_repository::TIMEOUT_SECONDS,
+            ]
+        );
+        foreach ($orphans as $job) {
+            \local_dixeo\service\image\poll\manager::ensure_poll_for_job($job);
+        }
+
         // Persist the failed state for jobs stuck in pending/processing beyond the timeout.
         $DB->execute(
             'UPDATE {' . job_repository::TABLE . '}
