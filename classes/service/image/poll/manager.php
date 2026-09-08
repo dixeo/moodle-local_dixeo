@@ -18,7 +18,9 @@ namespace local_dixeo\service\image\poll;
 
 
 use core\task\manager as core_task_manager;
+use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\image_target;
+use local_dixeo\service\image\target_factory;
 use local_dixeo\task\poll_image_job;
 
 /**
@@ -104,8 +106,8 @@ final class manager {
         if (!in_array(
             (string) ($job->status ?? ''),
             [
-                \local_dixeo\repository\image\job_repository::STATUS_PENDING,
-                \local_dixeo\repository\image\job_repository::STATUS_PROCESSING,
+                job_repository::STATUS_PENDING,
+                job_repository::STATUS_PROCESSING,
             ],
             true
         )) {
@@ -118,7 +120,7 @@ final class manager {
             return false;
         }
 
-        $target = \local_dixeo\service\image\target_factory::from_job_record($job);
+        $target = target_factory::from_job_record($job);
         if (self::has_poll_task($target)) {
             return false;
         }
