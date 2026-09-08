@@ -55,7 +55,28 @@ class get_content_image_status extends external_api {
     }
 
     /**
+     * Build an idle payload so the client can stop polling a missing job.
+     *
+     * @param string $placeholderid
+     * @return array
+     */
+    private static function idle_item(string $placeholderid): array {
+        return [
+            'placeholderid' => $placeholderid,
+            'status' => 'idle',
+            'imageurl' => '',
+            'imgclass' => 'img-fluid',
+            'contenthash' => '',
+            'errormessage' => '',
+            'filename' => file_service::stub_filename_for_placeholder($placeholderid),
+        ];
+    }
+
+    /**
      * Return status details for the given content image placeholders.
+     *
+     * Always returns one item per requested id. Missing/inaccessible jobs are
+     * reported as status "idle" so the page poller can clear pending UI.
      *
      * @param array $placeholderids Placeholder UUIDs to poll.
      * @return array
@@ -76,6 +97,7 @@ class get_content_image_status extends external_api {
 
             $job = job_repository::get_by_placeholderid($placeholderid);
             if (!$job || empty($job->contextid)) {
+                $items[] = self::idle_item($placeholderid);
                 continue;
             }
 
@@ -83,6 +105,7 @@ class get_content_image_status extends external_api {
             if (!isset($seencontexts[$contextid])) {
                 $context = context::instance_by_id($contextid, IGNORE_MISSING);
                 if (!$context) {
+                    $items[] = self::idle_item($placeholderid);
                     continue;
                 }
                 self::validate_context($context);
