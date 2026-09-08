@@ -18,7 +18,7 @@
  *
  * Stores bare imgs; wraps a shimmer host and injects translated status pills.
  * On course pages, polls until generation completes and swaps the live image.
- * Skips nesting inside filter_dixeo_imageeditor wraps; leaves is-generating labels to the filter.
+ * Does not page-poll imgs inside .dixeo-imageeditor-wrap (filter owns that path).
  * Safe to run inside the Dixeo editor TinyMCE iframe (uses ownerDocument).
  *
  * @module     local_dixeo/content_image_pending
@@ -35,6 +35,8 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     const WRAP_CLASS = 'dixeo-imageeditor-wrap';
     const GENERATING_CLASS = 'is-generating';
     const POLL_INTERVAL_MS = 3000;
+    /** Cap client polling (~10 min) for stuck pending HTML without a live job. */
+    const MAX_POLL_MS = 10 * 60 * 1000;
 
     /** @type {{generating: string, failed: string}|null} */
     let labels = null;
@@ -50,6 +52,9 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
 
     /** @type {boolean} */
     let pagePollInFlight = false;
+
+    /** @type {number} */
+    let pagePollStartedAt = 0;
 
     /**
      * @returns {Promise<{generating: string, failed: string}>}
@@ -145,6 +150,16 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         const src = img.getAttribute('src') || '';
         const match = src.match(/dixeo-gen-([a-f0-9-]+)\.png/i);
         return match ? match[1] : '';
+    };
+
+    /**
+     * Filter wrap owns location polling / labels for these hosts.
+     *
+     * @param {HTMLImageElement} img
+     * @returns {boolean}
+     */
+    const isInsideEditorWrap = (img) => {
+        return !!img.closest(`.${WRAP_CLASS}`);
     };
 
     /**
@@ -269,14 +284,14 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
-     * Collect pending placeholder ids under the top document.
+     * Collect pending placeholder ids under the top document (bare imgs only).
      *
      * @returns {string[]}
      */
     const collectPendingPlaceholderIds = () => {
         const ids = [];
         document.querySelectorAll('img.dixeo-img-gen-pending').forEach((img) => {
-            if (!isHtmlImage(img)) {
+            if (!isHtmlImage(img) || isInsideEditorWrap(img)) {
                 return;
             }
             const id = placeholderIdFromImg(img);
@@ -288,7 +303,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
-     * Find a live pending/failed img for a placeholder id.
+     * Find a live pending/failed img for a placeholder id (bare page imgs).
      *
      * @param {string} placeholderid
      * @param {string} filename
@@ -299,7 +314,26 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         if (!img && filename) {
             img = document.querySelector('img[src*="' + filename + '"]');
         }
-        return isHtmlImage(img) ? img : null;
+        if (!isHtmlImage(img) || isInsideEditorWrap(img)) {
+            return null;
+        }
+        return img;
+    };
+
+    /**
+     * Strip pending classes when the server reports idle (no job).
+     *
+     * @param {{placeholderid: string, filename: string}} item
+     * @returns {boolean}
+     */
+    const clearIdlePending = (item) => {
+        const img = findPageImage(item.placeholderid, item.filename || '');
+        if (!img) {
+            return false;
+        }
+        img.classList.remove('dixeo-img-gen-pending', 'dixeo-img-gen-failed');
+        clearImageHost(img);
+        return true;
     };
 
     /**
@@ -311,6 +345,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
      * @returns {boolean}
      */
     const applyPageItem = (item, strings) => {
+        if (item.status === 'idle') {
+            return clearIdlePending(item);
+        }
+
         const img = findPageImage(item.placeholderid, item.filename || '');
         if (!img) {
             return false;
@@ -349,6 +387,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             window.clearInterval(pagePollTimer);
             pagePollTimer = null;
         }
+        pagePollStartedAt = 0;
     };
 
     /**
@@ -358,6 +397,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
      */
     const startPagePolling = (strings) => {
         const pollOnce = () => {
+            if (pagePollStartedAt && (Date.now() - pagePollStartedAt) > MAX_POLL_MS) {
+                stopPagePolling();
+                return;
+            }
             const ids = collectPendingPlaceholderIds();
             if (!ids.length) {
                 stopPagePolling();
@@ -391,6 +434,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         };
 
         stopPagePolling();
+        pagePollStartedAt = Date.now();
         pollOnce();
         pagePollTimer = window.setInterval(pollOnce, POLL_INTERVAL_MS);
     };
@@ -442,14 +486,20 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                         }
                         if (node.matches?.(IMG_SELECTOR) && isHtmlImage(node)) {
                             enhanceImage(node, strings);
-                            if (doc === document && node.classList.contains('dixeo-img-gen-pending')) {
+                            if (doc === document &&
+                                    node.classList.contains('dixeo-img-gen-pending') &&
+                                    !isInsideEditorWrap(node)) {
                                 addedPending = true;
                             }
                             return;
                         }
                         enhanceTree(node, strings);
-                        if (doc === document && node.querySelector?.('img.dixeo-img-gen-pending')) {
-                            addedPending = true;
+                        if (doc === document) {
+                            node.querySelectorAll?.('img.dixeo-img-gen-pending').forEach((img) => {
+                                if (isHtmlImage(img) && !isInsideEditorWrap(img)) {
+                                    addedPending = true;
+                                }
+                            });
                         }
                     });
                 });

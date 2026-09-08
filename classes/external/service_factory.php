@@ -215,7 +215,7 @@ class service_factory {
             return self::$testimagegenerationservice;
         }
 
-        return new image_generation_service(null, null, null, $component ?? 'filter_dixeo_imageeditor');
+        return new image_generation_service(null, null, null, $component ?? 'local_dixeo');
     }
 
     /**
