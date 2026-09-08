@@ -101,15 +101,17 @@ final class content_handler {
      * @return void
      */
     public static function apply_failure(content_target $target, int $userid, ?\stdClass $jobrow): void {
+        $isdraft = job_repository::is_editor_draft_job($jobrow);
+        // Mirror apply(): replace stub for shortcode + editor_draft; never overwrite modal images.
         $shouldreplacefile = $jobrow !== null
-            && ($jobrow->origin ?? '') !== job_repository::ORIGIN_MODAL
-            && !job_repository::is_editor_draft_job($jobrow);
+            && ($jobrow->origin ?? '') !== job_repository::ORIGIN_MODAL;
         $location = $target->get_location();
         if ($shouldreplacefile) {
             file_service::apply_failed_placeholder($location, $userid);
         }
 
-        if (job_repository::is_editor_draft_job($jobrow)) {
+        // Editor drafts only replace the draft file; the editor polls and rewrites the live img.
+        if ($isdraft) {
             return;
         }
 
