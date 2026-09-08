@@ -144,6 +144,7 @@ final class editor_session_promoter_test extends \advanced_testcase {
 
         $this->assertNotNull($ctx->module_location($filename)->get_stored_file());
         $this->assertStringContainsString('src="@@PLUGINFILE@@/' . $filename . '"', $result);
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $result);
         $this->assertStringNotContainsString('local_dixeo_editor/draft_page', $result);
     }
 

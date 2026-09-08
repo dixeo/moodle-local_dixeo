@@ -21,7 +21,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\html_helper as content_html_helper;
-use local_dixeo\service\image\content\location;
+use local_dixeo\service\image\content\target_registry;
 use local_dixeo\service\image\content_target;
 
 /**
@@ -59,29 +59,38 @@ final class content_handler {
 
         file_service::apply_job_result($location, $result, $userid);
 
+        // Editor drafts only replace the draft file; the editor polls and rewrites the live img.
         if (job_repository::is_editor_draft_job($jobrow)) {
             return;
         }
 
+        self::bump_url_revision($jobrow);
+
         if ($jobrow && $jobrow->origin === job_repository::ORIGIN_SHORTCODE && !empty($jobrow->placeholderid)) {
-            content_html_helper::update_target_img(
+            $contenthash = '';
+            $stored = $location->get_stored_file();
+            if ($stored) {
+                $contenthash = $stored->get_contenthash();
+            }
+            content_html_helper::update_target_html_class(
                 $jobrow,
                 (string) $jobrow->placeholderid,
                 'dixeo-img-gen-pending',
                 '',
-                self::contenthash($location)
+                $contenthash
             );
         }
     }
 
     /**
-     * Contenthash of the file currently stored at the job location.
-     * @param location $location
-     * @return string
+     * Bump the target's URL revision so browsers refetch the swapped image file.
+     * @param \stdClass|null $jobrow
+     * @return void
      */
-    private static function contenthash(location $location): string {
-        $file = $location->get_stored_file();
-        return $file ? (string) $file->get_contenthash() : '';
+    private static function bump_url_revision(?\stdClass $jobrow): void {
+        if ($jobrow && !empty($jobrow->targettable) && !empty($jobrow->targetid)) {
+            target_registry::bump_url_revision((string) $jobrow->targettable, (int) $jobrow->targetid);
+        }
     }
 
     /**
@@ -104,13 +113,24 @@ final class content_handler {
             return;
         }
 
+        if ($shouldreplacefile) {
+            self::bump_url_revision($jobrow);
+        }
+
         if ($jobrow && !empty($jobrow->placeholderid)) {
-            content_html_helper::update_target_img(
+            $contenthash = '';
+            if ($shouldreplacefile) {
+                $stored = $location->get_stored_file();
+                if ($stored) {
+                    $contenthash = $stored->get_contenthash();
+                }
+            }
+            content_html_helper::update_target_html_class(
                 $jobrow,
                 (string) $jobrow->placeholderid,
                 'dixeo-img-gen-pending',
                 'dixeo-img-gen-failed',
-                self::contenthash($location)
+                $contenthash
             );
         }
     }

@@ -26,50 +26,46 @@ namespace local_dixeo\service\image\content;
  */
 final class html_helper_test extends \advanced_testcase {
     /**
-     * Test rewrite removes pending when class precedes data attribute.
+     * Test swap removes pending when class precedes data attribute.
      */
-    public function test_rewrite_removes_pending_when_class_precedes_data_attribute(): void {
+    public function test_swap_removes_pending_when_class_precedes_data_attribute(): void {
         $id = 'abc-123';
         $html = '<img src="http://x/y.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="' . $id . '" alt="" />';
-        $updated = html_helper::rewrite_img_for_placeholder($html, $id, 'dixeo-img-gen-pending', '', 'hash1');
+        $updated = html_helper::swap_img_class_for_placeholder($html, $id, 'dixeo-img-gen-pending', '');
         $this->assertStringNotContainsString('dixeo-img-gen-pending', $updated);
         $this->assertStringContainsString('data-dixeo-img-gen="' . $id . '"', $updated);
         $this->assertStringContainsString('class="img-fluid"', $updated);
-        $this->assertStringContainsString('src="http://x/y.png?rev=hash1"', $updated);
     }
 
     /**
-     * Test rewrite revs the src of the matching placeholder only.
+     * Test swap matches stub filename when data attribute was stripped.
      */
-    public function test_rewrite_revs_only_the_matching_placeholder(): void {
-        $html = '<img src="@@PLUGINFILE@@/a.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="one" />' .
-            '<img src="@@PLUGINFILE@@/b.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="two" />';
-        $updated = html_helper::rewrite_img_for_placeholder($html, 'one', 'dixeo-img-gen-pending', '', 'hash1');
-        $this->assertStringContainsString('src="@@PLUGINFILE@@/a.png?rev=hash1"', $updated);
-        $this->assertStringContainsString('src="@@PLUGINFILE@@/b.png"', $updated);
-        $this->assertStringContainsString('data-dixeo-img-gen="two" />', $updated);
-    }
-
-    /**
-     * Test rewrite replaces a previous rev instead of stacking params.
-     */
-    public function test_rewrite_replaces_previous_rev(): void {
-        $html = '<img src="@@PLUGINFILE@@/a.png?rev=old" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="one" />';
-        $updated = html_helper::rewrite_img_for_placeholder($html, 'one', 'dixeo-img-gen-pending', 'dixeo-img-gen-failed', 'new');
-        $this->assertStringContainsString('src="@@PLUGINFILE@@/a.png?rev=new"', $updated);
-        $this->assertStringNotContainsString('rev=old', $updated);
-        $this->assertStringContainsString('class="img-fluid dixeo-img-gen-failed"', $updated);
-    }
-
-    /**
-     * Test rewrite keeps the src untouched when the file is gone.
-     */
-    public function test_rewrite_without_contenthash_only_swaps_class(): void {
-        $html = '<img src="@@PLUGINFILE@@/a.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="one" />';
-        $updated = html_helper::rewrite_img_for_placeholder($html, 'one', 'dixeo-img-gen-pending', '', '');
-        $this->assertStringContainsString('src="@@PLUGINFILE@@/a.png"', $updated);
-        $this->assertStringNotContainsString('rev=', $updated);
+    public function test_swap_removes_pending_via_stub_filename_without_data_attribute(): void {
+        $id = '52c6e67c-e064-4e24-ad8a-a45201404d9f';
+        $filename = file_service::stub_filename_for_placeholder($id);
+        $html = '<img class="img-fluid dixeo-img-gen-pending" src="@@PLUGINFILE@@/' .
+            $filename . '" alt="" />';
+        $updated = html_helper::swap_img_class_for_placeholder($html, $id, 'dixeo-img-gen-pending', '');
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $updated);
         $this->assertStringContainsString('class="img-fluid"', $updated);
+    }
+
+    /**
+     * Failed swap stores contenthash for cache-busting on display.
+     */
+    public function test_swap_sets_contenthash_for_failed_state(): void {
+        $id = 'abc-123';
+        $html = '<img src="@@PLUGINFILE@@/x.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="' . $id . '" alt="" />';
+        $updated = html_helper::swap_img_class_for_placeholder(
+            $html,
+            $id,
+            'dixeo-img-gen-pending',
+            'dixeo-img-gen-failed',
+            'deadbeef'
+        );
+        $this->assertStringContainsString('dixeo-img-gen-failed', $updated);
+        $this->assertStringContainsString('data-dixeo-contenthash="deadbeef"', $updated);
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $updated);
     }
 
     /**
@@ -80,5 +76,20 @@ final class html_helper_test extends \advanced_testcase {
         $fixed = html_helper::normalize_legacy_intro_pluginfile_urls($broken);
         $this->assertStringContainsString('@@PLUGINFILE@@/dixeo-gen-x.png', $fixed);
         $this->assertStringNotContainsString('/intro/0/', $fixed);
+    }
+
+    /**
+     * Test unwrap removes display-only frame and status pill.
+     */
+    public function test_unwrap_display_frames_strips_frame_and_status(): void {
+        $html = '<p><span class="dixeo-img-gen-frame">' .
+            '<img src="http://x/y.png" class="img-fluid dixeo-img-gen-pending" alt="" />' .
+            '<span class="dixeo-img-gen-status is-pending">Generating...</span>' .
+            '</span></p>';
+        $updated = html_helper::unwrap_display_frames($html);
+        $this->assertStringNotContainsString('dixeo-img-gen-frame', $updated);
+        $this->assertStringNotContainsString('dixeo-img-gen-status', $updated);
+        $this->assertStringContainsString('dixeo-img-gen-pending', $updated);
+        $this->assertStringContainsString('<img src="http://x/y.png"', $updated);
     }
 }
