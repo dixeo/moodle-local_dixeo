@@ -77,8 +77,9 @@ final class poll_image_job_retarget_test extends \advanced_testcase {
             $task->execute();
         } catch (\Throwable $e) {
             // Remote API may be unavailable in CI; retarget runs before poll_once.
+            unset($e);
         }
-        // poll_once / apply_failure may emit developer debugging when the API is down.
+        // Poll_once / apply_failure may emit developer debugging when the API is down.
         $this->resetDebugging();
 
         $fresh = $DB->get_record(job_repository::TABLE, ['id' => $job->id], '*', MUST_EXIST);
@@ -88,10 +89,12 @@ final class poll_image_job_retarget_test extends \advanced_testcase {
             '',
             (string) $fresh->jobid
         );
-        if (in_array($fresh->status, [
-            job_repository::STATUS_PENDING,
-            job_repository::STATUS_PROCESSING,
-        ], true)) {
+        if (
+            in_array($fresh->status, [
+                job_repository::STATUS_PENDING,
+                job_repository::STATUS_PROCESSING,
+            ], true)
+        ) {
             $moduletarget = target_factory::from_job_record($fresh);
             $this->assertTrue(
                 manager::has_poll_task($moduletarget),
