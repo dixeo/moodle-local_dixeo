@@ -59,7 +59,7 @@ final class pluginfile_helper {
             return null;
         }
 
-        // tokenpluginfile.php / {token} / {contextid} / ...
+        // Tokenpluginfile.php / {token} / {contextid} / ...
         if (stripos($path, '/tokenpluginfile.php/') !== false) {
             array_shift($segments);
         }
@@ -105,7 +105,7 @@ final class pluginfile_helper {
             if ($hasnullitemid) {
                 $itemid = 0;
             } else if ($segments === []) {
-                // /context/component/filearea/filename (implicit itemid 0).
+                // .../context/component/filearea/filename (implicit itemid 0).
                 $itemid = 0;
             } else {
                 $itemid = (int) array_shift($segments);

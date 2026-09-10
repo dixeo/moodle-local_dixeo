@@ -55,7 +55,8 @@ final class html_helper_test extends \advanced_testcase {
      */
     public function test_swap_sets_contenthash_for_failed_state(): void {
         $id = 'abc-123';
-        $html = '<img src="@@PLUGINFILE@@/x.png" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="' . $id . '" alt="" />';
+        $html = '<img src="@@PLUGINFILE@@/x.png" class="img-fluid dixeo-img-gen-pending"'
+            . ' data-dixeo-img-gen="' . $id . '" alt="" />';
         $updated = html_helper::swap_img_class_for_placeholder(
             $html,
             $id,

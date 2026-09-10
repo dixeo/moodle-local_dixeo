@@ -430,8 +430,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                 return undefined;
             }).catch(() => {
                 // Keep polling on transient errors.
-            }).then(() => {
-                // jQuery deferreds from core/ajax may lack Promise.finally.
+            }).always(() => {
                 pagePollInFlight = false;
             });
         };
@@ -455,6 +454,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             if (doc === document && collectPendingPlaceholderIds().length) {
                 startPagePolling(strings);
             }
+            return undefined;
         });
     };
 
@@ -462,9 +462,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
      * Enhance existing images and observe new ones under root.
      *
      * @param {ParentNode|Document|null|undefined} [root]
+     * @returns {Promise<void>}
      */
     const init = (root) => {
-        loadLabels().then((strings) => {
+        return loadLabels().then((strings) => {
             const {searchRoot, observeRoot, doc} = resolveRoots(root);
             enhanceTree(searchRoot, strings);
 
@@ -473,10 +474,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             }
 
             if (typeof MutationObserver === 'undefined' || !observeRoot) {
-                return;
+                return undefined;
             }
             if (observedDocs.has(doc)) {
-                return;
+                return undefined;
             }
             observedDocs.add(doc);
 
@@ -511,6 +512,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                 }
             });
             observer.observe(observeRoot, {childList: true, subtree: true});
+            return undefined;
         });
     };
 
