@@ -17,6 +17,8 @@
 namespace local_dixeo\service\image\poll;
 
 
+use local_dixeo\api\exception\api_exception;
+use local_dixeo\api\exception\rate_limit_exception;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\apply\registry as apply_registry;
@@ -45,7 +47,15 @@ final class client_poll {
         int $userid,
         ?callable $imageurlresolver = null
     ): array {
-        $jobstatus = engine::poll_remote_once($remotejobid);
+        try {
+            $jobstatus = engine::poll_remote_once($remotejobid);
+        } catch (rate_limit_exception $e) {
+            return ['status' => 'pending'];
+        } catch (api_exception $e) {
+            // Do not bubble API errors to AJAX — they open Moodle exception modals.
+            debugging('Dixeo client image poll API error: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            return ['status' => 'pending'];
+        }
 
         if ($jobstatus->is_failed()) {
             $detail = (string) ($jobstatus->errormessage ?? '');
