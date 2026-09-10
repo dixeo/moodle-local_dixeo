@@ -103,14 +103,16 @@ final class manager {
      * @return bool True when a new poll task was queued.
      */
     public static function ensure_poll_for_job(\stdClass $job): bool {
-        if (!in_array(
-            (string) ($job->status ?? ''),
-            [
-                job_repository::STATUS_PENDING,
-                job_repository::STATUS_PROCESSING,
-            ],
-            true
-        )) {
+        if (
+            !in_array(
+                (string) ($job->status ?? ''),
+                [
+                    job_repository::STATUS_PENDING,
+                    job_repository::STATUS_PROCESSING,
+                ],
+                true
+            )
+        ) {
             return false;
         }
 

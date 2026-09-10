@@ -330,11 +330,13 @@ final class job_repository {
             $payload['errormessage'] = (string) $job->errormessage;
         }
 
-        if (in_array(
-            (string) $job->status,
-            [self::STATUS_PENDING, self::STATUS_PROCESSING],
-            true
-        )) {
+        if (
+            in_array(
+                (string) $job->status,
+                [self::STATUS_PENDING, self::STATUS_PROCESSING],
+                true
+            )
+        ) {
             poll_manager::ensure_poll_for_job($job);
         }
 
