@@ -69,27 +69,59 @@ class poll_image_job extends \core\task\adhoc_task {
 
         $job = job_repository::get_by_target($target);
         if (!$job) {
-            return;
+            global $DB;
+            $byremote = $DB->get_record(job_repository::TABLE, ['jobid' => $jobid], '*', IGNORE_MISSING);
+
+            // Save may have promoted the job to a new locationhash while this draft-hash
+            // poll was already queued. Continue against the live row when possible.
+            if (
+                $byremote
+                && in_array(
+                    (string) $byremote->status,
+                    [job_repository::STATUS_PENDING, job_repository::STATUS_PROCESSING],
+                    true
+                )
+            ) {
+                $job = $byremote;
+                $target = target_factory::from_job_record($job);
+            } else {
+                return;
+            }
         }
         if ($job->status === job_repository::STATUS_APPLIED || $job->status === job_repository::STATUS_FAILED) {
             return;
         }
-        job_repository::update_status((int) $job->id, job_repository::STATUS_PROCESSING);
 
-        $outcome = poll_engine::poll_once($jobid);
+        try {
+            job_repository::update_status((int) $job->id, job_repository::STATUS_PROCESSING);
+
+            $outcome = poll_engine::poll_once($jobid);
+        } catch (\Throwable $e) {
+            debugging('Dixeo image poll failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+
+            if ($chainseq + 1 >= poll_engine::MAX_POLL_ATTEMPTS) {
+                $this->mark_failed($target, $job, $userid, $e->getMessage());
+                return;
+            }
+            poll_manager::queue_poll_task(
+                $target,
+                $jobid,
+                $userid,
+                $chainseq + 1,
+                $source,
+                poll_engine::POLL_INTERVAL_SECONDS
+            );
+            return;
+        }
 
         if ($outcome['completed']) {
             try {
-                if ($job) {
-                    $freshjob = $DB->get_record(job_repository::TABLE, ['id' => $job->id], '*', MUST_EXIST);
-                    if ($freshjob->status === job_repository::STATUS_APPLIED) {
-                        return;
-                    }
+                $freshjob = $DB->get_record(job_repository::TABLE, ['id' => $job->id], '*', MUST_EXIST);
+                if ($freshjob->status === job_repository::STATUS_APPLIED) {
+                    return;
                 }
                 apply_registry::apply($target, $outcome['result'], $userid, $source, $job);
-                if ($job) {
-                    job_repository::update_status((int) $job->id, job_repository::STATUS_APPLIED);
-                }
+                job_repository::update_status((int) $job->id, job_repository::STATUS_APPLIED);
                 $this->maybe_backfill_job_metadata($job);
             } catch (\Throwable $e) {
                 $this->mark_failed($target, $job, $userid, $e->getMessage());
@@ -98,7 +130,6 @@ class poll_image_job extends \core\task\adhoc_task {
         }
 
         if ($outcome['failed']) {
-            // Outcome message is already a generic lang string from the poll engine.
             $this->mark_failed($target, $job, $userid, (string) ($outcome['errormessage'] ?? ''));
             return;
         }
@@ -113,8 +144,14 @@ class poll_image_job extends \core\task\adhoc_task {
             return;
         }
 
-        // Still pending: requeue a delayed poll instead of blocking the cron worker.
-        poll_manager::queue_poll_task($target, $jobid, $userid, $chainseq + 1, $source, poll_engine::POLL_INTERVAL_SECONDS);
+        poll_manager::queue_poll_task(
+            $target,
+            $jobid,
+            $userid,
+            $chainseq + 1,
+            $source,
+            poll_engine::POLL_INTERVAL_SECONDS
+        );
     }
 
     /**
@@ -162,7 +199,11 @@ class poll_image_job extends \core\task\adhoc_task {
             job_repository::mark_failed((int) $job->id, $safe);
         }
         if ($target instanceof content_target) {
-            apply_content_handler::apply_failure($target, $userid, $job);
+            try {
+                apply_content_handler::apply_failure($target, $userid, $job);
+            } catch (\Throwable $e) {
+                debugging('Dixeo image apply_failure failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
         }
     }
 

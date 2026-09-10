@@ -18,6 +18,7 @@ namespace local_dixeo\service\image\poll;
 
 
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\api\exception\rate_limit_exception;
 use local_dixeo\external\service_factory;
 
 /**
@@ -52,6 +53,9 @@ final class engine {
     public static function poll_once(string $remotejobid): array {
         try {
             $jobstatus = self::poll_remote_once($remotejobid);
+        } catch (rate_limit_exception $e) {
+            // Transient: concurrent/quota limits must not mark the image job failed.
+            return self::in_progress_outcome();
         } catch (api_exception $e) {
             return self::failed_outcome();
         }
@@ -118,6 +122,21 @@ final class engine {
             'failed' => true,
             'result' => [],
             'errormessage' => get_string('dixeo_image_job_failed', 'local_dixeo'),
+        ];
+    }
+
+    /**
+     * Non-terminal outcome so adhoc polling retries after a transient API error.
+     *
+     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
+     */
+    private static function in_progress_outcome(): array {
+        return [
+            'done' => false,
+            'completed' => false,
+            'failed' => false,
+            'result' => [],
+            'errormessage' => '',
         ];
     }
 }

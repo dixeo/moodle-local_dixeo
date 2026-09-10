@@ -28,6 +28,10 @@ final class pluginfile_helper {
     /**
      * Resolve a wwwroot-relative or absolute pluginfile URL to a stored file.
      *
+     * Handles revision-as-itemid URLs used by mod_page / mod_resource / etc.
+     * via component_callback('get_path_from_pluginfile'), matching core H5P
+     * and pluginfile serving behaviour.
+     *
      * @param string $imageurl Full or relative URL.
      * @return \stored_file|null
      */
@@ -43,32 +47,79 @@ final class pluginfile_helper {
         $path = is_string($parsedpath) && $parsedpath !== ''
             ? $parsedpath
             : (string) preg_replace('#^' . preg_quote($CFG->wwwroot, '#') . '#', '', $imageurl);
-        $parts = explode('/pluginfile.php/', $path, 2);
-        if (count($parts) !== 2) {
+
+        // Accept pluginfile.php, tokenpluginfile.php, and webservice/pluginfile.php.
+        if (!preg_match('#/(?:(?:webservice/)?)(?:token)?pluginfile\.php/#', $path, $m, PREG_OFFSET_CAPTURE)) {
             return null;
         }
-        $segmentsraw = explode('/', trim($parts[1], '/'));
+        $slashargs = substr($path, $m[0][1] + strlen($m[0][0]));
+        $segmentsraw = explode('/', trim($slashargs, '/'));
         $segments = array_map('rawurldecode', $segmentsraw);
-        if (count($segments) < 4) {
+        if (count($segments) < 3) {
             return null;
         }
-        if (count($segments) === 4) {
-            $contextid = (int) $segments[0];
-            $component = (string) $segments[1];
-            $filearea = (string) $segments[2];
-            $filename = (string) $segments[3];
-            $itemid = 0;
-            $filepath = '/';
+
+        // Tokenpluginfile.php / {token} / {contextid} / ...
+        if (stripos($path, '/tokenpluginfile.php/') !== false) {
+            array_shift($segments);
+        }
+
+        if (count($segments) < 3) {
+            return null;
+        }
+
+        $contextid = (int) array_shift($segments);
+        $component = (string) array_shift($segments);
+        $filearea = (string) array_shift($segments);
+        if ($contextid < 1 || $component === '' || $filearea === '' || $segments === []) {
+            return null;
+        }
+
+        $filename = (string) array_pop($segments);
+        if ($filename === '') {
+            return null;
+        }
+
+        // Some modules (page, resource, …) put a cache-busting revision where
+        // itemid would be, but store files with itemid 0. Prefer the component
+        // callback when present (same approach as core_h5p).
+        $pathdata = null;
+        $context = \context::instance_by_id($contextid, IGNORE_MISSING);
+        if ($context && in_array($context->contextlevel, [CONTEXT_MODULE, CONTEXT_BLOCK], true)) {
+            $pathdata = component_callback($component, 'get_path_from_pluginfile', [$filearea, $segments], null);
+        }
+
+        if (is_array($pathdata) && array_key_exists('itemid', $pathdata) && array_key_exists('filepath', $pathdata)) {
+            $itemid = (int) $pathdata['itemid'];
+            $filepath = (string) $pathdata['filepath'];
         } else {
-            $contextid = (int) array_shift($segments);
-            $component = (string) array_shift($segments);
-            $filearea = (string) array_shift($segments);
-            $itemid = (int) array_shift($segments);
-            $filename = (string) array_pop($segments);
-            $filepath = '/' . implode('/', $segments) . '/';
-            if ($filepath === '//') {
-                $filepath = '/';
+            $hasnullitemid = false;
+            $hasnullitemid = $hasnullitemid || ($component === 'user' && ($filearea === 'private' || $filearea === 'profile'));
+            $hasnullitemid = $hasnullitemid || (str_starts_with($component, 'mod_') && $filearea === 'intro');
+            $hasnullitemid = $hasnullitemid || ($component === 'course' &&
+                    ($filearea === 'summary' || $filearea === 'overviewfiles'));
+            $hasnullitemid = $hasnullitemid || ($component === 'coursecat' && $filearea === 'description');
+            $hasnullitemid = $hasnullitemid || ($component === 'backup' &&
+                    ($filearea === 'course' || $filearea === 'activity' || $filearea === 'automated'));
+
+            if ($hasnullitemid) {
+                $itemid = 0;
+            } else if ($segments === []) {
+                // .../context/component/filearea/filename (implicit itemid 0).
+                $itemid = 0;
+            } else {
+                $itemid = (int) array_shift($segments);
             }
+
+            if ($segments === []) {
+                $filepath = '/';
+            } else {
+                $filepath = '/' . implode('/', $segments) . '/';
+            }
+        }
+
+        if ($filepath === '' || $filepath === '//') {
+            $filepath = '/';
         }
 
         $fs = get_file_storage();
