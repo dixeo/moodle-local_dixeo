@@ -358,6 +358,21 @@ final class job_repository {
             $payload['prefill_prompt'] = (string) ($job->prompt ?? '');
             $payload['prefill_quality'] = (string) ($job->quality ?? '');
             $payload['prefill_mode'] = (string) ($job->mode ?? '');
+            // Error asset replaces the stub in-place; expose URL so clients can
+            // swap the live img without waiting for a full page reload.
+            if ($target->get_target_kind() === image_target::KIND_CONTENT) {
+                $location = null;
+                if ($target instanceof content_target) {
+                    $location = $target->get_location();
+                }
+                if ($location) {
+                    $payload['imageurl'] = url_helper::get_current_image_url($location);
+                    $file = $location->get_stored_file();
+                    if ($file) {
+                        $payload['current_contenthash'] = $file->get_contenthash();
+                    }
+                }
+            }
         }
 
         if ($acknowledged && $job->status === self::STATUS_APPLIED) {
