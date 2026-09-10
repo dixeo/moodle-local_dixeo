@@ -31,6 +31,8 @@ use core\hook\output\before_standard_top_of_body_html_generation;
  */
 class content_image_pending_injector {
     /**
+     * Register AMD to annotate pending/failed content images on course pages.
+     *
      * @param before_standard_top_of_body_html_generation $hook
      * @return void
      */
