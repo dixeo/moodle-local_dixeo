@@ -25,12 +25,6 @@ namespace local_dixeo\service\image\content;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class target_registry {
-    /** @var array<string, string> HTML field => format field suffix map. */
-    /** Columns embedded in the pluginfile URL, bumped after a file swap so browsers refetch. */
-    private const URL_REVISION_FIELDS = [
-        'page' => 'revision',
-    ];
-
     /**
      * HTML field => corresponding format field name map.
      *
@@ -129,23 +123,6 @@ final class target_registry {
             $cmid,
             $formatfield
         );
-    }
-
-    /**
-     * Bump the URL revision of a target row after its image file changed.
-     *
-     * @param string $table Target table.
-     * @param int $id Target row id.
-     */
-    public static function bump_url_revision(string $table, int $id): void {
-        global $DB;
-
-        $field = self::URL_REVISION_FIELDS[$table] ?? null;
-        if ($field === null) {
-            return;
-        }
-
-        $DB->execute("UPDATE {{$table}} SET {$field} = {$field} + 1 WHERE id = ?", [$id]);
     }
 
     /**

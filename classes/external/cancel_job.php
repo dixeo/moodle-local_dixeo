@@ -92,7 +92,7 @@ class cancel_job extends external_api {
             return response_factory::cancellation_result(
                 $params['jobid'],
                 false,
-                $e->getMessage(),
+                response_factory::safe_message($e),
                 $e->get_error_code()
             );
         }

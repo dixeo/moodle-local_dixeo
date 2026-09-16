@@ -190,7 +190,7 @@ class create_module_from_job extends external_api {
             return response_factory::module_creation_result(
                 false,
                 0,
-                $e->getMessage(),
+                response_factory::safe_message($e),
                 $e->get_error_code()
             );
         } catch (\moodle_exception $e) {
@@ -202,24 +202,18 @@ class create_module_from_job extends external_api {
                     'job_not_found'
                 );
             }
-            // For moodle_exception (including dsl_exception), getMessage() returns the
-            // language string key, not the detailed error. Extract debuginfo for details.
-            $message = $e->getMessage();
-            if (!empty($e->debuginfo)) {
-                $message = $e->debuginfo;
-            }
 
             return response_factory::module_creation_result(
                 false,
                 0,
-                $message,
+                response_factory::safe_message($e),
                 'dsl_execution_error'
             );
         } catch (\Exception $e) {
             return response_factory::module_creation_result(
                 false,
                 0,
-                $e->getMessage(),
+                response_factory::safe_message($e),
                 'dsl_execution_error'
             );
         }

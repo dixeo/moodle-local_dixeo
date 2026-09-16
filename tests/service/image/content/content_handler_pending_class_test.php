@@ -79,5 +79,112 @@ final class content_handler_pending_class_test extends \advanced_testcase {
 
         $fresh = $DB->get_record('page', ['id' => $page->id], 'content', MUST_EXIST);
         $this->assertStringNotContainsString('dixeo-img-gen-pending', $fresh->content);
+        $this->assertStringContainsString(
+            'rev=' . $location->get_stored_file()->get_contenthash(),
+            $fresh->content
+        );
+    }
+
+    /**
+     * Label intros are cached in modinfo: the course page must show the applied image.
+     */
+    public function test_success_apply_refreshes_label_intro_in_modinfo(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $placeholderid = 'label-placeholder-uuid';
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $img = '<img src="@@PLUGINFILE@@/' . $filename . '" class="img-fluid dixeo-img-gen-pending" ' .
+            'data-dixeo-img-gen="' . $placeholderid . '" alt="" />';
+        $label = $this->getDataGenerator()->create_module('label', [
+            'course' => $course->id,
+            'intro' => '<p>' . $img . '</p>',
+            'introformat' => FORMAT_HTML,
+        ]);
+        $context = \context_module::instance($label->cmid);
+        $location = new location($context->id, 'mod_label', 'intro', 0, '/', $filename, (int) $course->id);
+        file_service::create_stub($location, (int) $USER->id);
+
+        // Warm the modinfo cache the way a course page view does.
+        $cached = get_fast_modinfo($course->id)->get_cm((int) $label->cmid)->content;
+        $this->assertStringContainsString('dixeo-img-gen-pending', $cached);
+
+        $jobrow = (object) [
+            'origin' => job_repository::ORIGIN_SHORTCODE,
+            'placeholderid' => $placeholderid,
+            'targettable' => 'label',
+            'targetfield' => 'intro',
+            'targetid' => (int) $label->id,
+            'courseid' => (int) $course->id,
+            'cmid' => (int) $label->cmid,
+        ];
+
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8j0NgAAAABJRU5ErkJggg==');
+        content_handler::apply(
+            content_target::from_location($location),
+            ['image_base64' => base64_encode($png)],
+            (int) $USER->id,
+            'generated',
+            $jobrow,
+            null
+        );
+
+        $contenthash = $location->get_stored_file()->get_contenthash();
+        $fresh = $DB->get_record('label', ['id' => $label->id], 'intro', MUST_EXIST);
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $fresh->intro);
+        $this->assertStringContainsString('rev=' . $contenthash, $fresh->intro);
+
+        // Drop the per-request static cache: a later page view reads MUC only.
+        get_fast_modinfo(0, 0, true);
+        $rendered = get_fast_modinfo($course->id)->get_cm((int) $label->cmid)->content;
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $rendered);
+        $this->assertStringContainsString('rev=' . $contenthash, $rendered);
+    }
+
+    /**
+     * Failed jobs must also bust the browser cache of the pending stub.
+     */
+    public function test_failure_apply_marks_failed_and_revs_src(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $placeholderid = 'failed-placeholder-uuid';
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $img = '<img src="@@PLUGINFILE@@/' . $filename . '" class="img-fluid dixeo-img-gen-pending" ' .
+            'data-dixeo-img-gen="' . $placeholderid . '" alt="" />';
+        $label = $this->getDataGenerator()->create_module('label', [
+            'course' => $course->id,
+            'intro' => '<p>' . $img . '</p>',
+            'introformat' => FORMAT_HTML,
+        ]);
+        $context = \context_module::instance($label->cmid);
+        $location = new location($context->id, 'mod_label', 'intro', 0, '/', $filename, (int) $course->id);
+        file_service::create_stub($location, (int) $USER->id);
+
+        $jobrow = (object) [
+            'origin' => job_repository::ORIGIN_SHORTCODE,
+            'placeholderid' => $placeholderid,
+            'targettable' => 'label',
+            'targetfield' => 'intro',
+            'targetid' => (int) $label->id,
+            'courseid' => (int) $course->id,
+            'cmid' => (int) $label->cmid,
+        ];
+
+        content_handler::apply_failure(content_target::from_location($location), (int) $USER->id, $jobrow);
+
+        $fresh = $DB->get_record('label', ['id' => $label->id], 'intro', MUST_EXIST);
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $fresh->intro);
+        $this->assertStringContainsString('dixeo-img-gen-failed', $fresh->intro);
+        $this->assertStringContainsString(
+            'rev=' . $location->get_stored_file()->get_contenthash(),
+            $fresh->intro
+        );
     }
 }

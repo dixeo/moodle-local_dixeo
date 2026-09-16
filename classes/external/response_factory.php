@@ -35,6 +35,37 @@ use local_dixeo\api\exception\api_exception;
  */
 class response_factory {
     /**
+     * Return a message that is safe to send to a client.
+     *
+     * Business messages raised by the API are kept; anything else is logged for
+     * developers and replaced by a localised generic message.
+     *
+     * @param \Throwable $exception The exception to describe.
+     * @param string $fallbackkey The local_dixeo string key used when the detail is withheld.
+     * @return string The client-facing message.
+     */
+    public static function safe_message(\Throwable $exception, string $fallbackkey = 'error:unexpected'): string {
+        global $CFG;
+
+        if ($exception instanceof api_exception) {
+            return $exception->getMessage();
+        }
+
+        $detail = get_class($exception) . ': ' . $exception->getMessage();
+        if ($exception instanceof \moodle_exception && !empty($exception->debuginfo)) {
+            $detail .= ' (' . $exception->debuginfo . ')';
+        }
+
+        debugging($detail, DEBUG_DEVELOPER);
+
+        if (!empty($CFG->debugdeveloper)) {
+            return $detail;
+        }
+
+        return get_string($fallbackkey, 'local_dixeo');
+    }
+
+    /**
      * Build a success response with optional data payload.
      *
      * @param array $data The response data to include.
@@ -56,7 +87,7 @@ class response_factory {
     public static function from_api_exception(api_exception $exception, array $defaults = []): array {
         return array_merge($defaults, [
             'success' => false,
-            'errormessage' => $exception->getMessage(),
+            'errormessage' => self::safe_message($exception),
             'errorcode' => $exception->get_error_code(),
         ]);
     }
@@ -64,7 +95,7 @@ class response_factory {
     /**
      * Build an error response from a generic exception.
      *
-     * For non-API exceptions, wraps the message with a generic error code.
+     * For non-API exceptions, wraps a safe message with a generic error code.
      *
      * @param \Throwable $exception The exception to convert.
      * @param string $errorcode The error code to use.
@@ -78,7 +109,7 @@ class response_factory {
     ): array {
         return array_merge($defaults, [
             'success' => false,
-            'errormessage' => $exception->getMessage(),
+            'errormessage' => self::safe_message($exception),
             'errorcode' => $errorcode,
         ]);
     }
@@ -115,7 +146,7 @@ class response_factory {
             'jobid' => '',
             'status' => 'failed',
             'progress' => 0,
-            'errormessage' => $exception->getMessage(),
+            'errormessage' => self::safe_message($exception),
             'errorcode' => $exception->get_error_code(),
         ];
     }
@@ -144,7 +175,7 @@ class response_factory {
                 'type' => $errorcode,
                 'title' => ucwords(str_replace('_', ' ', $errorcode)),
                 'status' => 500,
-                'detail' => $exception->getMessage(),
+                'detail' => self::safe_message($exception),
             ],
         ];
     }

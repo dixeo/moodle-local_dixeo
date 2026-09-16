@@ -90,7 +90,7 @@ class set_file_sync_enabled extends external_api {
             return [
                 'success' => false,
                 'status' => 'error',
-                'error' => $e->getMessage(),
+                'error' => response_factory::safe_message($e),
             ];
         }
     }

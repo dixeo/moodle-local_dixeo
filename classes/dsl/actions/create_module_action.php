@@ -62,6 +62,13 @@ require_once($CFG->libdir . '/gradelib.php');
  */
 class create_module_action {
     /**
+     * Fields the interpreter owns, which the action specification may not set.
+     *
+     * @var array<int, string>
+     */
+    protected const RESERVED_FIELDS = ['course', 'coursemodule', 'cmidnumber', 'section', 'id'];
+
+    /**
      * Module-specific field quirks that cannot be handled by platform defaults.
      *
      * Some Moodle modules require specific field name remappings or special
@@ -278,7 +285,7 @@ class create_module_action {
      * 1. Platform defaults from get_config()
      * 2. Module-specific quirks (field name remappings)
      * 3. Activity instance completion defaults for the module type
-     * 4. DSL-provided fields
+     * 4. DSL-provided fields, minus the reserved fields the interpreter owns
      *
      * @param array $fields The resolved field values.
      * @param int $courseid The course ID.
@@ -294,6 +301,8 @@ class create_module_action {
         $quirks = $this->get_module_field_quirks($modulename);
 
         $activitydefaults = module_activity_defaults_registry::get_instance_completion_defaults($modulename);
+
+        $fields = array_diff_key($fields, array_flip(self::RESERVED_FIELDS));
 
         // Merge in priority order: platform defaults -> quirks -> activity defaults -> DSL fields.
         $mergedfields = array_merge($platformdefaults, $quirks, $activitydefaults, $fields);
@@ -338,6 +347,7 @@ class create_module_action {
         if ($modulename === 'glossary') {
             $edunaoformatfile = $CFG->dirroot . '/mod/glossary/formats/edunao123/edunao123_format.php';
             $quirks['displayformat'] = file_exists($edunaoformatfile) ? 'edunao123' : 'dictionary';
+            $quirks['assessed'] = 0;
         }
 
         return $quirks;

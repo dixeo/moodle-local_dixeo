@@ -77,6 +77,60 @@ In case of delay or difficulty, please contact support@dixeo.com.
 | `local/dixeo:talktotutor` | Interact with the AI Tutor | Manager, Editing Teacher, Non-Editing Teacher, Student |
 | `local/dixeo:viewusage` | View site-wide credit usage (overview, detailed report, and export). Exposes user and course names across the whole site. Assign only to trusted roles; managers receive it by default. Users with `local/dixeo:manage` can also access the report. | Manager |
 
+## For developers — extending the AI context
+
+The context Dixeo builds for a course only describes what the current user may see
+(`uservisible` on both sections and modules). Two hooks let other plugins extend it.
+
+Dixeo natively reads page, label, book, url and resource. Any other module type goes
+through three steps, in order, and the first one that returns text wins:
+
+1. its search area — a module shipping a `mod_<name>\search\activity` class is read
+   through it (activity level only: the intro and whatever else the area puts in the
+   document). The document is built on demand, so global search does not have to be
+   enabled; the site only needs a search engine selected, which Moodle does by default;
+2. the `extract_module_content` hook, for a module with no search area or one whose
+   document says nothing useful;
+3. its `intro`, when it declares `FEATURE_MOD_INTRO`.
+
+**`\local_dixeo\hook\extract_module_content`** — dispatched for module types Dixeo does
+not read natively and whose search area returned nothing. The first callback that answers
+wins.
+
+**`\local_dixeo\hook\extend_course_context`** — dispatched while building a course
+context, so a plugin that links courses together can have their content described
+too. `add_course($courseid)` adds a whole course, `add_course($courseid, [1, 2])`
+only those section numbers. Linked course sections follow the same visibility rules
+as the main course, so the callback only has to decide which courses the user is
+entitled to. Their files are not sent to the Dixeo file index.
+
+```php
+// db/hooks.php
+$callbacks = [
+    [
+        'hook' => \local_dixeo\hook\extract_module_content::class,
+        'callback' => [\your_plugin\dixeo::class, 'extract_module_content'],
+    ],
+    [
+        'hook' => \local_dixeo\hook\extend_course_context::class,
+        'callback' => [\your_plugin\dixeo::class, 'extend_course_context'],
+    ],
+];
+
+// classes/dixeo.php
+public static function extract_module_content(\local_dixeo\hook\extract_module_content $hook): void {
+    if ($hook->cm->modname === 'yourmodule') {
+        $hook->set_content(your_plugin_get_text($hook->cm->instance));
+    }
+}
+
+public static function extend_course_context(\local_dixeo\hook\extend_course_context $hook): void {
+    foreach (your_plugin_linked_courses($hook->courseid) as $linked) {
+        $hook->add_course($linked->courseid, $linked->sectionnums);
+    }
+}
+```
+
 # Support
 
 For documentation, licensing or technical support:

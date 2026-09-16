@@ -106,7 +106,13 @@ class create_questions_action {
         }
 
         $quizid = (int) $moduledata['id'];
-        $cmid = (int) $moduledata['cmid'];
+        $cm = $this->require_module_created_in_course(
+            $resolver,
+            'quiz',
+            $quizid,
+            isset($moduledata['cmid']) ? (int) $moduledata['cmid'] : null
+        );
+        $cmid = (int) $cm->id;
         $context = $resolver->get_context();
         $courseid = (int) $context['courseid'];
 

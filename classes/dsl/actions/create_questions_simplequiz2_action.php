@@ -108,6 +108,12 @@ class create_questions_simplequiz2_action {
         }
 
         $simplequiz2id = (int) $moduledata['id'];
+        $this->require_module_created_in_course(
+            $resolver,
+            'simplequiz2',
+            $simplequiz2id,
+            isset($moduledata['cmid']) ? (int) $moduledata['cmid'] : null
+        );
 
         // Resolve the questions collection.
         $foreachpath = $action['foreach'];

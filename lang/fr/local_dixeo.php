@@ -183,6 +183,7 @@ $string['error:payment_required'] = 'Crédits insuffisants. Veuillez ajouter des
 $string['error:rate_limit'] = 'Limite de requêtes dépassée. Veuillez patienter avant d\'effectuer d\'autres requêtes.';
 $string['error:slidenotinslideshow'] = 'La diapositive demandée n\'appartient pas à ce diaporama.';
 $string['error:timeout'] = 'L\'opération a expiré. Vous pouvez vérifier le statut du travail plus tard.';
+$string['error:unexpected'] = 'Une erreur est survenue. Veuillez réessayer ou demander à votre administrateur de consulter les journaux du site.';
 $string['error:upstream_ai'] = 'Erreur du service IA. Veuillez réessayer plus tard.';
 $string['error:validation'] = 'Requête invalide : {$a}';
 $string['eventcreditreportexported'] = 'Rapport d\'utilisation des crédits exporté';

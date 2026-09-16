@@ -183,6 +183,7 @@ $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Cred
 $string['error:rate_limit'] = 'Ratenlimit überschritten. Bitte warten Sie, bevor Sie weitere Anfragen senden.';
 $string['error:slidenotinslideshow'] = 'Die angeforderte Folie gehört nicht zu dieser Slideshow.';
 $string['error:timeout'] = 'Zeitüberschreitung. Sie können den Auftragsstatus später prüfen.';
+$string['error:unexpected'] = 'Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut oder bitten Sie Ihre Administration, die Website-Protokolle zu prüfen.';
 $string['error:upstream_ai'] = 'KI-Servicefehler. Bitte versuchen Sie es später erneut.';
 $string['error:validation'] = 'Ungültige Anfrage: {$a}';
 $string['eventcreditreportexported'] = 'Kreditnutzungsbericht exportiert';

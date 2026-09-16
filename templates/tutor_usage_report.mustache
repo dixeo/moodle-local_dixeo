@@ -328,7 +328,9 @@
             <button type="button"
                     class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
                     data-toggle="collapse"
+                    data-bs-toggle="collapse"
                     data-target="#dixeo-tutor-usage-report-summary"
+                    data-bs-target="#dixeo-tutor-usage-report-summary"
                     aria-expanded="true"
                     aria-controls="dixeo-tutor-usage-report-summary"
                     aria-labelledby="dixeo-tutor-usage-report-summary-title">
@@ -343,6 +345,7 @@
                          tabindex="0"
                          {{#kpis.engagement.hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{kpis.engagement.tooltip}}"
                          {{/kpis.engagement.hastooltip}}>
@@ -367,6 +370,7 @@
                          tabindex="0"
                          {{#kpis.sessions.hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{kpis.sessions.tooltip}}"
                          {{/kpis.sessions.hastooltip}}>
@@ -390,6 +394,7 @@
                          tabindex="0"
                          {{#kpis.adoption.hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{kpis.adoption.tooltip}}"
                          {{/kpis.adoption.hastooltip}}>
@@ -414,6 +419,7 @@
                          tabindex="0"
                          {{#kpis.duration.hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{kpis.duration.tooltip}}"
                          {{/kpis.duration.hastooltip}}>
@@ -437,6 +443,7 @@
                          tabindex="0"
                          {{#kpis.messages.hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{kpis.messages.tooltip}}"
                          {{/kpis.messages.hastooltip}}>
@@ -464,6 +471,7 @@
                          tabindex="0"
                          {{#hastooltip}}
                          data-toggle="tooltip"
+                         data-bs-toggle="tooltip"
                          data-placement="bottom"
                          title="{{tooltip}}"
                          {{/hastooltip}}>
@@ -540,7 +548,9 @@
             <button type="button"
                     class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
                     data-toggle="collapse"
+                    data-bs-toggle="collapse"
                     data-target="#dixeo-tutor-usage-report-performance"
+                    data-bs-target="#dixeo-tutor-usage-report-performance"
                     aria-expanded="true"
                     aria-controls="dixeo-tutor-usage-report-performance"
                     aria-labelledby="dixeo-tutor-usage-report-performance-title">
@@ -615,7 +625,9 @@
                 <button type="button"
                         class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
                         data-toggle="collapse"
+                        data-bs-toggle="collapse"
                         data-target="#dixeo-tutor-usage-report-table"
+                        data-bs-target="#dixeo-tutor-usage-report-table"
                         aria-expanded="true"
                         aria-controls="dixeo-tutor-usage-report-table"
                         aria-labelledby="dixeo-tutor-usage-report-table-title">
@@ -659,6 +671,7 @@
                                     {{#issitelevel}}
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{adoptiontooltip}}">{{adoptionformatted}}</td>
                                     {{/issitelevel}}
@@ -668,23 +681,28 @@
                                     <td>{{messagesformatted}}</td>
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{normaltooltip}}">{{normalformatted}}</td>
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{guidetooltip}}">{{guideformatted}}</td>
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{quiztooltip}}">{{quizformatted}}</td>
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{teachtooltip}}">{{teachformatted}}</td>
                                     {{^isuserlevel}}
                                     <td class="dixeo-tutor-usage-report-stat"
                                         data-toggle="tooltip"
+                                        data-bs-toggle="tooltip"
                                         data-placement="bottom"
                                         title="{{durationtooltip}}">{{durationformatted}}</td>
                                     {{/isuserlevel}}

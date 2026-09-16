@@ -1,6 +1,9 @@
 name: Moodle Plugin CI
 
-on: [push, pull_request]
+# Installing Moodle across the compatibility matrix is expensive. Run this
+# suite explicitly when needed; ordinary pushes and pull requests spend no CI minutes.
+on:
+  workflow_dispatch:
 
 jobs:
   test:

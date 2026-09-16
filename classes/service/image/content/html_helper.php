@@ -18,7 +18,7 @@ namespace local_dixeo\service\image\content;
 
 
 /**
- * Updates stored HTML fields for img-gen CSS class transitions.
+ * Updates stored HTML fields when an img-gen placeholder reaches its final state.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -47,50 +47,57 @@ final class html_helper {
     }
 
     /**
-     * Swap pending/failed classes on img tags referencing a placeholder id.
+     * Swap pending/failed classes and refresh the src rev on the placeholder img tag.
+     *
+     * The generated file keeps its name for the whole job lifetime, so the rev query
+     * param is the only thing that makes browsers drop the cached placeholder bytes
+     * (files are served with $CFG->filelifetime, 6h by default).
      *
      * @param string $html
      * @param string $placeholderid
      * @param string $fromclass
      * @param string $toclass
+     * @param string $contenthash Contenthash of the file now stored at the location.
      * @return string
      */
-    public static function swap_img_class_for_placeholder(
+    public static function rewrite_img_for_placeholder(
         string $html,
         string $placeholderid,
         string $fromclass,
-        string $toclass
+        string $toclass,
+        string $contenthash
     ): string {
         if ($html === '' || $placeholderid === '') {
             return $html;
         }
 
-        $pattern = '/(<img\b(?=[^>]*\bdata-dixeo-img-gen="' . preg_quote($placeholderid, '/') .
-            '")[^>]*\bclass=")([^"]*)(")/iu';
+        $pattern = '/<img\b[^>]*\bdata-dixeo-img-gen="' . preg_quote($placeholderid, '/') . '"[^>]*>/iu';
 
-        return (string) preg_replace_callback($pattern, static function (array $match) use ($fromclass, $toclass): string {
-            $classes = preg_split('/\s+/', trim($match[2])) ?: [];
-            $classes = array_values(array_filter($classes, static fn(string $c): bool => $c !== '' && $c !== $fromclass));
-            if ($toclass !== '' && !in_array($toclass, $classes, true)) {
-                $classes[] = $toclass;
-            }
-            return $match[1] . implode(' ', $classes) . $match[3];
-        }, $html);
+        return (string) preg_replace_callback(
+            $pattern,
+            static function (array $match) use ($fromclass, $toclass, $contenthash): string {
+                return self::rev_img_src(self::swap_img_classes($match[0], $fromclass, $toclass), $contenthash);
+            },
+            $html
+        );
     }
 
     /**
-     * Update target html class.
-     * @param \stdClass $job Job row with targettable/targetfield/targetid.
+     * Rewrite the stored HTML field holding a placeholder img, in a single write.
+     *
+     * @param \stdClass $job Job row with targettable/targetfield/targetid/courseid/cmid.
      * @param string $placeholderid
      * @param string $fromclass
      * @param string $toclass
+     * @param string $contenthash Contenthash of the file now stored at the location.
      * @return void
      */
-    public static function update_target_html_class(
+    public static function update_target_img(
         \stdClass $job,
         string $placeholderid,
         string $fromclass,
-        string $toclass
+        string $toclass,
+        string $contenthash
     ): void {
         global $DB;
 
@@ -108,11 +115,62 @@ final class html_helper {
             return;
         }
 
-        $updated = self::swap_img_class_for_placeholder((string) $record->{$field}, $placeholderid, $fromclass, $toclass);
+        $updated = self::rewrite_img_for_placeholder(
+            (string) $record->{$field},
+            $placeholderid,
+            $fromclass,
+            $toclass,
+            $contenthash
+        );
         if ($updated === $record->{$field}) {
             return;
         }
 
         $DB->set_field($job->targettable, $field, $updated, ['id' => (int) $job->targetid]);
+        modinfo_helper::purge_module((int) ($job->courseid ?? 0), isset($job->cmid) ? (int) $job->cmid : null);
+    }
+
+    /**
+     * Swap classes.
+     * @param string $imghtml Single img tag.
+     * @param string $fromclass
+     * @param string $toclass
+     * @return string
+     */
+    private static function swap_img_classes(string $imghtml, string $fromclass, string $toclass): string {
+        return (string) preg_replace_callback(
+            '/\bclass="([^"]*)"/iu',
+            static function (array $match) use ($fromclass, $toclass): string {
+                $classes = preg_split('/\s+/', trim($match[1])) ?: [];
+                $classes = array_values(array_filter($classes, static fn(string $c): bool => $c !== '' && $c !== $fromclass));
+                if ($toclass !== '' && !in_array($toclass, $classes, true)) {
+                    $classes[] = $toclass;
+                }
+                return 'class="' . implode(' ', $classes) . '"';
+            },
+            $imghtml,
+            1
+        );
+    }
+
+    /**
+     * Rev img src.
+     * @param string $imghtml Single img tag.
+     * @param string $contenthash
+     * @return string
+     */
+    private static function rev_img_src(string $imghtml, string $contenthash): string {
+        if ($contenthash === '') {
+            return $imghtml;
+        }
+
+        return (string) preg_replace_callback(
+            '/\bsrc="([^"]*)"/iu',
+            static function (array $match) use ($contenthash): string {
+                return 'src="' . url_helper::append_image_rev($match[1], $contenthash) . '"';
+            },
+            $imghtml,
+            1
+        );
     }
 }

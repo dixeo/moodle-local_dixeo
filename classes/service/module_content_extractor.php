@@ -18,7 +18,8 @@
  * Service for extracting content from Moodle modules.
  *
  * Handles content retrieval from various module types (page, label, book, etc.)
- * and provides both raw and processed content for AI context building.
+ * and provides both raw and processed content for AI context building. Any other
+ * module type is read from its search area, the extract_module_content hook, or its intro.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -28,12 +29,26 @@
 
 namespace local_dixeo\service;
 
+use cache;
+use core_search\document;
+use core_search\manager;
+use local_dixeo\hook\extract_module_content;
+
 /**
  * Service for extracting content from Moodle modules.
  */
 class module_content_extractor {
+    /** @var string Cache holding the search area text of a module. */
+    private const SEARCH_TEXT_CACHE = 'modulesearchtext';
+
+    /** @var string[] Search document fields holding module text, in reading order. */
+    private const SEARCH_TEXT_FIELDS = ['content', 'description1', 'description2'];
+
     /** @var html_helper HTML processing helper. */
     private html_helper $htmlhelper;
+
+    /** @var bool|null Whether a search engine answered, remembered for the life of this instance. */
+    private ?bool $searchengineready = null;
 
     /**
      * Constructor.
@@ -47,7 +62,8 @@ class module_content_extractor {
     /**
      * Get raw content from a module based on its type.
      *
-     * Returns the HTML content as stored in the database.
+     * Returns the HTML content as stored in the database. Module types handled here take
+     * precedence; any other type falls back to {@see get_fallback_content()}.
      *
      * @param \cm_info $cm The course module info.
      * @return string|null The raw HTML content, or null if not applicable.
@@ -61,8 +77,183 @@ class module_content_extractor {
             'book' => $this->get_book_content($cm->instance),
             'url' => $DB->get_field('url', 'intro', ['id' => $cm->instance]),
             'resource' => $DB->get_field('resource', 'intro', ['id' => $cm->instance]),
-            default => null,
+            default => $this->get_fallback_content($cm),
         };
+    }
+
+    /**
+     * Get the content of a module type this class does not read natively.
+     *
+     * The module search area comes first as the standard source of module text, then the
+     * extract_module_content hook for plugins that describe themselves, then the module intro.
+     *
+     * @param \cm_info $cm The course module info.
+     * @return string|null The content, or null if no step could provide any.
+     */
+    private function get_fallback_content(\cm_info $cm): ?string {
+        return $this->blank_to_null($this->get_search_area_content($cm))
+            ?? $this->blank_to_null($this->get_hooked_content($cm))
+            ?? $this->blank_to_null($this->get_intro_content($cm));
+    }
+
+    /**
+     * Get the text of the module search area document, cached per module.
+     *
+     * @param \cm_info $cm The course module info.
+     * @return string The document text, empty when the module has no usable search area.
+     */
+    private function get_search_area_content(\cm_info $cm): string {
+        // Nothing is cached without an engine, so the modules are read again once one is back.
+        if (!$this->is_search_engine_ready()) {
+            return '';
+        }
+
+        $area = manager::get_search_area("mod_{$cm->modname}-activity");
+        if (!$area) {
+            return '';
+        }
+
+        $cache = cache::make('local_dixeo', self::SEARCH_TEXT_CACHE);
+        $version = $this->get_search_area_version($cm, $area);
+
+        // Empty results are cached too, so a module whose document says nothing is only built once.
+        $cached = $cache->get_versioned($cm->id, $version);
+        if ($cached !== false) {
+            return (string) $cached;
+        }
+
+        $content = $this->build_search_area_content($cm, $area);
+        $cache->set_versioned($cm->id, $version, $content);
+
+        return $content;
+    }
+
+    /**
+     * Version of the cached document: the latest of the course cache revision and the module
+     * timestamp core_search itself indexes on, so content refreshed outside a course edit is seen.
+     *
+     * @param \cm_info $cm The course module info.
+     * @param \core_search\base $area The module search area.
+     * @return int The version.
+     */
+    private function get_search_area_version(\cm_info $cm, \core_search\base $area): int {
+        global $DB;
+
+        $version = (int) $cm->get_course()->cacherev;
+        if (!$area instanceof \core_search\base_activity) {
+            return $version;
+        }
+
+        try {
+            $modified = $DB->get_field($cm->modname, $area::MODIFIED_FIELD_NAME, ['id' => $cm->instance]);
+        } catch (\Throwable $e) {
+            return $version;
+        }
+
+        return max($version, (int) $modified);
+    }
+
+    /**
+     * Check that a search engine is usable, once per instance.
+     *
+     * Documents are built through the configured engine (global search does not have to be
+     * enabled), so a missing or unreachable one must cost a single attempt, not one per module.
+     *
+     * @return bool True when an engine answered.
+     */
+    private function is_search_engine_ready(): bool {
+        if ($this->searchengineready === null) {
+            try {
+                manager::instance(true);
+                $this->searchengineready = true;
+            } catch (\Throwable $e) {
+                $this->searchengineready = false;
+            }
+        }
+
+        return $this->searchengineready;
+    }
+
+    /**
+     * Build the module text from its mod_<name>\search\activity document.
+     *
+     * @param \cm_info $cm The course module info.
+     * @param \core_search\base $area The module search area.
+     * @return string The document text, empty when the area answered nothing.
+     */
+    private function build_search_area_content(\cm_info $cm, \core_search\base $area): string {
+        $recordset = null;
+        $parts = [];
+
+        try {
+            $recordset = $area->get_document_recordset(0, $cm->context);
+            if (!$recordset) {
+                return '';
+            }
+
+            foreach ($recordset as $record) {
+                $document = $area->get_document($record);
+                if (!$document instanceof document) {
+                    continue;
+                }
+
+                foreach (self::SEARCH_TEXT_FIELDS as $field) {
+                    if ($document->is_set($field)) {
+                        $parts[] = (string) $document->get($field);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // A search area failing on its own data must not break the context: the next step takes over.
+            return '';
+        } finally {
+            if ($recordset instanceof \moodle_recordset) {
+                $recordset->close();
+            }
+        }
+
+        return trim(implode("\n", $parts));
+    }
+
+    /**
+     * Ask other plugins for the content of a module type handled by none of the above.
+     *
+     * @param \cm_info $cm The course module info.
+     * @return string|null The content provided by a plugin, or null if none did.
+     */
+    private function get_hooked_content(\cm_info $cm): ?string {
+        $hook = new extract_module_content($cm);
+        \core\di::get(\core\hook\manager::class)->dispatch($hook);
+
+        return $hook->get_content();
+    }
+
+    /**
+     * Get the intro of a module that declares one.
+     *
+     * @param \cm_info $cm The course module info.
+     * @return string|null The intro, or null when the module has none.
+     */
+    private function get_intro_content(\cm_info $cm): ?string {
+        global $DB;
+
+        if (!plugin_supports('mod', $cm->modname, FEATURE_MOD_INTRO, false)) {
+            return null;
+        }
+
+        $intro = $DB->get_field($cm->modname, 'intro', ['id' => $cm->instance]);
+
+        return $intro === false ? null : $intro;
+    }
+
+    /**
+     * Treat a blank candidate as no content, so the next step of the chain is tried.
+     *
+     * @param string|null $content The candidate content.
+     * @return string|null The content, or null when blank.
+     */
+    private function blank_to_null(?string $content): ?string {
+        return ($content === null || trim($content) === '') ? null : $content;
     }
 
     /**

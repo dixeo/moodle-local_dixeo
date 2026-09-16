@@ -60,15 +60,16 @@ abstract class abstract_context_builder implements context_builder_interface {
     }
 
     /**
-     * Check if a module is accessible (visible and available to users).
+     * Check if a module is accessible to the user the context is built for.
      *
-     * Provides consistent visibility filtering across all context builders.
+     * Relies on cm_info::$uservisible so hidden modules and access restrictions
+     * (groups, availability) are honoured for the current user.
      *
      * @param \cm_info $cm The course module info.
      * @return bool True if module should be included in context.
      */
     protected function is_module_accessible(\cm_info $cm): bool {
-        return $cm->visible && $cm->available;
+        return (bool) $cm->uservisible;
     }
 
     /**
@@ -235,12 +236,12 @@ abstract class abstract_context_builder implements context_builder_interface {
         $prevsection = $sectionnum > 0 ? $modinfo->get_section_info($sectionnum - 1) : null;
         $nextsection = $modinfo->get_section_info($sectionnum + 1);
 
-        if ($prevsection && $prevsection->visible) {
+        if ($prevsection && $prevsection->uservisible) {
             $prevname = $this->get_section_name($prevsection);
             $lines[] = "- Previous: {$prevname}";
         }
 
-        if ($nextsection && $nextsection->visible) {
+        if ($nextsection && $nextsection->uservisible) {
             $nextname = $this->get_section_name($nextsection);
             $lines[] = "- Next: {$nextname}";
         }

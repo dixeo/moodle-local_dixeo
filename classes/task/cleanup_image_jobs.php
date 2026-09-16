@@ -18,6 +18,9 @@ namespace local_dixeo\task;
 
 
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\image\apply\content_handler;
+use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\target_factory;
 
 /**
  * Scheduled retention for unified image job records.
@@ -48,20 +51,30 @@ class cleanup_image_jobs extends \core\task\scheduled_task {
 
         $now = time();
 
-        // Persist the failed state for jobs stuck in pending/processing beyond the timeout.
-        $DB->execute(
-            'UPDATE {' . job_repository::TABLE . '}
-                SET status = :failed, errormessage = :message, timemodified = :now
-              WHERE status IN (:pending, :processing) AND timecreated < :cutoff',
+        // Fail jobs stuck in pending/processing beyond the timeout, swapping the
+        // pending placeholder for the error asset so content never pulses forever.
+        $stuck = $DB->get_records_select(
+            job_repository::TABLE,
+            'status IN (:pending, :processing) AND timecreated < :cutoff',
             [
-                'failed' => job_repository::STATUS_FAILED,
-                'message' => get_string('dixeo_image_job_failed', 'local_dixeo'),
-                'now' => $now,
                 'pending' => job_repository::STATUS_PENDING,
                 'processing' => job_repository::STATUS_PROCESSING,
                 'cutoff' => $now - job_repository::TIMEOUT_SECONDS,
             ]
         );
+        $message = get_string('dixeo_image_job_failed', 'local_dixeo');
+        foreach ($stuck as $job) {
+            job_repository::mark_failed((int) $job->id, $message);
+            $target = target_factory::from_job_record($job);
+            if (!$target instanceof content_target) {
+                continue;
+            }
+            try {
+                content_handler::apply_failure($target, (int) $job->userid, $job);
+            } catch (\Throwable $e) {
+                debugging('Dixeo image job cleanup failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
 
         // Delete terminal rows past the retention period.
         $DB->delete_records_select(

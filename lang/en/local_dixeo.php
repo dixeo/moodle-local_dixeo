@@ -183,6 +183,7 @@ $string['error:payment_required'] = 'Insufficient credits. Please add credits to
 $string['error:rate_limit'] = 'Rate limit exceeded. Please wait before making more requests.';
 $string['error:slidenotinslideshow'] = 'The requested slide does not belong to this slideshow.';
 $string['error:timeout'] = 'The operation timed out. You can check the job status later.';
+$string['error:unexpected'] = 'Something went wrong. Please try again, or ask your administrator to check the site logs.';
 $string['error:upstream_ai'] = 'AI service error. Please try again later.';
 $string['error:validation'] = 'Invalid request: {$a}';
 $string['eventcreditreportexported'] = 'Credit usage report exported';

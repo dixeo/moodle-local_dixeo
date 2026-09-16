@@ -17,8 +17,8 @@
 /**
  * Trait for common DSL action validation.
  *
- * Provides a reusable field validation helper for DSL action classes,
- * reducing duplication of the validate_action() pattern.
+ * Provides the field validation and course boundary checks shared by the
+ * DSL action classes.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -29,6 +29,7 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dsl\value_resolver;
 
 /**
  * Trait providing common action field validation.
@@ -52,5 +53,82 @@ trait action_validation {
                 );
             }
         }
+    }
+
+    /**
+     * Resolve the parent course module a child action writes into.
+     *
+     * The parent must have been created by the running execution and must live in
+     * the course the interpreter was given, so a crafted action specification
+     * cannot reach a module of another course.
+     *
+     * @param value_resolver $resolver The value resolver holding the variables and the context.
+     * @param string $modulename The expected module plugin name.
+     * @param int $instanceid The module instance id resolved from the action specification.
+     * @param int|null $cmid The course module id resolved from the action specification, when known.
+     * @return \stdClass The parent course module record.
+     * @throws dsl_exception If the module was not created by this execution or is outside the course.
+     */
+    protected function require_module_created_in_course(
+        value_resolver $resolver,
+        string $modulename,
+        int $instanceid,
+        ?int $cmid = null
+    ): \stdClass {
+        $courseid = (int) ($resolver->get_context()['courseid'] ?? 0);
+        if ($courseid <= 0) {
+            throw dsl_exception::missing_context('courseid');
+        }
+
+        if ($instanceid <= 0 || !self::was_created_in_run($resolver->get_variables(), $modulename, $instanceid, $cmid)) {
+            throw new dsl_exception(
+                "$modulename instance $instanceid was not created by this execution",
+                'action_validation',
+                ['modulename' => $modulename, 'instanceid' => $instanceid, 'cmid' => $cmid]
+            );
+        }
+
+        $cm = get_coursemodule_from_instance($modulename, $instanceid, $courseid, false, IGNORE_MISSING);
+        if (!$cm || ($cmid !== null && (int) $cm->id !== $cmid)) {
+            throw new dsl_exception(
+                "$modulename instance $instanceid does not belong to course $courseid",
+                'action_validation',
+                ['modulename' => $modulename, 'instanceid' => $instanceid, 'courseid' => $courseid]
+            );
+        }
+
+        return $cm;
+    }
+
+    /**
+     * Whether a module created by this execution matches the one being written into.
+     *
+     * @param array $variables The variables saved by the previous actions.
+     * @param string $modulename The expected module plugin name.
+     * @param int $instanceid The module instance id.
+     * @param int|null $cmid The course module id, when known.
+     * @return bool True when a create_module result matches.
+     */
+    private static function was_created_in_run(
+        array $variables,
+        string $modulename,
+        int $instanceid,
+        ?int $cmid
+    ): bool {
+        foreach ($variables as $value) {
+            if (!is_array($value) || !isset($value['id'], $value['cmid'], $value['modulename'])) {
+                continue;
+            }
+            if ((int) $value['id'] !== $instanceid || $value['modulename'] !== $modulename) {
+                continue;
+            }
+            if ($cmid !== null && (int) $value['cmid'] !== $cmid) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }

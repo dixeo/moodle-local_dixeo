@@ -63,6 +63,18 @@ class create_entries_action {
     ];
 
     /**
+     * Parent module of each entity type.
+     *
+     * Names the record field holding the parent instance id and the module the
+     * parent must be.
+     *
+     * @var array<string, array{field: string, modulename: string}>
+     */
+    protected const ENTITY_PARENTS = [
+        'glossary_entry' => ['field' => 'glossaryid', 'modulename' => 'glossary'],
+    ];
+
+    /**
      * Default field values for each entity type.
      *
      * Applied to all records of that entity type.
@@ -132,25 +144,23 @@ class create_entries_action {
             // Resolve fields for this item.
             $record = $this->build_record($entity, $fieldsspec, $itemresolver);
 
+            $cm = $this->require_parent_module($entity, $record, $resolver);
+
             // Insert the record.
             $recordid = $DB->insert_record($table, $record);
 
             if ($entity === 'glossary_entry' && property_exists($record, 'definition')) {
-                $glossaryid = (int) ($record->glossaryid ?? 0);
-                if ($glossaryid > 0) {
-                    $cm = get_coursemodule_from_instance('glossary', $glossaryid, 0, false, MUST_EXIST);
-                    $modulecontext = \context_module::instance($cm->id);
-                    $record->id = $recordid;
-                    $shortcodeservice->process_and_persist(
-                        'glossary_entry',
-                        $recordid,
-                        $modulecontext->id,
-                        (int) $cm->course,
-                        (int) $cm->id,
-                        $record,
-                        $userid
-                    );
-                }
+                $modulecontext = \context_module::instance($cm->id);
+                $record->id = $recordid;
+                $shortcodeservice->process_and_persist(
+                    'glossary_entry',
+                    $recordid,
+                    $modulecontext->id,
+                    (int) $cm->course,
+                    (int) $cm->id,
+                    $record,
+                    $userid
+                );
             }
 
             $createdids[] = $recordid;
@@ -167,6 +177,33 @@ class create_entries_action {
      */
     protected function validate_action(array $action): void {
         $this->require_action_fields($action, ['entity', 'foreach'], 'create_entries');
+    }
+
+    /**
+     * Resolve the parent course module of a record about to be inserted.
+     *
+     * @param string $entity The entity type.
+     * @param \stdClass $record The record to insert.
+     * @param value_resolver $resolver The value resolver.
+     * @return \stdClass The parent course module record.
+     * @throws dsl_exception If the entity declares no parent or the parent is out of bounds.
+     */
+    protected function require_parent_module(string $entity, \stdClass $record, value_resolver $resolver): \stdClass {
+        if (!isset(self::ENTITY_PARENTS[$entity])) {
+            throw new dsl_exception(
+                "No parent module is declared for entity '$entity'",
+                'create_entries',
+                ['entity' => $entity]
+            );
+        }
+
+        $parent = self::ENTITY_PARENTS[$entity];
+
+        return $this->require_module_created_in_course(
+            $resolver,
+            $parent['modulename'],
+            (int) ($record->{$parent['field']} ?? 0)
+        );
     }
 
     /**

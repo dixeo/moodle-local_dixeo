@@ -183,6 +183,9 @@ class shortcode_service {
 
         if ($changed) {
             $DB->update_record(target_registry::get_table_for_entity($modname), $updates);
+            // Creation paths that rebuild the course cache before calling us (h5p) would
+            // otherwise keep serving the pre-shortcode intro.
+            modinfo_helper::purge_module($courseid, $cmid);
         }
 
         return $record;

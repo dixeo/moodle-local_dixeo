@@ -85,7 +85,7 @@ class trigger_file_sync extends external_api {
             return [
                 'success' => false,
                 'status' => 'error',
-                'error' => $e->getMessage(),
+                'error' => response_factory::safe_message($e),
             ];
         }
     }

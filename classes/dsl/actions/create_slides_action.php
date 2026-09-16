@@ -66,7 +66,7 @@ class create_slides_action {
         $moduleref = $action['module_ref'];
         $moduledata = $resolver->resolve_source($moduleref, 'module_ref');
 
-        if (!is_array($moduledata) || !isset($moduledata['cmid'])) {
+        if (!is_array($moduledata) || !isset($moduledata['id'], $moduledata['cmid'])) {
             throw new dsl_exception(
                 "module_ref did not resolve to valid module data",
                 'add_slides',
@@ -74,15 +74,13 @@ class create_slides_action {
             );
         }
 
-        $cmid = (int) $moduledata['cmid'];
-        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
-        if ($cm->modname !== 'slideshow') {
-            throw new dsl_exception(
-                'module_ref must resolve to a slideshow activity',
-                'add_slides',
-                ['cmid' => $cmid]
-            );
-        }
+        $cm = $this->require_module_created_in_course(
+            $resolver,
+            'slideshow',
+            (int) $moduledata['id'],
+            (int) $moduledata['cmid']
+        );
+        $cmid = (int) $cm->id;
         $slideshowinstanceid = (int) $cm->instance;
 
         // Resolve the slides collection.

@@ -196,7 +196,7 @@ h2:has(.dixeo-sync-indicator),
    1. File sync indicator — dropdown panel
    ========================================================================== */
 
-.dixeo-sync-dropdown {
+.dropdown-menu.dixeo-sync-dropdown {
     min-width: 260px;
     max-width: 300px;
     background: #fff;
@@ -363,7 +363,7 @@ h2:has(.dixeo-sync-indicator),
         font-size: 0.6875rem;
     }
 
-    .dixeo-sync-dropdown {
+    .dropdown-menu.dixeo-sync-dropdown {
         min-width: 240px;
     }
 }

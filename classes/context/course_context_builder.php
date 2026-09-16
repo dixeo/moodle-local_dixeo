@@ -17,8 +17,9 @@
 /**
  * Context builder for full course context.
  *
- * Constructs markdown context from an entire course structure including
- * all sections and modules. Supports two context modes:
+ * Constructs markdown context from an entire course structure, limited to the
+ * sections and modules the current user may see, and extended with the courses
+ * other plugins link to it. Supports two context modes:
  * - Teaching mode: Tiered detail by proximity to target section
  * - Assessment mode: Full content everywhere for quiz/glossary generation
  *
@@ -30,6 +31,7 @@
 
 namespace local_dixeo\context;
 
+use local_dixeo\hook\extend_course_context;
 use local_dixeo\service\html_helper;
 use local_dixeo\service\module_content_extractor;
 
@@ -113,7 +115,7 @@ class course_context_builder extends abstract_context_builder {
      * @return string Markdown-formatted course context.
      */
     public function build(): string {
-        $this->loadCourseData();
+        $this->load_course_data();
 
         $lines = [];
         $lines[] = '# Course Context';
@@ -132,12 +134,13 @@ class course_context_builder extends abstract_context_builder {
         $lines[] = '## Course Structure';
         $lines[] = '';
 
-        $lines = array_merge($lines, $this->buildSectionsContext());
+        $lines = array_merge($lines, $this->build_sections_context($this->modinfo, $this->targetsection));
+        $lines = array_merge($lines, $this->build_linked_courses_context());
 
         // Append the planned structure so the AI understands what is still to come.
         if ($this->courseplan !== null) {
             $lines[] = '';
-            $lines = array_merge($lines, $this->buildPlanContext());
+            $lines = array_merge($lines, $this->build_plan_context());
         }
 
         return $this->finalize_context($lines);
@@ -149,7 +152,7 @@ class course_context_builder extends abstract_context_builder {
      * @return void
      * @throws \dml_exception If course not found.
      */
-    private function loadcoursedata(): void {
+    private function load_course_data(): void {
         global $DB;
 
         if ($this->course === null) {
@@ -159,42 +162,130 @@ class course_context_builder extends abstract_context_builder {
     }
 
     /**
-     * Build context for all visible sections.
+     * Build context for the sections a course lists, as seen by the current user.
      *
+     * @param \course_modinfo $modinfo Modinfo of the course, built for the current user.
+     * @param int|null $targetsection Section number to mark as the target, null for none.
+     * @param array|null $sectionnums Section numbers to keep, null for all of them.
      * @return array Lines of markdown for all sections.
      */
-    private function buildsectionscontext(): array {
+    private function build_sections_context(
+        \course_modinfo $modinfo,
+        ?int $targetsection,
+        ?array $sectionnums = null
+    ): array {
         $lines = [];
 
-        foreach ($this->modinfo->get_section_info_all() as $section) {
-            if (!$section->visible) {
+        // Delegated sections are skipped here: they are described inside the module that owns them.
+        foreach ($modinfo->get_listed_section_info_all() as $section) {
+            if (!$section->uservisible) {
                 continue;
             }
 
-            $sectionnum = $section->section;
-            $sectionname = $this->get_section_name($section);
-            $detaillevel = $this->getSectionDetailLevel($sectionnum);
-
-            // Mark target section clearly (only in teaching mode).
-            if ($this->mode === self::MODE_TEACHING && $this->targetsection === $sectionnum) {
-                $lines[] = "### {$sectionname} ← TARGET SECTION";
-            } else {
-                $lines[] = "### {$sectionname}";
+            if ($sectionnums !== null && !in_array((int) $section->section, $sectionnums, true)) {
+                continue;
             }
 
-            if (!empty($section->summary)) {
-                $summary = $this->htmlhelper->clean_html($section->summary);
-                $lines[] = $summary;
+            $lines = array_merge($lines, $this->build_section_context($modinfo, $section, $targetsection, 3));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Build context for a single section and for the sections its modules delegate.
+     *
+     * @param \course_modinfo $modinfo Modinfo of the course the section belongs to.
+     * @param \section_info $section The section to describe.
+     * @param int|null $targetsection Section number to mark as the target, null for none.
+     * @param int $headinglevel Markdown heading level for the section title.
+     * @return array Lines of markdown for the section.
+     */
+    private function build_section_context(
+        \course_modinfo $modinfo,
+        \section_info $section,
+        ?int $targetsection,
+        int $headinglevel
+    ): array {
+        $lines = [];
+        $heading = str_repeat('#', $headinglevel);
+        $sectionnum = (int) $section->section;
+        $sectionname = $this->get_section_name($section);
+        $detaillevel = $this->get_section_detail_level($sectionnum, $targetsection);
+
+        // Mark target section clearly (only in teaching mode).
+        if ($this->mode === self::MODE_TEACHING && $targetsection === $sectionnum) {
+            $lines[] = "{$heading} {$sectionname} ← TARGET SECTION";
+        } else {
+            $lines[] = "{$heading} {$sectionname}";
+        }
+
+        if (!empty($section->summary)) {
+            $summary = $this->htmlhelper->clean_html($section->summary);
+            $lines[] = $summary;
+        }
+
+        $lines[] = '';
+
+        foreach ($this->get_cms_in_section($modinfo, $sectionnum) as $cm) {
+            if (!$this->is_module_accessible($cm)) {
+                continue;
             }
 
-            $modules = $this->get_cms_in_section($this->modinfo, $sectionnum);
+            $delegated = $cm->get_delegated_section_info();
 
-            if (!empty($modules)) {
-                $lines[] = '';
-                $lines = array_merge($lines, $this->buildModuleList($modules, $detaillevel));
-            } else {
-                $lines[] = '';
+            if ($delegated !== null) {
+                if ($delegated->uservisible) {
+                    $lines = array_merge(
+                        $lines,
+                        $this->build_section_context($modinfo, $delegated, $targetsection, $headinglevel + 1)
+                    );
+                }
+                continue;
             }
+
+            $lines = array_merge($lines, $this->build_module_lines($cm, $detaillevel));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Build context for the courses other plugins link to this one.
+     *
+     * @return array Lines of markdown for the linked courses.
+     */
+    private function build_linked_courses_context(): array {
+        global $DB;
+
+        $hook = new extend_course_context($this->courseid, $this->mode);
+        \core\di::get(\core\hook\manager::class)->dispatch($hook);
+
+        $lines = [];
+
+        foreach ($hook->get_courses() as $courseid => $sectionnums) {
+            $course = $DB->get_record('course', ['id' => $courseid], '*', IGNORE_MISSING);
+
+            if (!$course) {
+                continue;
+            }
+
+            // A course the user cannot even open must not reach the context through a link.
+            if (!$course->visible && !has_capability('moodle/course:viewhiddencourses', \context_course::instance($course->id))) {
+                continue;
+            }
+
+            // Linked courses have no target section of their own, so they use the plain detail level.
+            $sectionlines = $this->build_sections_context(get_fast_modinfo($course), null, $sectionnums);
+
+            if (empty($sectionlines)) {
+                continue;
+            }
+
+            $lines[] = '';
+            $lines[] = '## Linked Course: ' . format_string($course->fullname);
+            $lines[] = '';
+            $lines = array_merge($lines, $sectionlines);
         }
 
         return $lines;
@@ -208,24 +299,25 @@ class course_context_builder extends abstract_context_builder {
      * - Teaching mode: Tiered by proximity to target section
      *
      * @param int $sectionnum The section number.
+     * @param int|null $targetsection The target section number, null when there is none.
      * @return string Detail level: 'full', 'preview', or 'titles'.
      */
-    private function getsectiondetaillevel(int $sectionnum): string {
+    private function get_section_detail_level(int $sectionnum, ?int $targetsection): string {
         // Assessment mode: full content everywhere for comprehensive AI knowledge.
         if ($this->mode === self::MODE_ASSESSMENT) {
             return 'full';
         }
 
         // Teaching mode: tiered by proximity to target.
-        if ($this->targetsection === null) {
+        if ($targetsection === null) {
             return 'preview';
         }
 
-        if ($sectionnum === $this->targetsection) {
+        if ($sectionnum === $targetsection) {
             return 'full';
         }
 
-        if (abs($sectionnum - $this->targetsection) === 1) {
+        if (abs($sectionnum - $targetsection) === 1) {
             return 'preview';
         }
 
@@ -233,43 +325,34 @@ class course_context_builder extends abstract_context_builder {
     }
 
     /**
-     * Build module list with appropriate detail level.
+     * Build the lines describing one module at the given detail level.
      *
-     * @param array $modules Array of cm_info objects.
+     * @param \cm_info $cm The course module info.
      * @param string $detaillevel Detail level: 'full', 'preview', or 'titles'.
-     * @return array Lines for the module list.
+     * @return array Lines for the module.
      */
-    private function buildmodulelist(array $modules, string $detaillevel): array {
-        $lines = [];
+    private function build_module_lines(\cm_info $cm, string $detaillevel): array {
+        $fileannotation = $this->get_file_annotation($cm);
 
-        foreach ($modules as $cm) {
-            if (!$this->is_module_accessible($cm)) {
-                continue;
-            }
-
-            $fileannotation = $this->get_file_annotation($cm);
-
-            if ($detaillevel === 'titles') {
-                $lines[] = "- [{$cm->modname}] {$cm->name}{$fileannotation}";
-                continue;
-            }
-
-            // Full or preview: include content.
-            $lines[] = "**[{$cm->modname}] {$cm->name}**{$fileannotation}";
-
-            // Full level: untruncated content so the tutor and assessment generators
-            // see the entire module. Preview level: short excerpt for adjacent sections
-            // in teaching mode.
-            $content = ($detaillevel === 'full')
-                ? $this->contentextractor->get_full_content($cm)
-                : $this->contentextractor->get_preview($cm, self::CONTENT_LENGTH_PREVIEW);
-
-            if (!empty($content)) {
-                $lines[] = $content;
-            }
-
-            $lines[] = '';
+        if ($detaillevel === 'titles') {
+            return ["- [{$cm->modname}] {$cm->name}{$fileannotation}"];
         }
+
+        // Full or preview: include content.
+        $lines = ["**[{$cm->modname}] {$cm->name}**{$fileannotation}"];
+
+        // Full level: untruncated content so the tutor and assessment generators
+        // see the entire module. Preview level: short excerpt for adjacent sections
+        // in teaching mode.
+        $content = ($detaillevel === 'full')
+            ? $this->contentextractor->get_full_content($cm)
+            : $this->contentextractor->get_preview($cm, self::CONTENT_LENGTH_PREVIEW);
+
+        if (!empty($content)) {
+            $lines[] = $content;
+        }
+
+        $lines[] = '';
 
         return $lines;
     }
@@ -288,7 +371,7 @@ class course_context_builder extends abstract_context_builder {
      *
      * @return array Lines of markdown representing the planned structure.
      */
-    private function buildplancontext(): array {
+    private function build_plan_context(): array {
         $lines = [];
         $lines[] = '## Planned Course Structure';
         $lines[] = '_The following is the complete intended structure. Modules already generated appear as [COMPLETED]._';

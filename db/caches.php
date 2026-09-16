@@ -55,4 +55,11 @@ $definitions = [
         'simpledata' => true,
         'ttl' => 5 * 60, // 5 minutes
     ],
+    // Text of a module core_search activity document, keyed by cmid.
+    // Versioned with the course cacherev, so any module change makes the entry stale (see rebuild_course_cache()).
+    'modulesearchtext' => [
+        'mode' => \cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => false, // Versioned entries are wrapped in an object.
+    ],
 ];
