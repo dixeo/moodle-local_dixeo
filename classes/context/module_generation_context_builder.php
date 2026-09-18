@@ -42,6 +42,9 @@ use local_dixeo\service\module_content_extractor;
 class module_generation_context_builder extends abstract_context_builder {
     use module_data_loader;
 
+    /** @var bool Whether to include previous/next modules in the section. */
+    private bool $includeadjacent;
+
     /**
      * Constructor.
      *

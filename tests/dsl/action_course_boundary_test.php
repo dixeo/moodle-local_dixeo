@@ -223,18 +223,14 @@ final class action_course_boundary_test extends \advanced_testcase {
     }
 
     public function test_add_slides_rejects_a_module_reference_built_from_api_data(): void {
-        global $DB;
-
         $this->resetAfterTest();
 
-        $generator = $this->getDataGenerator();
-        $course = $generator->create_course();
-        $othercourse = $generator->create_course();
-        $otherslideshow = $generator->create_module('slideshow', ['course' => $othercourse->id]);
+        $course = $this->getDataGenerator()->create_course();
 
-        // module_ref may point at any source, including API data the interpreter never vetted.
+        // The module_ref may point at any source, including API data the interpreter never vetted.
+        // Use synthetic ids so this runs without mod_slideshow installed (plugin CI).
         $resolver = new value_resolver([
-            'parent' => ['id' => (int) $otherslideshow->id, 'cmid' => (int) $otherslideshow->cmid],
+            'parent' => ['id' => 424242, 'cmid' => 434343],
             'slides' => [['title' => 'Slide', 'content' => '<p>Body</p>']],
         ], [], $this->build_context($course, 'slideshow'));
 
@@ -251,23 +247,16 @@ final class action_course_boundary_test extends \advanced_testcase {
         } catch (dsl_exception $e) {
             $this->assertStringContainsString('was not created by this execution', $e->getMessage());
         }
-
-        $this->assertSame(0, $DB->count_records('slideshow_slide', ['slideshow' => $otherslideshow->id]));
     }
 
-    public function test_create_questions_simplequiz2_rejects_an_instance_of_another_course(): void {
-        global $DB;
-
+    public function test_create_questions_simplequiz2_rejects_an_instance_not_created_in_the_run(): void {
         $this->resetAfterTest();
 
-        $generator = $this->getDataGenerator();
-        $course = $generator->create_course();
-        $othercourse = $generator->create_course();
-        $otherquiz = $generator->create_module('simplequiz2', ['course' => $othercourse->id]);
-        $before = $DB->get_field('simplequiz2', 'questions', ['id' => $otherquiz->id]);
+        $course = $this->getDataGenerator()->create_course();
 
+        // Synthetic ids: validation rejects before any mod_simplequiz2 lookup (plugin CI).
         $resolver = new value_resolver([
-            'parent' => ['id' => (int) $otherquiz->id, 'cmid' => (int) $otherquiz->cmid],
+            'parent' => ['id' => 525252, 'cmid' => 535353],
             'questions' => [['text' => 'Question?', 'options' => ['A', 'B'], 'answer' => 0]],
         ], [], $this->build_context($course, 'simplequiz2'));
 
@@ -285,7 +274,5 @@ final class action_course_boundary_test extends \advanced_testcase {
         } catch (dsl_exception $e) {
             $this->assertStringContainsString('was not created by this execution', $e->getMessage());
         }
-
-        $this->assertSame($before, $DB->get_field('simplequiz2', 'questions', ['id' => $otherquiz->id]));
     }
 }
