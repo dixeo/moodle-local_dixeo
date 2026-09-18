@@ -394,14 +394,29 @@ class tutor_service {
     }
 
     /**
-     * Resolve instructions.
+     * Resolve course-structure markdown (and any leftover client brief) for the wire.
      * @param int $courseid
      * @param tutor_message $message
      * @return string|null
      */
     private function resolve_instructions(int $courseid, tutor_message $message): ?string {
-        if ($message->instructions !== null && trim($message->instructions) !== '') {
-            return $message->instructions;
+        $brief = ($message->instructions !== null && trim($message->instructions) !== '')
+            ? trim($message->instructions)
+            : '';
+
+        if ($this->needs_course_structure_in_instructions($message)) {
+            $coursecontext = trim($this->build_instructions($courseid));
+            if ($coursecontext === '') {
+                return $brief !== '' ? $brief : null;
+            }
+            if ($brief === '') {
+                return $coursecontext;
+            }
+            return $coursecontext . "\n\n" . $brief;
+        }
+
+        if ($brief !== '') {
+            return $brief;
         }
 
         if (
@@ -412,6 +427,16 @@ class tutor_service {
         }
 
         return null;
+    }
+
+    /**
+     * Whether system instructions must be paired with course structure markdown.
+     *
+     * @param tutor_message $message
+     * @return bool
+     */
+    private function needs_course_structure_in_instructions(tutor_message $message): bool {
+        return $message->role === tutor_message::ROLE_SYSTEM && $message->requireresponse;
     }
 
     /**
