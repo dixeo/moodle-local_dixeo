@@ -35,7 +35,7 @@ class credit_component_mapper {
         'tutor' => 'block_dixeo_tutor',
         'tutor_message' => 'block_dixeo_tutor',
         'course_structure' => 'block_dixeo_designer',
-        'image_generate' => 'filter_dixeo_imageeditor',
+        'image_generate' => 'local_dixeo',
         'image_edit' => 'filter_dixeo_imageeditor',
     ];
 
@@ -46,7 +46,7 @@ class credit_component_mapper {
         'module_edit' => 'local_dixeo_editor',
         'tutor_message' => 'block_dixeo_tutor',
         'course_structure' => 'block_dixeo_designer',
-        'image_generate' => 'filter_dixeo_imageeditor',
+        'image_generate' => 'local_dixeo',
         'image_edit' => 'filter_dixeo_imageeditor',
     ];
 
