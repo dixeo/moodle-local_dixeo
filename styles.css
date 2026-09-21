@@ -384,6 +384,16 @@ h2:has(.dixeo-sync-indicator),
    2. Content image placeholders — [img-gen] async pending state
    ========================================================================== */
 
+/* img-fluid only caps content images at the column width, so a 1024px
+   illustration filled it edge to edge; cap and centre them in the text flow.
+   Qualified with img so it outranks .img-fluid, which the theme emits later. */
+img.dixeo-img-content {
+    display: block;
+    max-width: min(100%, 40rem);
+    height: auto;
+    margin: 1.5rem auto;
+}
+
 /* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png. */
 .dixeo-img-gen-pending,
 .dixeo-img-gen-failed {

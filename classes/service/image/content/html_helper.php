@@ -25,6 +25,9 @@ namespace local_dixeo\service\image\content;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class html_helper {
+    /** @var string Classes carried by every AI-generated content image. */
+    public const IMG_CLASS = 'img-fluid dixeo-img-content';
+
     /**
      * Normalize legacy absolute intro pluginfile URLs for rewrite at display time.
      *

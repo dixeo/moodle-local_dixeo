@@ -34,7 +34,8 @@ final class shortcode_parser_test extends \advanced_testcase {
         $parsed = shortcode_parser::find_all($html);
         $this->assertCount(1, $parsed);
         $this->assertSame('Sunset over mountains', $parsed[0]['prompt']);
-        $this->assertSame('high', $parsed[0]['quality']);
+        // The quality attribute is still accepted, but the default applies.
+        $this->assertSame('medium', $parsed[0]['quality']);
         $this->assertSame('portrait', $parsed[0]['mode']);
         $this->assertSame('1024x1536', $parsed[0]['size']);
     }

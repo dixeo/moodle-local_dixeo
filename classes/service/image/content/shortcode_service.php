@@ -285,7 +285,7 @@ class shortcode_service {
         }
 
         $url = s($location->get_pluginfile_token_src());
-        return '<img src="' . $url . '" class="img-fluid dixeo-img-gen-pending" data-dixeo-img-gen="' .
+        return '<img src="' . $url . '" class="' . html_helper::IMG_CLASS . ' dixeo-img-gen-pending" data-dixeo-img-gen="' .
             s($placeholderid) . '" alt="" />';
     }
 

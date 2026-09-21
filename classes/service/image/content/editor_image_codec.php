@@ -157,9 +157,8 @@ final class editor_image_codec {
         if ($ref !== null) {
             $job = job_repository::get_by_placeholderid($ref);
             $prompt = $job && !empty($job->prompt) ? (string) $job->prompt : shortcode_parser::PRESERVE_PROMPT;
-            $quality = $job && !empty($job->quality) ? (string) $job->quality : '';
             $mode = $job && !empty($job->mode) ? (string) $job->mode : '';
-            return shortcode_parser::build_ref_shortcode($ref, $prompt, $quality, $mode);
+            return shortcode_parser::build_ref_shortcode($ref, $prompt, $mode);
         }
 
         $filename = $this->extract_module_pluginfile_filename($imghtml, $ctx);
@@ -240,7 +239,7 @@ final class editor_image_codec {
             );
             if ($draftfile && !$draftfile->is_directory()) {
                 $url = \moodle_url::make_draftfile_url($draftitemid, '/', $filename)->out(false);
-                return '<img src="' . s($url) . '" class="img-fluid" alt="" />';
+                return '<img src="' . s($url) . '" class="' . html_helper::IMG_CLASS . '" alt="" />';
             }
         }
 
@@ -257,7 +256,7 @@ final class editor_image_codec {
         // Emit a real URL so the image renders inside TinyMCE; the marker lets
         // editor_session_promoter rewrite it back to @@PLUGINFILE@@ on save.
         $url = s($location->get_pluginfile_url());
-        return '<img src="' . $url . '" class="img-fluid" data-dixeo-draft-file="' .
+        return '<img src="' . $url . '" class="' . html_helper::IMG_CLASS . '" data-dixeo-draft-file="' .
             s($location->filename) . '" alt="" />';
     }
 
@@ -326,7 +325,7 @@ final class editor_image_codec {
      * @return string
      */
     private function build_img_for_location(location $location, string $placeholderid, ?\stdClass $job): string {
-        $class = 'img-fluid';
+        $class = html_helper::IMG_CLASS;
         if ($job && in_array($job->status, [job_repository::STATUS_PENDING, job_repository::STATUS_PROCESSING], true)) {
             $class .= ' dixeo-img-gen-pending';
         } else if ($job && $job->status === job_repository::STATUS_FAILED) {

@@ -101,21 +101,16 @@ final class shortcode_parser {
      * Build ref shortcode.
      * @param string $ref
      * @param string $prompt
-     * @param string $quality
      * @param string $mode
      * @return string
      */
     public static function build_ref_shortcode(
         string $ref,
         string $prompt = self::PRESERVE_PROMPT,
-        string $quality = '',
         string $mode = ''
     ): string {
         $parts = ['ref="' . self::escape_attr($ref) . '"'];
         $parts[] = 'prompt="' . self::escape_attr($prompt) . '"';
-        if ($quality !== '') {
-            $parts[] = 'quality="' . self::escape_attr($quality) . '"';
-        }
         if ($mode !== '') {
             $parts[] = 'mode="' . self::escape_attr($mode) . '"';
         }
@@ -189,10 +184,9 @@ final class shortcode_parser {
             $prompt = self::PRESERVE_PROMPT;
         }
 
-        $quality = strtolower(trim($attrs['quality'] ?? image_generation_service::DEFAULT_QUALITY));
-        if (!in_array($quality, ['low', 'medium', 'high'], true)) {
-            $quality = image_generation_service::DEFAULT_QUALITY;
-        }
+        // Quality is no longer part of the grammar. The attribute is still
+        // accepted so tokens stored in existing content keep parsing.
+        $quality = image_generation_service::DEFAULT_QUALITY;
 
         $mode = strtolower(trim($attrs['mode'] ?? 'landscape'));
         if (!isset(self::MODE_SIZES[$mode])) {
