@@ -66,6 +66,7 @@ final class html_helper_test extends \advanced_testcase {
         );
         $this->assertStringContainsString('dixeo-img-gen-failed', $updated);
         $this->assertStringContainsString('data-dixeo-contenthash="deadbeef"', $updated);
+        $this->assertStringContainsString('src="@@PLUGINFILE@@/x.png?rev=deadbeef"', $updated);
         $this->assertStringNotContainsString('dixeo-img-gen-pending', $updated);
     }
 

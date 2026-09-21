@@ -97,7 +97,12 @@ final class content_handler {
                 $jobmeta->targettable = $htmltarget->targettable;
                 $jobmeta->targetfield = $htmltarget->targetfield;
                 $jobmeta->targetid = $htmltarget->targetid;
+                $jobmeta->courseid = $htmltarget->courseid;
+                $jobmeta->cmid = $htmltarget->cmid;
             }
+        }
+        if (empty($jobmeta->courseid) && $location->courseid > 0) {
+            $jobmeta->courseid = $location->courseid;
         }
 
         self::bump_url_revision($jobmeta);

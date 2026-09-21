@@ -56,7 +56,7 @@ final class html_helper {
      * @param string $placeholderid
      * @param string $fromclass
      * @param string $toclass
-     * @param string $contenthash Optional contenthash written to data-dixeo-contenthash for cache-busting.
+     * @param string $contenthash Optional contenthash for data-dixeo-contenthash and src ?rev=.
      * @return string
      */
     public static function swap_img_class_for_placeholder(
@@ -103,6 +103,16 @@ final class html_helper {
             $tag = preg_replace('/\s*\bdata-dixeo-contenthash="[^"]*"/iu', '', $tag) ?? $tag;
             if ($contenthash !== '') {
                 $tag = preg_replace('/<img\b/iu', '<img data-dixeo-contenthash="' . s($contenthash) . '"', $tag, 1) ?? $tag;
+                // Labels/intros have no revision path segment; rewrite src so browsers
+                // drop the cached stub bytes after an in-place file replace.
+                $tag = (string) (preg_replace_callback(
+                    '/\bsrc="([^"]*)"/iu',
+                    static function (array $match) use ($contenthash): string {
+                        return 'src="' . url_helper::append_image_rev($match[1], $contenthash) . '"';
+                    },
+                    $tag,
+                    1
+                ) ?? $tag);
             }
 
             return $tag;
@@ -115,7 +125,7 @@ final class html_helper {
      * @param string $placeholderid
      * @param string $fromclass
      * @param string $toclass
-     * @param string $contenthash Optional file contenthash for browser cache-busting.
+     * @param string $contenthash Optional file contenthash for browser cache-busting (?rev= + data attr).
      * @return void
      */
     public static function update_target_html_class(
@@ -153,6 +163,10 @@ final class html_helper {
         }
 
         $DB->set_field($job->targettable, $field, $updated, ['id' => (int) $job->targetid]);
+        modinfo_helper::purge_module(
+            (int) ($job->courseid ?? 0),
+            isset($job->cmid) ? (int) $job->cmid : null
+        );
     }
 
     /**
