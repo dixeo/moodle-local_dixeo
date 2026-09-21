@@ -18,12 +18,16 @@ namespace local_dixeo\task;
 
 
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\image\apply\content_handler as apply_content_handler;
+use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\target_factory;
 
 /**
  * Scheduled retention for unified image job records.
  *
- * Marks timed-out pending/processing rows as failed and deletes terminal
- * (applied/failed) rows older than the retention period.
+ * Marks timed-out pending/processing rows as failed (and swaps shortcode
+ * placeholders to the error asset), then deletes terminal (applied/failed)
+ * rows older than the retention period.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -62,20 +66,28 @@ class cleanup_image_jobs extends \core\task\scheduled_task {
             \local_dixeo\service\image\poll\manager::ensure_poll_for_job($job);
         }
 
-        // Persist the failed state for jobs stuck in pending/processing beyond the timeout.
-        $DB->execute(
-            'UPDATE {' . job_repository::TABLE . '}
-                SET status = :failed, errormessage = :message, timemodified = :now
-              WHERE status IN (:pending, :processing) AND timecreated < :cutoff',
+        // Fail jobs stuck beyond the timeout and swap content placeholders.
+        $timedout = $DB->get_records_select(
+            job_repository::TABLE,
+            'status IN (:pending, :processing) AND timecreated < :cutoff',
             [
-                'failed' => job_repository::STATUS_FAILED,
-                'message' => get_string('dixeo_image_job_failed', 'local_dixeo'),
-                'now' => $now,
                 'pending' => job_repository::STATUS_PENDING,
                 'processing' => job_repository::STATUS_PROCESSING,
                 'cutoff' => $now - job_repository::TIMEOUT_SECONDS,
             ]
         );
+        $message = get_string('dixeo_image_job_failed', 'local_dixeo');
+        foreach ($timedout as $job) {
+            job_repository::mark_failed((int) $job->id, $message);
+            try {
+                $target = target_factory::from_job_record($job);
+                if ($target instanceof content_target) {
+                    apply_content_handler::apply_failure($target, (int) $job->userid, $job);
+                }
+            } catch (\Throwable $e) {
+                debugging('Dixeo image apply_failure failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
 
         // Delete terminal rows past the retention period.
         $DB->delete_records_select(
