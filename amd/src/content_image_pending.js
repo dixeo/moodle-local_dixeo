@@ -18,7 +18,8 @@
  *
  * Stores bare imgs; wraps a shimmer host and injects translated status pills.
  * On course pages, polls until generation completes and swaps the live image.
- * Does not page-poll imgs inside .dixeo-imageeditor-wrap (filter owns that path).
+ * Also polls imgs inside .dixeo-imageeditor-wrap so shortcode jobs still update
+ * live when the filter did not flag data-dixeo-pending.
  * Safe to run inside the Dixeo editor TinyMCE iframe (uses ownerDocument).
  *
  * @module     local_dixeo/content_image_pending
@@ -156,16 +157,6 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
-     * Filter wrap owns location polling / labels for these hosts.
-     *
-     * @param {HTMLImageElement} img
-     * @returns {boolean}
-     */
-    const isInsideEditorWrap = (img) => {
-        return !!img.closest(`.${WRAP_CLASS}`);
-    };
-
-    /**
      * @param {ParentNode|Document|null|undefined} root
      * @returns {{searchRoot: ParentNode|Document, observeRoot: Node|null, doc: Document}}
      */
@@ -287,14 +278,18 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
-     * Collect pending placeholder ids under the top document (bare imgs only).
+     * Collect pending placeholder ids under the top document.
+     *
+     * Includes images inside .dixeo-imageeditor-wrap: shortcode jobs defer remote
+     * polling to adhoc tasks, and wraps without data-dixeo-pending would otherwise
+     * never get a live src swap when generation finishes.
      *
      * @returns {string[]}
      */
     const collectPendingPlaceholderIds = () => {
         const ids = [];
         document.querySelectorAll('img.dixeo-img-gen-pending').forEach((img) => {
-            if (!isHtmlImage(img) || isInsideEditorWrap(img)) {
+            if (!isHtmlImage(img)) {
                 return;
             }
             const id = placeholderIdFromImg(img);
@@ -306,7 +301,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
-     * Find a live pending/failed img for a placeholder id (bare page imgs).
+     * Find a live pending/failed img for a placeholder id.
      *
      * @param {string} placeholderid
      * @param {string} filename
@@ -317,7 +312,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         if (!img && filename) {
             img = document.querySelector('img[src*="' + filename + '"]');
         }
-        if (!isHtmlImage(img) || isInsideEditorWrap(img)) {
+        if (!isHtmlImage(img)) {
             return null;
         }
         return img;
@@ -376,6 +371,16 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         if (nextClass.indexOf('dixeo-img-gen-pending') === -1 &&
                 nextClass.indexOf('dixeo-img-gen-failed') === -1) {
             clearImageHost(img);
+            const editorWrap = img.closest(`.${WRAP_CLASS}`);
+            if (editorWrap) {
+                editorWrap.classList.remove(GENERATING_CLASS);
+                delete editorWrap.dataset.dixeoPending;
+                delete editorWrap.dataset.dixeoImageGeneratingLabel;
+                if (item.contenthash) {
+                    editorWrap.dataset.contenthash = item.contenthash;
+                }
+                editorWrap.querySelectorAll(`:scope > .${STATUS_CLASS}`).forEach((el) => el.remove());
+            }
         } else {
             enhanceImage(img, strings);
         }
@@ -491,8 +496,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                         if (node.matches?.(IMG_SELECTOR) && isHtmlImage(node)) {
                             enhanceImage(node, strings);
                             if (doc === document &&
-                                    node.classList.contains('dixeo-img-gen-pending') &&
-                                    !isInsideEditorWrap(node)) {
+                                    node.classList.contains('dixeo-img-gen-pending')) {
                                 addedPending = true;
                             }
                             return;
@@ -500,7 +504,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                         enhanceTree(node, strings);
                         if (doc === document) {
                             node.querySelectorAll?.('img.dixeo-img-gen-pending').forEach((img) => {
-                                if (isHtmlImage(img) && !isInsideEditorWrap(img)) {
+                                if (isHtmlImage(img)) {
                                     addedPending = true;
                                 }
                             });
