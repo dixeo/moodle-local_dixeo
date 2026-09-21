@@ -389,6 +389,8 @@ h2:has(.dixeo-sync-indicator),
    Qualified with img so it outranks .img-fluid, which the theme emits later. */
 img.dixeo-img-content {
     display: block;
+    /* Cap at column width or 40rem, whichever is smaller (csstree lacks min()). */
+    /* stylelint-disable-next-line csstree/validator -- max-width: min() is valid CSS */
     max-width: min(100%, 40rem);
     height: auto;
     margin: 1.5rem auto;
