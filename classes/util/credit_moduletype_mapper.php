@@ -31,6 +31,7 @@ class credit_moduletype_mapper {
      */
     public static function get_known_moduletypes(): array {
         return [
+            'assign',
             'glossary',
             'h5pactivity',
             'label',

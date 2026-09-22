@@ -62,6 +62,7 @@ $string['credit_component_local_dixeo_editor'] = 'Editor de contenido';
 $string['credit_component_unknown'] = 'Desconocido';
 $string['credit_context_site'] = 'Sitio';
 $string['credit_information'] = 'Información de créditos';
+$string['credit_moduletype_assign'] = 'Tarea';
 $string['credit_moduletype_glossary'] = 'Glosario';
 $string['credit_moduletype_h5pactivity'] = 'Actividad H5P';
 $string['credit_moduletype_label'] = 'Etiqueta';
