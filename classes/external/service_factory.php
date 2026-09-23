@@ -29,6 +29,8 @@
 namespace local_dixeo\external;
 
 use local_dixeo\api\client;
+use local_dixeo\service\assign_ux_persistence_interface;
+use local_dixeo\service\assign_ux_service;
 use local_dixeo\service\image\content\shortcode_service;
 use local_dixeo\service\course_structure_service;
 use local_dixeo\service\course_template_service;
@@ -57,6 +59,9 @@ class service_factory {
 
     /** @var tutor_service|null Mock tutor service instance for unit testing. */
     private static ?tutor_service $testtutorservice = null;
+
+    /** @var assign_ux_service|null Mock assign UX service instance for unit testing. */
+    private static ?assign_ux_service $testassignuxservice = null;
 
     /** @var course_structure_service|null Mock course structure service for unit testing. */
     private static ?course_structure_service $testcoursestructureservice = null;
@@ -131,6 +136,22 @@ class service_factory {
         }
 
         return new tutor_service();
+    }
+
+    /**
+     * Get an assign_ux_service instance.
+     *
+     * @param assign_ux_persistence_interface|null $persistence Optional authorship persistence.
+     * @return assign_ux_service The service instance.
+     */
+    public static function get_assign_ux_service(
+        ?assign_ux_persistence_interface $persistence = null
+    ): assign_ux_service {
+        if (self::$testassignuxservice !== null) {
+            return self::$testassignuxservice;
+        }
+
+        return new assign_ux_service(null, null, $persistence);
     }
 
     /**
@@ -307,6 +328,15 @@ class service_factory {
     }
 
     /**
+     * Set a test assign UX service instance.
+     *
+     * @param assign_ux_service|null $service The test service, or null to clear.
+     */
+    public static function set_test_assign_ux_service(?assign_ux_service $service): void {
+        self::$testassignuxservice = $service;
+    }
+
+    /**
      * Set a test course structure service instance.
      *
      * Use this in unit tests to inject mock services.
@@ -413,6 +443,7 @@ class service_factory {
         self::$testjobservice = null;
         self::$testmodulegenerationservice = null;
         self::$testtutorservice = null;
+        self::$testassignuxservice = null;
         self::$testcoursestructureservice = null;
         self::$testcoursetemplateservice = null;
         self::$testmoduletypesservice = null;
