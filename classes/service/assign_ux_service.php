@@ -114,6 +114,28 @@ class assign_ux_service {
     }
 
     /**
+     * Submit a review job and block until it completes or times out.
+     *
+     * @param int $courseid Course id.
+     * @param int $cmid Assign course module id.
+     * @param int $studentuserid Student whose submission is reviewed.
+     * @return operation_result
+     * @throws \moodle_exception
+     * @throws api_exception
+     */
+    public function submit_review_and_wait(int $courseid, int $cmid, int $studentuserid): operation_result {
+        $payload = $this->build_review_or_grade_payload($courseid, $cmid, $studentuserid, null);
+
+        return $this->jobservice->submit_and_wait(
+            self::ENDPOINT_REVIEW,
+            $payload,
+            'assign_review',
+            self::COMPONENT,
+            job_binding_metadata::for_module('assign', $cmid)
+        );
+    }
+
+    /**
      * Submit a teacher Assist grading job.
      *
      * @param int $courseid Course id.
@@ -135,6 +157,34 @@ class assign_ux_service {
         return $this->jobservice->submit_job(
             self::ENDPOINT_GRADE,
             $payload,
+            self::COMPONENT,
+            job_binding_metadata::for_module('assign', $cmid)
+        );
+    }
+
+    /**
+     * Submit a grade job and block until it completes or times out.
+     *
+     * @param int $courseid Course id.
+     * @param int $cmid Assign course module id.
+     * @param int $studentuserid Student being graded.
+     * @param \stdClass|null $authorship Optional authorship record.
+     * @return operation_result
+     * @throws \moodle_exception
+     * @throws api_exception
+     */
+    public function submit_grade_and_wait(
+        int $courseid,
+        int $cmid,
+        int $studentuserid,
+        ?\stdClass $authorship = null
+    ): operation_result {
+        $payload = $this->build_review_or_grade_payload($courseid, $cmid, $studentuserid, $authorship);
+
+        return $this->jobservice->submit_and_wait(
+            self::ENDPOINT_GRADE,
+            $payload,
+            'assign_grade',
             self::COMPONENT,
             job_binding_metadata::for_module('assign', $cmid)
         );
@@ -169,6 +219,41 @@ class assign_ux_service {
         return $this->jobservice->submit_job(
             self::ENDPOINT_AUTHORSHIP,
             $payload,
+            self::COMPONENT,
+            job_binding_metadata::for_module('assign', $cmid)
+        );
+    }
+
+    /**
+     * Submit an authorship job and block until it completes or times out.
+     *
+     * @param int $courseid Course id.
+     * @param int $cmid Assign course module id.
+     * @param int $studentuserid Student userid.
+     * @param string $mode One of confidence|quiz|final.
+     * @param array $options Mode-specific fields.
+     * @return operation_result
+     * @throws \moodle_exception
+     * @throws api_exception
+     */
+    public function submit_authorship_and_wait(
+        int $courseid,
+        int $cmid,
+        int $studentuserid,
+        string $mode,
+        array $options = []
+    ): operation_result {
+        $mode = strtolower(trim($mode));
+        if (!in_array($mode, [self::MODE_CONFIDENCE, self::MODE_QUIZ, self::MODE_FINAL], true)) {
+            throw new \moodle_exception('assign_ux_authorship_mode_invalid', 'local_dixeo');
+        }
+
+        $payload = $this->build_authorship_payload($courseid, $cmid, $studentuserid, $mode, $options);
+
+        return $this->jobservice->submit_and_wait(
+            self::ENDPOINT_AUTHORSHIP,
+            $payload,
+            'assign_authorship',
             self::COMPONENT,
             job_binding_metadata::for_module('assign', $cmid)
         );
