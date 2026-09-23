@@ -408,6 +408,9 @@ class job_service {
             '/v1/images/generate' => 'image_generate',
             '/v1/images/edit' => 'image_edit',
             '/v1/courses/structure' => 'course_structure',
+            '/v1/assign/review' => 'assign_review',
+            '/v1/assign/grade' => 'assign_grade',
+            '/v1/assign/authorship' => 'assign_authorship',
         ];
 
         $normalized = rtrim($endpoint, '/');
