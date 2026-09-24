@@ -162,4 +162,42 @@ final class content_handler_apply_failure_test extends \advanced_testcase {
             sha1($file->get_content())
         );
     }
+
+    /**
+     * Editor-draft jobs must replace the draft stub with the error asset (editor polls DOM).
+     */
+    public function test_apply_failure_editor_draft_replaces_stub_with_error_asset(): void {
+        global $USER;
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $context = \context_module::instance($page->cmid);
+        $placeholderid = 'draft-fail-uuid';
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $location = new location(
+            $context->id,
+            editor_draft_fileareas::COMPONENT,
+            editor_draft_fileareas::for_modname('page'),
+            99,
+            '/',
+            $filename,
+            (int) $course->id
+        );
+        file_service::create_stub($location, (int) $USER->id);
+
+        $target = content_target::from_location($location);
+        $jobrow = (object) [
+            'origin' => job_repository::ORIGIN_EDITOR_DRAFT,
+            'targettable' => job_repository::TARGETTABLE_EDITOR_SESSION,
+            'placeholderid' => $placeholderid,
+        ];
+        content_handler::apply_failure($target, (int) $USER->id, $jobrow);
+
+        $file = $location->get_stored_file();
+        $this->assertNotFalse($file);
+        $this->assertSame(
+            sha1(asset_helper::get_error_binary()),
+            sha1($file->get_content())
+        );
+    }
 }

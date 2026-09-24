@@ -61,6 +61,20 @@ final class asset_helper {
     }
 
     /**
+     * Whether a contenthash is the pending placeholder or failure error asset.
+     *
+     * @param string $contenthash
+     * @return bool
+     */
+    public static function is_status_asset_hash(string $contenthash): bool {
+        if ($contenthash === '') {
+            return false;
+        }
+        return $contenthash === sha1(self::get_placeholder_binary())
+            || $contenthash === sha1(self::get_error_binary());
+    }
+
+    /**
      * Load plugin image.
      * @param string $filename Basename under local/dixeo/img/.
      * @return string

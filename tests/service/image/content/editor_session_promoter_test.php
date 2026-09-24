@@ -144,6 +144,7 @@ final class editor_session_promoter_test extends \advanced_testcase {
 
         $this->assertNotNull($ctx->module_location($filename)->get_stored_file());
         $this->assertStringContainsString('src="@@PLUGINFILE@@/' . $filename . '"', $result);
+        $this->assertStringNotContainsString('dixeo-img-gen-pending', $result);
         $this->assertStringNotContainsString('local_dixeo_editor/draft_page', $result);
     }
 
@@ -200,5 +201,65 @@ final class editor_session_promoter_test extends \advanced_testcase {
 
         $this->assertNotNull($ctx->module_location('upload.png')->get_stored_file());
         $this->assertStringContainsString('src="@@PLUGINFILE@@/upload.png"', $result);
+    }
+
+    /**
+     * Promote requeues poll against the module locationhash after draft promote.
+     */
+    public function test_promote_requeues_poll_on_module_location(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $ctx = $this->make_page_context();
+        $placeholderid = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $draftloc = $ctx->draft_location($filename);
+        $this->create_file_at($draftloc);
+
+        $job = \local_dixeo\repository\image\job_repository::upsert_job(array_merge(
+            $draftloc->to_record_fields(),
+            [
+                'placeholderid' => $placeholderid,
+                'targettable' => 'page',
+                'targetfield' => 'content',
+                'targetid' => $ctx->html_field_target()->targetid,
+                'cmid' => $ctx->cmid,
+                'origin' => \local_dixeo\repository\image\job_repository::ORIGIN_EDITOR_DRAFT,
+                'prompt' => 'A tree',
+                'quality' => 'medium',
+                'mode' => 'landscape',
+                'jobid' => 'remote-promote-poll',
+                'status' => \local_dixeo\repository\image\job_repository::STATUS_PENDING,
+                'userid' => (int) $USER->id,
+            ]
+        ));
+
+        $drafttarget = \local_dixeo\service\image\content_target::from_location($draftloc);
+        \local_dixeo\service\image\poll\manager::queue_poll_task(
+            $drafttarget,
+            (string) $job->jobid,
+            (int) $USER->id,
+            0,
+            'generated',
+            60
+        );
+        $this->assertTrue(\local_dixeo\service\image\poll\manager::has_poll_task($drafttarget));
+
+        $draftsrc = $draftloc->get_pluginfile_url();
+        $html = '<img class="img-fluid dixeo-img-gen-pending" src="' . s($draftsrc) .
+            '" data-dixeo-img-gen="' . $placeholderid . '" alt="" />';
+        editor_session_promoter::promote_html($html, $ctx, (int) get_admin()->id);
+
+        $fresh = \local_dixeo\repository\image\job_repository::get_by_placeholderid($placeholderid);
+        $this->assertNotNull($fresh);
+        $this->assertSame(
+            \local_dixeo\repository\image\job_repository::ORIGIN_SHORTCODE,
+            $fresh->origin
+        );
+        $moduletarget = \local_dixeo\service\image\target_factory::from_job_record($fresh);
+        $this->assertFalse(\local_dixeo\service\image\poll\manager::has_poll_task($drafttarget));
+        $this->assertTrue(\local_dixeo\service\image\poll\manager::has_poll_task($moduletarget));
     }
 }
