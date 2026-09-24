@@ -48,9 +48,13 @@ class assign_ux_service {
     /** @var string */
     public const ENDPOINT_AUTHORSHIP = '/v1/assign/authorship';
 
-    /** Authorship API modes. */
+    /** Authorship API mode: initial confidence. */
     public const MODE_CONFIDENCE = 'confidence';
+
+    /** Authorship API mode: quiz generation. */
     public const MODE_QUIZ = 'quiz';
+
+    /** Authorship API mode: final evaluation. */
     public const MODE_FINAL = 'final';
 
     /** API accepts at most this many submission files. */
@@ -69,6 +73,8 @@ class assign_ux_service {
     private ?string $namespace;
 
     /**
+     * Build the service with optional collaborators for tests.
+     *
      * @param job_service|null $jobservice Optional job service.
      * @param assign_submission_reader|null $reader Optional submission reader.
      * @param assign_ux_persistence_interface|null $persistence Optional authorship store.
@@ -293,7 +299,7 @@ class assign_ux_service {
      *
      * @param array $assignmentcontext From {@see assign_submission_reader::get_assignment_context()}.
      * @param array|null $result Job result array.
-     * @return array{gradingmethod: string, analysis: string, feedback: string, grade?: float, criteria?: array}|array{error: string}
+     * @return array Mapped grade fields, or an error key.
      */
     public function map_grade_result(array $assignmentcontext, ?array $result): array {
         if ($result === null || !is_array($result)) {
@@ -317,8 +323,14 @@ class assign_ux_service {
 
         $rawcriteria = $result['criteria'] ?? [];
         if (!is_array($rawcriteria) || count($rawcriteria) !== $expectedcount) {
-            return ['error' => get_string('assign_ux_grading_criteria_count', 'local_dixeo',
-                (object) ['got' => is_array($rawcriteria) ? count($rawcriteria) : 0, 'expected' => $expectedcount])];
+            return ['error' => get_string(
+                'assign_ux_grading_criteria_count',
+                'local_dixeo',
+                (object) [
+                    'got' => is_array($rawcriteria) ? count($rawcriteria) : 0,
+                    'expected' => $expectedcount,
+                ]
+            )];
         }
 
         $idtoctx = [];
@@ -349,8 +361,14 @@ class assign_ux_service {
                 }
                 $levelid = isset($item['levelid']) ? (int) $item['levelid'] : 0;
                 if (!isset($levelids[$levelid])) {
-                    return ['error' => get_string('assign_ux_grading_invalid_level', 'local_dixeo',
-                        (object) ['levelid' => $levelid, 'criterionid' => $id])];
+                    return ['error' => get_string(
+                        'assign_ux_grading_invalid_level',
+                        'local_dixeo',
+                        (object) [
+                            'levelid' => $levelid,
+                            'criterionid' => $id,
+                        ]
+                    )];
                 }
                 $out[] = [
                     'id' => $id,
@@ -532,8 +550,10 @@ class assign_ux_service {
                 ?? $options['initial_confidence']);
             $payload['questions'] = $options['questions'] ?? [];
             $payload['answers'] = $options['answers'] ?? [];
-            if (!is_array($payload['questions']) || $payload['questions'] === []
-                    || !is_array($payload['answers'])) {
+            if (
+                !is_array($payload['questions']) || $payload['questions'] === []
+                || !is_array($payload['answers'])
+            ) {
                 throw new \moodle_exception('assign_ux_authorship_final_incomplete', 'local_dixeo');
             }
             return $payload;

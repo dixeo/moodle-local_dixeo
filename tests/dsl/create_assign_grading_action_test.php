@@ -72,6 +72,8 @@ final class create_assign_grading_action_test extends \advanced_testcase {
     }
 
     /**
+     * Build interpreter context for an assign module in the course.
+     *
      * @param \stdClass $course Course.
      * @return array Interpreter context.
      */
