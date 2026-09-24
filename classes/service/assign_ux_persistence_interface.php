@@ -28,7 +28,6 @@ namespace local_dixeo\service;
  * CRUD for authorship confidence / quiz persistence.
  */
 interface assign_ux_persistence_interface {
-
     /**
      * Replace any existing row for (userid, component, area, itemid), then insert.
      *

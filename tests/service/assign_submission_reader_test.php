@@ -21,15 +21,14 @@
  * @category   test
  * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \local_dixeo\service\assign_submission_reader
  */
 
 namespace local_dixeo;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Unit tests for assign submission reader.
+ *
+ * @covers \local_dixeo\service\assign_submission_reader
  */
 final class assign_submission_reader_test extends \advanced_testcase {
     public function setUp(): void {

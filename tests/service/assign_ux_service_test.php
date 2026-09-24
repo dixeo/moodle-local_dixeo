@@ -21,7 +21,6 @@
  * @category   test
  * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \local_dixeo\service\assign_ux_service
  */
 
 namespace local_dixeo;
@@ -34,6 +33,8 @@ use local_dixeo\service\job_service;
 
 /**
  * Unit tests for {@see assign_ux_service}.
+ *
+ * @covers \local_dixeo\service\assign_ux_service
  */
 final class assign_ux_service_test extends \advanced_testcase {
     protected function tearDown(): void {
