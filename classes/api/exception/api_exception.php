@@ -110,8 +110,8 @@ class api_exception extends \moodle_exception {
      * @return api_exception The appropriate exception instance.
      */
     public static function from_response(array $errordata, int $httpstatus): api_exception {
-        $type = $errordata['type'] ?? 'unknown_error';
-        $message = $errordata['detail'] ?? $errordata['title'] ?? 'Unknown API error';
+        $type = $errordata['type'] ?? ($httpstatus === 429 ? 'rate_limit_exceeded' : 'unknown_error');
+        $message = $errordata['detail'] ?? $errordata['title'] ?? "Unexpected API response (HTTP {$httpstatus})";
         $details = $errordata;
 
         // Map RFC 7807 error type identifiers to our exception classes.
@@ -128,8 +128,8 @@ class api_exception extends \moodle_exception {
             ),
 
             // Rate limiting.
-            'too_many_requests', 'too_many_requests_http' => new rate_limit_exception(
-                $message,
+            'rate_limit_exceeded', 'too_many_requests', 'too_many_requests_http' => new rate_limit_exception(
+                get_string('error:rate_limit', 'local_dixeo'),
                 $errordata['retryAfter'] ?? $errordata['retry_after'] ?? null,
                 $details
             ),

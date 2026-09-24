@@ -193,6 +193,9 @@ class client {
         $contenttype = (string) ($info['content_type'] ?? '');
         $responsebytes = strlen($response);
         $data = json_decode($response, true);
+        $jsonerror = json_last_error() !== JSON_ERROR_NONE
+            ? json_last_error_msg()
+            : 'Decoded JSON was not an object/array';
 
         // Log metadata only — never response bodies (may contain course content or PII).
         debugging(sprintf(
@@ -208,20 +211,6 @@ class client {
             return [];
         }
 
-        // Handle JSON parse errors.
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new api_exception(
-                'invalid_response',
-                'Invalid JSON response from Dixeo API',
-                $httpcode,
-                [
-                    'response_bytes' => $responsebytes,
-                    'json_error' => json_last_error_msg(),
-                    'content_type' => $contenttype,
-                ]
-            );
-        }
-
         // Successful responses: unwrap the optional 'data' key when present.
         if ($httpcode >= 200 && $httpcode < 300) {
             if (!is_array($data)) {
@@ -231,7 +220,7 @@ class client {
                     $httpcode,
                     [
                         'response_bytes' => $responsebytes,
-                        'json_error' => 'Decoded JSON was not an object/array',
+                        'json_error' => $jsonerror,
                         'content_type' => $contenttype,
                     ]
                 );
@@ -239,7 +228,7 @@ class client {
             return $data['data'] ?? $data;
         }
 
-        // Error responses follow RFC 7807 (Problem Details).
+        // Error responses follow RFC 7807 (Problem Details); proxy errors may carry no JSON body.
         $errortype = is_array($data) ? (string) ($data['type'] ?? 'unknown_error') : 'unknown_error';
         $errortitle = is_array($data) ? (string) ($data['title'] ?? '') : '';
         debugging(sprintf(
