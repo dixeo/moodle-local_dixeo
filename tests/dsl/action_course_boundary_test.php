@@ -19,6 +19,7 @@ namespace local_dixeo\dsl;
 use local_dixeo\dsl\actions\create_entries_action;
 use local_dixeo\dsl\actions\create_questions_simplequiz2_action;
 use local_dixeo\dsl\actions\create_slides_action;
+use local_dixeo\dsl\actions\create_assign_grading_action;
 
 /**
  * Tests that child DSL actions only write into the module they created in the course.
@@ -273,6 +274,44 @@ final class action_course_boundary_test extends \advanced_testcase {
             $this->fail('dsl_exception expected');
         } catch (dsl_exception $e) {
             $this->assertStringContainsString('was not created by this execution', $e->getMessage());
+        }
+    }
+
+    public function test_create_assign_grading_rejects_an_assign_of_another_course(): void {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $othercourse = $generator->create_course();
+        $otherassign = $generator->create_module('assign', ['course' => $othercourse->id]);
+
+        $variables = ['module' => [
+            'id' => (int) $otherassign->id,
+            'cmid' => (int) $otherassign->cmid,
+            'modulename' => 'assign',
+        ]];
+        $resolver = new value_resolver(
+            [
+                'grading_method' => 'simple',
+                'marking_guide' => null,
+                'marking_rubric' => null,
+            ],
+            $variables,
+            $this->build_context($course, 'assign')
+        );
+
+        try {
+            (new create_assign_grading_action())->execute([
+                'module_ref' => '$module',
+                'fields' => [
+                    'grading_method' => ['source' => '$.grading_method'],
+                    'marking_guide' => ['source' => '$.marking_guide'],
+                    'marking_rubric' => ['source' => '$.marking_rubric'],
+                ],
+            ], $resolver);
+            $this->fail('dsl_exception expected');
+        } catch (dsl_exception $e) {
+            $this->assertStringContainsString('does not belong to course', $e->getMessage());
         }
     }
 }

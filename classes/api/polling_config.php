@@ -64,6 +64,22 @@ class polling_config {
     /** @var int Timeout for course generation (ms) - 5 minutes. */
     public const COURSE_GEN_TIMEOUT_MS = 300000;
 
+    // Tutor message timing constants (~2-90 seconds).
+    /** @var int Initial delay for tutor messages (ms). */
+    public const TUTOR_INITIAL_DELAY_MS = 2000;
+    /** @var int Poll interval for tutor messages (ms). */
+    public const TUTOR_POLL_INTERVAL_MS = 2000;
+    /** @var int Timeout for tutor messages (ms) - 90 seconds. */
+    public const TUTOR_TIMEOUT_MS = 90000;
+
+    // Assign UX timing constants (review/grade/authorship; may include file_search, ~3-180 seconds).
+    /** @var int Initial delay for assign UX jobs (ms). */
+    public const ASSIGN_UX_INITIAL_DELAY_MS = 3000;
+    /** @var int Poll interval for assign UX jobs (ms). */
+    public const ASSIGN_UX_POLL_INTERVAL_MS = 2000;
+    /** @var int Timeout for assign UX jobs (ms) - 3 minutes. */
+    public const ASSIGN_UX_TIMEOUT_MS = 180000;
+
     // Milliseconds to seconds conversion factor.
     /** @var float Conversion factor from milliseconds to seconds. */
     private const MS_TO_SECONDS = 1000.0;
@@ -98,6 +114,8 @@ class polling_config {
      * - edit_module: Fast edits to existing content (~2-5 seconds)
      * - generate_module: Creating new modules with name/intro/content (~5-15 seconds)
      * - generate_course_structure: AI-driven course outline generation (~30-120 seconds)
+     * - tutor: Tutor message responses (~2-90 seconds)
+     * - assign_review / assign_grade / assign_authorship: Assign UX AI jobs (~3-180 seconds)
      *
      * @param string $jobtype The job type identifier.
      * @return self The polling configuration for the job type.
@@ -124,7 +142,16 @@ class polling_config {
                 self::COURSE_GEN_POLL_INTERVAL_MS,
                 self::COURSE_GEN_TIMEOUT_MS
             ),
-            'tutor' => new self(2000, 2000, 90000),
+            'tutor' => new self(
+                self::TUTOR_INITIAL_DELAY_MS,
+                self::TUTOR_POLL_INTERVAL_MS,
+                self::TUTOR_TIMEOUT_MS
+            ),
+            'assign_review', 'assign_grade', 'assign_authorship' => new self(
+                self::ASSIGN_UX_INITIAL_DELAY_MS,
+                self::ASSIGN_UX_POLL_INTERVAL_MS,
+                self::ASSIGN_UX_TIMEOUT_MS
+            ),
             // Default to generate_module timing for unknown types.
             default => new self(
                 self::GENERATE_INITIAL_DELAY_MS,
