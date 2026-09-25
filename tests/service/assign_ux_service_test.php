@@ -72,7 +72,7 @@ final class assign_ux_service_test extends \advanced_testcase {
                         && is_array($payload['criteria'] ?? null)
                         && !isset($payload['authorship']);
                 }),
-                'local_dixeo_ux',
+                'plagiarism_dixeo',
                 $this->callback(function ($meta) use ($assign): bool {
                     return $meta instanceof \local_dixeo\dto\job_binding_metadata
                         && (int) $meta->cmid === (int) $assign->cmid;
@@ -118,7 +118,7 @@ final class assign_ux_service_test extends \advanced_testcase {
                         && (float) $hint['final_confidence'] === 75.0
                         && (float) $hint['grade'] === 90.0;
                 }),
-                'local_dixeo_ux',
+                'plagiarism_dixeo',
                 $this->anything()
             )
             ->willReturn(operation_result::pending('job-grade-1', 'pending', 0));
@@ -150,7 +150,7 @@ final class assign_ux_service_test extends \advanced_testcase {
                     return ($payload['mode'] ?? '') === 'confidence'
                         && isset($payload['submissionText'], $payload['courseId'], $payload['files']);
                 }),
-                'local_dixeo_ux',
+                'plagiarism_dixeo',
                 $this->anything()
             )
             ->willReturn(operation_result::pending('job-auth-1', 'pending', 0));
@@ -179,7 +179,7 @@ final class assign_ux_service_test extends \advanced_testcase {
                         && !isset($payload['files'])
                         && !isset($payload['submissionText']);
                 }),
-                'local_dixeo_ux',
+                'plagiarism_dixeo',
                 $this->anything()
             )
             ->willReturn(operation_result::pending('job-auth-final', 'pending', 0));

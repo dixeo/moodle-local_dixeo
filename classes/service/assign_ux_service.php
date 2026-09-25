@@ -33,11 +33,11 @@ use local_dixeo\dto\operation_result;
  * Orchestrates assign UX AI jobs via job_service (initiator_scoped by default).
  *
  * Builds structured camelCase payloads only — no prompt text. Persistence is
- * injected when authorship records must be written (implementation lives in UX).
+ * injected when authorship records must be written.
  */
 class assign_ux_service {
     /** Component for credit / job binding attribution. */
-    public const COMPONENT = 'local_dixeo_ux';
+    public const COMPONENT = 'plagiarism_dixeo';
 
     /** @var string */
     public const ENDPOINT_REVIEW = '/v1/assign/review';
