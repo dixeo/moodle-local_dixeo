@@ -210,16 +210,35 @@ final class assign_ux_service_test extends \advanced_testcase {
         $this->assertArrayHasKey('error', $service->map_review_result([]));
 
         $this->assertSame(
-            ['confidence' => 88.0],
+            ['confidence' => 88.0, 'explanation' => ''],
             $service->map_authorship_result('confidence', ['confidence' => 88])
+        );
+        $this->assertSame(
+            ['confidence' => 88.0, 'explanation' => 'Voice matches earlier work.'],
+            $service->map_authorship_result('confidence', [
+                'confidence' => 88,
+                'explanation' => 'Voice matches earlier work.',
+            ])
         );
         $this->assertSame(
             ['questions' => [['id' => 'q1']]],
             $service->map_authorship_result('quiz', ['questions' => [['id' => 'q1']]])
         );
         $this->assertSame(
-            ['final_confidence' => 60.0, 'grade' => 80.0],
-            $service->map_authorship_result('final', ['final_confidence' => 60, 'grade' => 80])
+            [
+                'final_confidence' => 60.0,
+                'grade' => 80.0,
+                'explanation' => 'Answers were specific.',
+                'quiz_explanation' => 'Two of three correct.',
+                'question_feedbacks' => ['Clear on q1'],
+            ],
+            $service->map_authorship_result('final', [
+                'final_confidence' => 60,
+                'grade' => 80,
+                'explanation' => 'Answers were specific.',
+                'quiz_explanation' => 'Two of three correct.',
+                'question_feedbacks' => ['Clear on q1', ''],
+            ])
         );
     }
 

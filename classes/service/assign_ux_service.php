@@ -397,7 +397,10 @@ class assign_ux_service {
             if (!isset($result['confidence'])) {
                 return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
             }
-            return ['confidence' => max(0.0, min(100.0, (float) $result['confidence']))];
+            return [
+                'confidence' => max(0.0, min(100.0, (float) $result['confidence'])),
+                'explanation' => trim((string) ($result['explanation'] ?? '')),
+            ];
         }
         if ($mode === self::MODE_QUIZ) {
             $questions = $result['questions'] ?? null;
@@ -411,9 +414,13 @@ class assign_ux_service {
                 return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
             }
             $grade = $result['grade'] ?? null;
+            $feedbacks = $result['question_feedbacks'] ?? $result['quiz_question_feedbacks'] ?? [];
             return [
                 'final_confidence' => max(0.0, min(100.0, (float) $result['final_confidence'])),
                 'grade' => $grade === null ? null : max(0.0, min(100.0, (float) $grade)),
+                'explanation' => trim((string) ($result['explanation'] ?? $result['final_explanation'] ?? '')),
+                'quiz_explanation' => trim((string) ($result['quiz_explanation'] ?? '')),
+                'question_feedbacks' => self::string_list($feedbacks),
             ];
         }
         return ['error' => get_string('assign_ux_authorship_mode_invalid', 'local_dixeo')];
@@ -426,13 +433,15 @@ class assign_ux_service {
      * @param int $submissionid Assign submission id.
      * @param float $initialconfidence Confidence 0–100.
      * @param array|null $quizdata Quiz structure or null.
+     * @param string $initialexplanation Reasons for the initial score.
      * @return \stdClass|null Created record, or null if no persistence / failure.
      */
     public function apply_authorship_confidence(
         int $userid,
         int $submissionid,
         float $initialconfidence,
-        ?array $quizdata = null
+        ?array $quizdata = null,
+        string $initialexplanation = ''
     ): ?\stdClass {
         if ($this->persistence === null) {
             return null;
@@ -443,7 +452,8 @@ class assign_ux_service {
             'submission',
             $submissionid,
             $initialconfidence,
-            $quizdata
+            $quizdata,
+            $initialexplanation
         );
     }
 
@@ -454,18 +464,32 @@ class assign_ux_service {
      * @param array $responses Question id => answer.
      * @param float $finalconfidence Final confidence.
      * @param float|null $quizgrade Objective grade or null.
+     * @param string $finalexplanation Reasons for the final score.
+     * @param string $quizexplanation How the verification test was judged overall.
+     * @param array $questionfeedbacks Per-question notes, in question order.
      * @return \stdClass|null Updated record, or null if no persistence / failure.
      */
     public function apply_authorship_final(
         int $recordid,
         array $responses,
         float $finalconfidence,
-        ?float $quizgrade
+        ?float $quizgrade,
+        string $finalexplanation = '',
+        string $quizexplanation = '',
+        array $questionfeedbacks = []
     ): ?\stdClass {
         if ($this->persistence === null) {
             return null;
         }
-        return $this->persistence->save_quiz_result($recordid, $responses, $finalconfidence, $quizgrade);
+        return $this->persistence->save_quiz_result(
+            $recordid,
+            $responses,
+            $finalconfidence,
+            $quizgrade,
+            $finalexplanation,
+            $quizexplanation,
+            $questionfeedbacks
+        );
     }
 
     /**
@@ -617,5 +641,30 @@ class assign_ux_service {
             'submissionText' => $text,
             'files' => $files,
         ];
+    }
+
+    /**
+     * Keep only non-empty scalar strings from a list.
+     *
+     * @param mixed $value Raw list from the API.
+     * @return list<string>
+     */
+    private static function string_list($value): array {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($value as $item) {
+            if (!is_scalar($item)) {
+                continue;
+            }
+            $line = trim((string) $item);
+            if ($line !== '') {
+                $out[] = $line;
+            }
+        }
+
+        return $out;
     }
 }
