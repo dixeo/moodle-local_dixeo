@@ -37,6 +37,7 @@ interface assign_ux_persistence_interface {
      * @param int $itemid Item id (e.g. assign_submission id).
      * @param float $initialconfidence Initial human-authorship confidence 0–100.
      * @param array|null $quizdata Decoded quiz structure to store, or null.
+     * @param string $initialexplanation Reasons for the initial score.
      * @return \stdClass|null Record including id, or null on failure.
      */
     public function create_authorship_record(
@@ -45,7 +46,8 @@ interface assign_ux_persistence_interface {
         string $area,
         int $itemid,
         float $initialconfidence,
-        ?array $quizdata = null
+        ?array $quizdata = null,
+        string $initialexplanation = ''
     ): ?\stdClass;
 
     /**
@@ -79,12 +81,18 @@ interface assign_ux_persistence_interface {
      * @param array $responses Question id => answer.
      * @param float $finalconfidence Final confidence 0–100.
      * @param float|null $quizgrade Objective quiz grade 0–100, or null.
+     * @param string $finalexplanation Reasons for the final score.
+     * @param string $quizexplanation How the verification test was judged overall.
+     * @param array $questionfeedbacks Per-question notes, in question order.
      * @return \stdClass|null Updated record, or null if missing / update failed.
      */
     public function save_quiz_result(
         int $recordid,
         array $responses,
         float $finalconfidence,
-        ?float $quizgrade
+        ?float $quizgrade,
+        string $finalexplanation = '',
+        string $quizexplanation = '',
+        array $questionfeedbacks = []
     ): ?\stdClass;
 }
