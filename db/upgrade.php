@@ -535,13 +535,15 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026081808, 'local', 'dixeo');
     }
 
-    // Apply the new teacher archetype of local/dixeo:viewtutorusage to existing sites,
-    // where update_capabilities() only handles brand new capabilities.
+    // Apply the new teacher archetype of local/dixeo:viewtutorusage to sites that already have the capability.
+    // Sites upgrading from before it existed get it later from update_capabilities(), archetype included.
     if ($oldversion < 2026090800) {
-        $systemcontext = context_system::instance();
+        if ($DB->record_exists('capabilities', ['name' => 'local/dixeo:viewtutorusage'])) {
+            $systemcontext = context_system::instance();
 
-        foreach (get_archetype_roles('teacher') as $role) {
-            assign_capability('local/dixeo:viewtutorusage', CAP_ALLOW, $role->id, $systemcontext->id);
+            foreach (get_archetype_roles('teacher') as $role) {
+                assign_capability('local/dixeo:viewtutorusage', CAP_ALLOW, $role->id, $systemcontext->id);
+            }
         }
 
         upgrade_plugin_savepoint(true, 2026090800, 'local', 'dixeo');
