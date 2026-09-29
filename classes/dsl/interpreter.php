@@ -34,6 +34,7 @@ use local_dixeo\dsl\actions\create_h5p_module_action;
 use local_dixeo\dsl\actions\create_questions_action;
 use local_dixeo\dsl\actions\create_slides_action;
 use local_dixeo\dsl\actions\create_questions_simplequiz2_action;
+use local_dixeo\dsl\actions\create_assign_grading_action;
 
 /**
  * Main DSL interpreter for module creation.
@@ -69,6 +70,9 @@ class interpreter {
     /** @var create_h5p_module_action Action handler for create_h5p_module. */
     protected create_h5p_module_action $createh5pmoduleaction;
 
+    /** @var create_assign_grading_action Action handler for create_assign_grading. */
+    protected create_assign_grading_action $createassigngradingaction;
+
     /**
      * Constructor.
      *
@@ -80,6 +84,7 @@ class interpreter {
      * @param create_slides_action|null $createslidesaction Custom slides action handler.
      * @param create_questions_simplequiz2_action|null $createquestionssimplequiz2action Custom simplequiz2 questions action.
      * @param create_h5p_module_action|null $createh5pmoduleaction Custom H5P module action handler.
+     * @param create_assign_grading_action|null $createassigngradingaction Custom assign grading action handler.
      */
     public function __construct(
         ?create_module_action $createmoduleaction = null,
@@ -87,7 +92,8 @@ class interpreter {
         ?create_questions_action $createquestionsaction = null,
         ?create_slides_action $createslidesaction = null,
         ?create_questions_simplequiz2_action $createquestionssimplequiz2action = null,
-        ?create_h5p_module_action $createh5pmoduleaction = null
+        ?create_h5p_module_action $createh5pmoduleaction = null,
+        ?create_assign_grading_action $createassigngradingaction = null
     ) {
         $this->createmoduleaction = $createmoduleaction ?? new create_module_action();
         $this->createentriesaction = $createentriesaction ?? new create_entries_action();
@@ -95,6 +101,7 @@ class interpreter {
         $this->createslidesaction = $createslidesaction ?? new create_slides_action();
         $this->createquestionssimplequiz2action = $createquestionssimplequiz2action ?? new create_questions_simplequiz2_action();
         $this->createh5pmoduleaction = $createh5pmoduleaction ?? new create_h5p_module_action();
+        $this->createassigngradingaction = $createassigngradingaction ?? new create_assign_grading_action();
     }
 
     /**
@@ -186,6 +193,7 @@ class interpreter {
             'create_entries' => $this->createentriesaction->execute($action, $resolver),
             'create_questions' => $this->dispatch_create_questions($action, $resolver, $context),
             'add_slides' => $this->createslidesaction->execute($action, $resolver),
+            'create_assign_grading' => $this->createassigngradingaction->execute($action, $resolver),
             default => throw dsl_exception::unknown_action($actiontype),
         };
     }

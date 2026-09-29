@@ -221,4 +221,36 @@ final class module_content_extractor_test extends \advanced_testcase {
         $cminfo = get_fast_modinfo($course->id)->get_cm($forum->cmid);
         $this->assertStringContainsString('Second intro', $extractor->get_raw_content($cminfo));
     }
+
+    public function test_assign_returns_name_intro_and_activity(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $assign = $gen->create_module('assign', [
+            'course' => $course->id,
+            'name' => 'PDF essay',
+            'intro' => '<p>Write carefully</p>',
+            'introformat' => FORMAT_HTML,
+            'activityeditor' => [
+                'text' => '<p>Upload one PDF document</p>',
+                'format' => FORMAT_HTML,
+                'itemid' => 0,
+            ],
+        ]);
+
+        // Ensure activity column is populated even if the generator path differs by Moodle version.
+        $DB->set_field('assign', 'activity', '<p>Upload one PDF document</p>', ['id' => $assign->id]);
+        $DB->set_field('assign', 'activityformat', FORMAT_HTML, ['id' => $assign->id]);
+
+        $cminfo = get_fast_modinfo($course->id)->get_cm($assign->cmid);
+        $extractor = new \local_dixeo\service\module_content_extractor();
+        $raw = $extractor->get_raw_content($cminfo);
+
+        $this->assertNotNull($raw);
+        $this->assertStringContainsString('PDF essay', $raw);
+        $this->assertStringContainsString('Write carefully', $raw);
+        $this->assertStringContainsString('Upload one PDF document', $raw);
+    }
 }

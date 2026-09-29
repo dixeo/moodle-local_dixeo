@@ -37,6 +37,9 @@ class credit_component_mapper {
         'course_structure' => 'block_dixeo_designer',
         'image_generate' => 'local_dixeo',
         'image_edit' => 'filter_dixeo_imageeditor',
+        'assign_review' => 'plagiarism_dixeo',
+        'assign_grade' => 'plagiarism_dixeo',
+        'assign_authorship' => 'plagiarism_dixeo',
     ];
 
     /** @var array<string, string> Local operation to component map. */
@@ -48,6 +51,9 @@ class credit_component_mapper {
         'course_structure' => 'block_dixeo_designer',
         'image_generate' => 'local_dixeo',
         'image_edit' => 'filter_dixeo_imageeditor',
+        'assign_review' => 'plagiarism_dixeo',
+        'assign_grade' => 'plagiarism_dixeo',
+        'assign_authorship' => 'plagiarism_dixeo',
     ];
 
     /**
@@ -63,6 +69,7 @@ class credit_component_mapper {
             'filter_dixeo_imageeditor',
             'local_dixeo',
             'local_dixeo_editor',
+            'plagiarism_dixeo',
         ];
     }
 

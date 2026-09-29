@@ -58,7 +58,7 @@ class module_generation_service {
     private const JOB_TYPE_EDIT = 'edit_module';
 
     /** @var array Module types that require assessment context (full content). */
-    private const ASSESSMENT_MODULES = ['quiz', 'glossary'];
+    private const ASSESSMENT_MODULES = ['quiz', 'glossary', 'assign'];
 
     /** @var job_service Job management service. */
     private job_service $jobservice;

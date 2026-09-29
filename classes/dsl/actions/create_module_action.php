@@ -118,6 +118,49 @@ class create_module_action {
             'rightanswerclosed' => 1,
             'overallfeedbackclosed' => 1,
         ],
+        'assign' => [
+            'introformat' => FORMAT_HTML,
+            // Availability: all unchecked/empty.
+            'allowsubmissionsfromdate' => 0,
+            'duedate' => 0,
+            'cutoffdate' => 0,
+            'gradingduedate' => 0,
+            'alwaysshowdescription' => 0,
+            'submissionattachments' => 0,
+            // Submission settings: require click to submit, 3 attempts, grant automatically.
+            'submissiondrafts' => 1,
+            'requiresubmissionstatement' => 0,
+            'maxattempts' => 3,
+            'attemptreopenmethod' => 'automatic',
+            // Group submission: off.
+            'teamsubmission' => 0,
+            'requireallteammemberssubmit' => 0,
+            'teamsubmissiongroupingid' => 0,
+            'preventsubmissionnotypes' => 0,
+            // Notifications.
+            'sendnotifications' => 1,
+            'sendstudentnotifications' => 1,
+            'sendlatenotifications' => 0,
+            // Grade: Point, max 100.
+            'grade' => 100,
+            // Grading options.
+            'blindmarking' => 0,
+            'hidegrader' => 0,
+            'markingworkflow' => 0,
+            'markingallocation' => 0,
+            'markinganonymous' => 0,
+            // Submission types: file only, one file, PDF format.
+            'assignsubmission_onlinetext_enabled' => 0,
+            'assignsubmission_onlinetext_wordlimit_enabled' => 0,
+            'assignsubmission_onlinetext_wordlimit' => 0,
+            'assignsubmission_file_enabled' => 1,
+            'assignsubmission_file_maxfiles' => 1,
+            'assignsubmission_file_maxsizebytes' => 0,
+            'assignsubmission_file_filetypes' => '.pdf',
+            // Feedback types: comments, comment inline no.
+            'assignfeedback_comments_enabled' => 1,
+            'assignfeedback_comments_commentinline' => 0,
+        ],
     ];
 
     /**
@@ -312,7 +355,31 @@ class create_module_action {
         $moduledata->coursemodule = $cmid;
         $moduledata->cmidnumber = $cmid;
 
+        if ($modulename === 'assign') {
+            $this->normalise_assign_activity_editor($moduledata);
+        }
+
         return $moduledata;
+    }
+
+    /**
+     * Map a plain activity HTML string to assign's activityeditor form field.
+     *
+     * @param \stdClass $moduledata Module data passed to assign_add_instance().
+     */
+    protected function normalise_assign_activity_editor(\stdClass $moduledata): void {
+        if (isset($moduledata->activityeditor) && is_array($moduledata->activityeditor)) {
+            return;
+        }
+        if (!isset($moduledata->activity) || !is_string($moduledata->activity)) {
+            return;
+        }
+
+        $moduledata->activityeditor = [
+            'text' => $moduledata->activity,
+            'format' => FORMAT_HTML,
+            'itemid' => 0,
+        ];
     }
 
     /**

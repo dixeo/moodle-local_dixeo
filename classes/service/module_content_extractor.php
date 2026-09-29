@@ -77,8 +77,36 @@ class module_content_extractor {
             'book' => $this->get_book_content($cm->instance),
             'url' => $DB->get_field('url', 'intro', ['id' => $cm->instance]),
             'resource' => $DB->get_field('resource', 'intro', ['id' => $cm->instance]),
+            'assign' => $this->get_assign_content($cm->instance),
             default => $this->get_fallback_content($cm),
         };
+    }
+
+    /**
+     * Get assign name, intro and activity instructions for AI context.
+     *
+     * @param int $instanceid Assign instance id.
+     * @return string|null Combined content, or null when the record is missing.
+     */
+    private function get_assign_content(int $instanceid): ?string {
+        global $DB;
+
+        $assign = $DB->get_record('assign', ['id' => $instanceid], 'name,intro,activity');
+        if (!$assign) {
+            return null;
+        }
+
+        $parts = array_filter([
+            trim((string) $assign->name),
+            trim((string) ($assign->intro ?? '')),
+            trim((string) ($assign->activity ?? '')),
+        ], static fn(string $part): bool => $part !== '');
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode("\n\n", $parts);
     }
 
     /**
