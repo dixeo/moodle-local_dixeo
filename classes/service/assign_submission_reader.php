@@ -204,7 +204,11 @@ class assign_submission_reader {
     }
 
     /**
-     * Latest submission plus onlinetext, files, and plugin config.
+     * Latest analyzable submission plus onlinetext, files, and plugin config.
+     *
+     * When the latest attempt is reopened or empty, the most recent submitted attempt
+     * that still has text or files is used instead. That is the row a teacher is grading
+     * after automatic attempt reopen.
      *
      * @param int $cmid Course module id.
      * @param int $userid Student user id.
@@ -223,23 +227,85 @@ class assign_submission_reader {
         $cm = $this->require_assign_cm($cmid, $courseid);
         $assignmentid = (int) $cm->instance;
         $plugins = $this->get_submission_plugins($assignmentid);
+        $contextid = \context_module::instance($cm->id)->id;
 
-        $submission = $DB->get_record_sql(
-            'SELECT * FROM {assign_submission}
-             WHERE assignment = :assignmentid AND userid = :userid AND latest = 1
-             ORDER BY attemptnumber DESC',
-            ['assignmentid' => $assignmentid, 'userid' => $userid],
-            IGNORE_MISSING
-        );
-
-        $attempts = $DB->get_records('assign_submission', [
+        $attempts = array_values($DB->get_records('assign_submission', [
             'assignment' => $assignmentid,
             'userid' => $userid,
-        ], 'attemptnumber ASC');
+        ], 'attemptnumber DESC'));
+
+        $submission = null;
+        foreach ($attempts as $candidate) {
+            if ((int) ($candidate->latest ?? 0) === 1) {
+                $submission = $candidate;
+                break;
+            }
+        }
+        if (!$submission && $attempts) {
+            $submission = $attempts[0];
+        }
+
+        [$onlinetext, $files] = $this->load_attempt_content($assignmentid, $plugins, $contextid, $submission);
+        if (!$this->has_analyzable_content($plugins, $onlinetext, $files)) {
+            foreach ($attempts as $candidate) {
+                if ($submission && (int) $candidate->id === (int) $submission->id) {
+                    continue;
+                }
+                if (($candidate->status ?? '') !== 'submitted') {
+                    continue;
+                }
+                [$text, $attemptfiles] = $this->load_attempt_content(
+                    $assignmentid,
+                    $plugins,
+                    $contextid,
+                    $candidate
+                );
+                if ($this->has_analyzable_content($plugins, $text, $attemptfiles)) {
+                    $submission = $candidate;
+                    $onlinetext = $text;
+                    $files = $attemptfiles;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'submission' => $submission,
+            'onlinetext' => $onlinetext,
+            'attempts' => array_values($DB->get_records('assign_submission', [
+                'assignment' => $assignmentid,
+                'userid' => $userid,
+            ], 'attemptnumber ASC')),
+            'submission_plugins' => $plugins,
+            'submission_files' => $files,
+        ];
+    }
+
+    /**
+     * Online text and stored files for one assign_submission row.
+     *
+     * @param int $assignmentid Assign instance id.
+     * @param array $plugins From {@see get_submission_plugins()}.
+     * @param int $contextid Module context id.
+     * @param \stdClass|null $submission Submission row.
+     * @return array{0: string, 1: list<\stored_file>}
+     */
+    private function load_attempt_content(
+        int $assignmentid,
+        array $plugins,
+        int $contextid,
+        ?\stdClass $submission
+    ): array {
+        global $DB;
 
         $onlinetext = '';
-        $submissionid = $submission ? (int) $submission->id : null;
-        if ($submissionid && $plugins['onlinetext_enabled']) {
+        $files = [];
+        $submissionid = $submission ? (int) $submission->id : 0;
+        if ($submissionid <= 0) {
+            return [$onlinetext, $files];
+        }
+
+        if (!empty($plugins['onlinetext_enabled'])) {
             $onlinetextrec = $DB->get_record('assignsubmission_onlinetext', [
                 'assignment' => $assignmentid,
                 'submission' => $submissionid,
@@ -249,19 +315,31 @@ class assign_submission_reader {
             }
         }
 
-        $files = [];
-        if ($submissionid && $plugins['file_enabled']) {
-            $context = \context_module::instance($cm->id);
-            $files = $this->get_submission_files($context->id, $submissionid);
+        if (!empty($plugins['file_enabled'])) {
+            $files = $this->get_submission_files($contextid, $submissionid);
         }
 
-        return [
-            'submission' => $submission,
-            'onlinetext' => $onlinetext,
-            'attempts' => array_values($attempts),
-            'submission_plugins' => $plugins,
-            'submission_files' => $files,
-        ];
+        return [$onlinetext, $files];
+    }
+
+    /**
+     * Whether this attempt has text or a non-empty file the AI path can read.
+     *
+     * @param array $plugins From {@see get_submission_plugins()}.
+     * @param string $onlinetext Online text body.
+     * @param \stored_file[] $files Submission files.
+     * @return bool
+     */
+    private function has_analyzable_content(array $plugins, string $onlinetext, array $files): bool {
+        if (!empty($plugins['onlinetext_enabled']) && trim($onlinetext) !== '') {
+            return true;
+        }
+        foreach ($files as $file) {
+            if ($file instanceof \stored_file && !$file->is_directory() && $file->get_filesize() > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -375,7 +453,7 @@ class assign_submission_reader {
 
         $content = implode("\n\n", array_filter($parts));
         if ($content === '') {
-            $content = '(No submission content yet.)';
+            return ['error' => get_string('assign_submission_empty', 'local_dixeo')];
         }
 
         $warning = null;
