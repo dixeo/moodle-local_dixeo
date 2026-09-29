@@ -26,7 +26,7 @@ namespace local_dixeo\service\image\content;
  */
 final class html_helper {
     /** @var string Classes carried by every AI-generated content image. */
-    public const IMG_CLASS = 'img-fluid dixeo-img-content';
+    public const IMG_CLASS = 'img-fluid';
 
     /**
      * Normalize legacy absolute intro pluginfile URLs for rewrite at display time.
