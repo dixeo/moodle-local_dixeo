@@ -170,4 +170,74 @@ final class assign_submission_reader_test extends \advanced_testcase {
         $this->assertNotNull($err);
         $this->assertStringContainsString('online text', strtolower($err));
     }
+
+    public function test_get_submission_data_uses_submitted_attempt_when_latest_is_reopened_empty(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'assignsubmission_onlinetext_enabled' => 1,
+            'assignsubmission_file_enabled' => 0,
+        ]);
+
+        /** @var \mod_assign_generator $assigngen */
+        $assigngen = $this->getDataGenerator()->get_plugin_generator('mod_assign');
+        $assigngen->create_submission([
+            'cmid' => $assign->cmid,
+            'userid' => $student->id,
+            'onlinetext' => '<p>Submitted journal</p>',
+        ]);
+
+        $submitted = $DB->get_record(
+            'assign_submission',
+            ['assignment' => $assign->id, 'userid' => $student->id, 'latest' => 1],
+            '*',
+            MUST_EXIST
+        );
+        $DB->set_field('assign_submission', 'status', ASSIGN_SUBMISSION_STATUS_SUBMITTED, ['id' => $submitted->id]);
+        $DB->set_field('assign_submission', 'latest', 0, ['id' => $submitted->id]);
+        $DB->insert_record('assign_submission', (object) [
+            'assignment' => $assign->id,
+            'userid' => $student->id,
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'status' => ASSIGN_SUBMISSION_STATUS_REOPENED,
+            'groupid' => 0,
+            'attemptnumber' => (int) $submitted->attemptnumber + 1,
+            'latest' => 1,
+        ]);
+
+        $reader = new \local_dixeo\service\assign_submission_reader();
+        $data = $reader->get_submission_data((int) $assign->cmid, (int) $student->id, (int) $course->id);
+
+        $this->assertNotNull($data['submission']);
+        $this->assertSame((int) $submitted->id, (int) $data['submission']->id);
+        $this->assertStringContainsString('Submitted journal', $data['onlinetext']);
+    }
+
+    public function test_build_submission_block_errors_when_empty(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'assignsubmission_onlinetext_enabled' => 1,
+            'assignsubmission_file_enabled' => 0,
+        ]);
+
+        $reader = new \local_dixeo\service\assign_submission_reader();
+        $block = $reader->build_submission_block_for_ai((int) $assign->id, [
+            'onlinetext' => '',
+            'submission_files' => [],
+            'submission_plugins' => [
+                'onlinetext_enabled' => true,
+                'file_enabled' => false,
+                'file_filetypeslist' => '',
+            ],
+        ]);
+
+        $this->assertArrayHasKey('error', $block);
+        $this->assertStringContainsString('no submission content', strtolower($block['error']));
+    }
 }
