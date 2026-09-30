@@ -22,10 +22,9 @@
  */
 
 define([
+    'jquery',
     'core/chartjs',
-    'theme_boost/bootstrap/tooltip',
-], function(Chart, TooltipModule) {
-    const Tooltip = TooltipModule.default || TooltipModule;
+], function($, Chart) {
     // Mode colors mirror the tutor block mode variables in blocks/dixeo_tutor/styles.css.
     const palette = {
         normal: 'rgba(16, 142, 238, 0.8)',
@@ -274,30 +273,78 @@ define([
     };
 
     /**
-     * Hide every info-icon tooltip except the one that is opening.
-     *
-     * @param {HTMLElement} current
+     * Bootstrap 4 tooltips, used when Moodle still ships the jQuery plugin.
      */
-    const hideOtherInfoTooltips = (current) => {
-        document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]').forEach((icon) => {
-            if (icon === current) {
-                return;
+    const initJqueryTooltips = () => {
+        const cards = document.querySelectorAll(
+            '.dixeo-tutor-usage-report-kpi[data-toggle="tooltip"],' +
+            '.dixeo-tutor-usage-report-stat[data-toggle="tooltip"]'
+        );
+        if (cards.length) {
+            $(cards).tooltip({
+                container: 'body',
+                placement: 'bottom',
+                trigger: 'hover focus',
+            });
+        }
+
+        // These deliberately avoid data-toggle="tooltip" and title: the theme delegates a hover
+        // tooltip to every such element, which would reintroduce hover on the info icons.
+        const infoicons = document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]');
+        if (!infoicons.length) {
+            return;
+        }
+
+        infoicons.forEach((icon) => {
+            $(icon).tooltip({
+                container: 'body',
+                placement: 'top',
+                trigger: 'click',
+                title: icon.dataset.info || '',
+            });
+        });
+
+        const $infoicons = $(infoicons);
+
+        // A click only toggles its own tooltip, so close any other one that is open.
+        $infoicons.on('show.bs.tooltip', (event) => {
+            $infoicons.not(event.currentTarget).tooltip('hide');
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.dixeo-tutor-usage-report-info')) {
+                $infoicons.tooltip('hide');
             }
-            const tooltip = Tooltip.getInstance(icon);
-            if (tooltip) {
-                tooltip.hide();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                $infoicons.tooltip('hide');
             }
         });
     };
 
     /**
-     * Click tooltips on KPI info icons.
+     * Click tooltips on KPI info icons using the Bootstrap 5 tooltip class.
      *
-     * KPI cards and summary cells already carry data-bs-toggle="tooltip", so the theme loader
-     * initializes those. Info icons omit that attribute on purpose: a delegated hover tooltip
-     * would open on hover, and these are click-only.
+     * KPI cards and summary cells already carry data-bs-toggle="tooltip", so the Moodle 5
+     * theme loader initializes those. Info icons omit that attribute on purpose.
+     *
+     * @param {object} Tooltip Bootstrap tooltip constructor.
      */
-    const initTooltips = () => {
+    const initBootstrap5InfoTooltips = (Tooltip) => {
+        const hideOtherInfoTooltips = (current) => {
+            document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]').forEach((icon) => {
+                if (icon === current) {
+                    return;
+                }
+                const tooltip = Tooltip.getInstance(icon);
+                if (tooltip) {
+                    tooltip.hide();
+                }
+            });
+        };
+
         const infoicons = document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]');
         infoicons.forEach((icon) => {
             Tooltip.getOrCreateInstance(icon, {
@@ -307,7 +354,6 @@ define([
                 title: icon.dataset.info || '',
             });
 
-            // A click only toggles its own tooltip, so close any other one that is open.
             icon.addEventListener('show.bs.tooltip', () => {
                 hideOtherInfoTooltips(icon);
             });
@@ -326,6 +372,23 @@ define([
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
                 hideOtherInfoTooltips(null);
+            }
+        });
+    };
+
+    /**
+     * Enable tooltips on this page.
+     *
+     * Moodle 5 provides theme_boost/bootstrap/tooltip. Moodle 4.x does not, and uses $.fn.tooltip.
+     * The Bootstrap 5 module is loaded on demand so a missing module does not break the report on 4.x.
+     */
+    const initTooltips = () => {
+        require(['theme_boost/bootstrap/tooltip'], function(TooltipModule) {
+            const Tooltip = TooltipModule.default || TooltipModule;
+            initBootstrap5InfoTooltips(Tooltip);
+        }, function() {
+            if (typeof $.fn.tooltip === 'function') {
+                initJqueryTooltips();
             }
         });
     };
