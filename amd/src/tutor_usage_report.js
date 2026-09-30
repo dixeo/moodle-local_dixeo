@@ -22,9 +22,10 @@
  */
 
 define([
-    'jquery',
     'core/chartjs',
-], function($, Chart) {
+    'theme_boost/bootstrap/tooltip',
+], function(Chart, TooltipModule) {
+    const Tooltip = TooltipModule.default || TooltipModule;
     // Mode colors mirror the tutor block mode variables in blocks/dixeo_tutor/styles.css.
     const palette = {
         normal: 'rgba(16, 142, 238, 0.8)',
@@ -273,57 +274,58 @@ define([
     };
 
     /**
-     * Enable Bootstrap tooltips on KPI cards, KPI info icons, and summary table cells.
+     * Hide every info-icon tooltip except the one that is opening.
+     *
+     * @param {HTMLElement} current
+     */
+    const hideOtherInfoTooltips = (current) => {
+        document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]').forEach((icon) => {
+            if (icon === current) {
+                return;
+            }
+            const tooltip = Tooltip.getInstance(icon);
+            if (tooltip) {
+                tooltip.hide();
+            }
+        });
+    };
+
+    /**
+     * Click tooltips on KPI info icons.
+     *
+     * KPI cards and summary cells already carry data-bs-toggle="tooltip", so the theme loader
+     * initializes those. Info icons omit that attribute on purpose: a delegated hover tooltip
+     * would open on hover, and these are click-only.
      */
     const initTooltips = () => {
-        if (typeof $.fn.tooltip !== 'function') {
-            return;
-        }
-
-        const cards = document.querySelectorAll(
-            '.dixeo-tutor-usage-report-kpi[data-toggle="tooltip"],' +
-            '.dixeo-tutor-usage-report-stat[data-toggle="tooltip"]'
-        );
-        if (cards.length) {
-            $(cards).tooltip({
-                container: 'body',
-                placement: 'bottom',
-                trigger: 'hover focus',
-            });
-        }
-
-        // These deliberately avoid data-toggle="tooltip" and title: the theme delegates a hover
-        // tooltip to every such element, which would reintroduce hover on the info icons.
         const infoicons = document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]');
-        if (!infoicons.length) {
-            return;
-        }
-
         infoicons.forEach((icon) => {
-            $(icon).tooltip({
+            Tooltip.getOrCreateInstance(icon, {
                 container: 'body',
                 placement: 'top',
                 trigger: 'click',
                 title: icon.dataset.info || '',
             });
+
+            // A click only toggles its own tooltip, so close any other one that is open.
+            icon.addEventListener('show.bs.tooltip', () => {
+                hideOtherInfoTooltips(icon);
+            });
         });
 
-        const $infoicons = $(infoicons);
-
-        // A click only toggles its own tooltip, so close any other one that is open.
-        $infoicons.on('show.bs.tooltip', (event) => {
-            $infoicons.not(event.currentTarget).tooltip('hide');
-        });
+        if (!infoicons.length) {
+            return;
+        }
 
         document.addEventListener('click', (event) => {
             if (!event.target.closest('.dixeo-tutor-usage-report-info')) {
-                $infoicons.tooltip('hide');
+                hideOtherInfoTooltips(null);
             }
         });
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
-                $infoicons.tooltip('hide');
+                hideOtherInfoTooltips(null);
             }
         });
     };

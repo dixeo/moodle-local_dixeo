@@ -1578,7 +1578,8 @@ class tutor_usage_report_service {
     /**
      * Hide user-level activity rows with no messages when the module type is tutor-excluded.
      *
-     * Uses block_dixeo_tutor | excludedmodules (via block_dixeo_tutor::get_excluded_modules()).
+     * Uses block_dixeo_tutor | excludedmodules. Reads the setting directly so report pages
+     * do not load the block class (that requires block_base, which is not loaded until a block is shown).
      *
      * @param array $row Formatted summary row.
      * @return bool
@@ -1602,25 +1603,12 @@ class tutor_usage_report_service {
      * @return string[]
      */
     protected function get_tutor_excluded_modules(): array {
-        global $CFG;
-
-        if (!class_exists('block_dixeo_tutor', false)) {
-            $blockfile = $CFG->dirroot . '/blocks/dixeo_tutor/block_dixeo_tutor.php';
-            if (is_readable($blockfile)) {
-                require_once($blockfile);
-            }
-        }
-
-        if (class_exists('block_dixeo_tutor')) {
-            return \block_dixeo_tutor::get_excluded_modules();
-        }
-
         $setting = get_config('block_dixeo_tutor', 'excludedmodules');
         if ($setting === false || $setting === '') {
             return ['quiz', 'simplequiz2'];
         }
 
-        return array_values(array_filter(array_map('trim', explode(',', (string) $setting))));
+        return array_map('trim', explode(',', (string) $setting));
     }
 
     /**
