@@ -88,6 +88,19 @@ final class tutor_usage_report_request {
     }
 
     /**
+     * Require a course login for course and user reports.
+     *
+     * Site reports stay on the system login already performed by the page.
+     */
+    public function require_course_login(): void {
+        if ($this->level === tutor_usage_report_service::LEVEL_SITE) {
+            return;
+        }
+
+        require_login($this->courseid);
+    }
+
+    /**
      * Parse the current HTTP request.
      *
      * @return self

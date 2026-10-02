@@ -819,4 +819,49 @@ final class tutor_usage_report_test extends \advanced_testcase {
             }
         }
     }
+
+    /**
+     * Course and user downloads require a course login. Site downloads do not.
+     */
+    public function test_require_course_login_matches_report_level(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $outsider = $this->getDataGenerator()->create_user();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+
+        $this->setUser($outsider);
+        $site = tutor_usage_report_request::from_renderable_params([
+            'level' => tutor_usage_report_service::LEVEL_SITE,
+            'courseid' => (int) $course->id,
+        ]);
+        $site->require_course_login();
+
+        $courselevel = tutor_usage_report_request::from_renderable_params([
+            'level' => tutor_usage_report_service::LEVEL_COURSE,
+            'courseid' => (int) $course->id,
+        ]);
+        $this->expectException(\moodle_exception::class);
+        $courselevel->require_course_login();
+    }
+
+    /**
+     * An enrolled user can pass the course login used by the usage download.
+     */
+    public function test_require_course_login_allows_enrolled_user(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+        $this->setUser($student);
+
+        $request = tutor_usage_report_request::from_renderable_params([
+            'level' => tutor_usage_report_service::LEVEL_USER,
+            'courseid' => (int) $course->id,
+            'userid' => (int) $student->id,
+        ]);
+        $request->require_course_login();
+
+        $this->assertSame((int) $course->id, $request->courseid);
+    }
 }
