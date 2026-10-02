@@ -30,19 +30,57 @@ use local_dixeo\dsl\dsl_exception;
  */
 final class response_factory_test extends \advanced_testcase {
     /**
-     * Business messages raised by the API reach the user unchanged.
+     * Known API types return a localised string and omit the remote detail.
      */
-    public function test_api_exception_message_is_kept(): void {
+    public function test_known_api_types_omit_remote_detail(): void {
         $this->resetAfterTest();
         set_debugging(DEBUG_NONE);
 
-        $exception = new api_exception('payment_required', 'Insufficient credits. Please add credits to continue.', 402);
+        $crafted = 'crafted-detail /internal/path token=abc';
+        $cases = [
+            'payment_required' => 'error:payment_required',
+            'insufficient_credits' => 'error:payment_required',
+            'validation_error' => 'error:validation_failed',
+            'job_not_found' => 'error:job_not_found',
+            'authentication' => 'error:authentication',
+            'upstream_ai' => 'error:upstream_ai',
+            'rate_limit_exceeded' => 'error:rate_limit',
+        ];
 
-        $this->assertSame(
-            get_string('api_error', 'local_dixeo', 'Insufficient credits. Please add credits to continue.'),
-            response_factory::safe_message($exception)
-        );
-        $this->assertStringContainsString('Insufficient credits', response_factory::safe_message($exception));
+        foreach ($cases as $type => $stringkey) {
+            $exception = api_exception::from_response([
+                'type' => $type,
+                'detail' => $crafted,
+                'title' => $crafted,
+            ], 400);
+            $response = response_factory::from_api_exception($exception);
+            $encoded = json_encode($response);
+
+            $this->assertSame(get_string($stringkey, 'local_dixeo'), $response['errormessage'], $type);
+            $this->assertIsString($encoded);
+            $this->assertStringNotContainsString($crafted, $encoded, $type);
+        }
+    }
+
+    /**
+     * An unknown API type is logged and replaced by the generic string.
+     */
+    public function test_unknown_api_type_omits_remote_detail(): void {
+        $this->resetAfterTest();
+        set_debugging(DEBUG_DEVELOPER);
+
+        $crafted = 'crafted-detail schema dump';
+        $exception = api_exception::from_response([
+            'type' => 'internal_diagnostics',
+            'detail' => $crafted,
+        ], 500);
+        $response = response_factory::from_api_exception($exception);
+        $encoded = json_encode($response);
+
+        $this->assertSame(get_string('error:unexpected', 'local_dixeo'), $response['errormessage']);
+        $this->assertIsString($encoded);
+        $this->assertStringNotContainsString($crafted, $encoded);
+        $this->assertDebuggingCalled();
     }
 
     /**

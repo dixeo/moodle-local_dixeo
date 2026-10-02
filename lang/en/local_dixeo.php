@@ -188,6 +188,7 @@ $string['error:timeout'] = 'The operation timed out. You can check the job statu
 $string['error:unexpected'] = 'Something went wrong. Please try again, or ask your administrator to check the site logs.';
 $string['error:upstream_ai'] = 'AI service error. Please try again later.';
 $string['error:validation'] = 'Invalid request: {$a}';
+$string['error:validation_failed'] = 'The request is invalid. Check the values and try again.';
 $string['eventcreditreportexported'] = 'Credit usage report exported';
 $string['eventcreditreportexporteddesc'] = 'The user with id \'{$a->userid}\' exported the credit usage report (view={$a->view}, format={$a->dataformat}, rows={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Credit usage report viewed';

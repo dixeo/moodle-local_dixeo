@@ -188,6 +188,7 @@ $string['error:timeout'] = 'Operazione scaduta. Puoi controllare lo stato del la
 $string['error:unexpected'] = 'Si è verificato un errore. Riprova o chiedi all\'amministratore di controllare i log del sito.';
 $string['error:upstream_ai'] = 'Errore del servizio IA. Riprova più tardi.';
 $string['error:validation'] = 'Richiesta non valida: {$a}';
+$string['error:validation_failed'] = 'La richiesta non è valida. Controlla i valori e riprova.';
 $string['eventcreditreportexported'] = 'Report utilizzo crediti esportato';
 $string['eventcreditreportexporteddesc'] = 'L\'utente con id \'{$a->userid}\' ha esportato il report utilizzo crediti (vista={$a->view}, formato={$a->dataformat}, righe={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Report utilizzo crediti visualizzato';
