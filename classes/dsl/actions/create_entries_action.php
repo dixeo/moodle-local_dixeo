@@ -30,6 +30,7 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\external\service_factory;
 
@@ -242,6 +243,9 @@ class create_entries_action {
         $resolvedfields = $resolver->resolve_fields($fieldsspec);
 
         foreach ($resolvedfields as $field => $value) {
+            if ($field === 'definition' && is_string($value)) {
+                $value = generated_html::strip_active_content($value);
+            }
             $record->$field = $value;
         }
 
