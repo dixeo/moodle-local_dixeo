@@ -29,6 +29,7 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\service\module_activity_defaults_registry;
 use local_dixeo\service\module_addinstance_service;
@@ -164,6 +165,11 @@ class create_module_action {
             // Activity names are PARAM_TEXT. Remove any markup in the name if it exists.
             if (isset($moduledata->name)) {
                 $moduledata->name = clean_param((string) $moduledata->name, PARAM_TEXT);
+            }
+            foreach (['intro', 'content'] as $htmlfield) {
+                if (isset($moduledata->$htmlfield) && is_string($moduledata->$htmlfield)) {
+                    $moduledata->$htmlfield = generated_html::strip_active_content($moduledata->$htmlfield);
+                }
             }
 
             // Run module-specific pre-creation hooks if available.

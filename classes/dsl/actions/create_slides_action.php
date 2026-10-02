@@ -29,6 +29,7 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\external\service_factory;
 
@@ -121,7 +122,7 @@ class create_slides_action {
             $record = new \stdClass();
             $record->slideshow = $slideshowinstanceid;
             $record->name = $resolvedfields['title'] ?? '';
-            $record->content = $resolvedfields['content'] ?? '';
+            $record->content = generated_html::strip_active_content((string) ($resolvedfields['content'] ?? ''));
             $record->contentformat = FORMAT_HTML;
             $record->hidden = 0;
             $record->sortorder = $index;
