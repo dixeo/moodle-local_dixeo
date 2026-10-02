@@ -39,6 +39,7 @@ if ($dataformat === '') {
 
 $request = tutor_usage_report_request::from_globals();
 $request->require_access();
+$request->require_course_login();
 require_sesskey();
 
 $service = new tutor_usage_report_service();
