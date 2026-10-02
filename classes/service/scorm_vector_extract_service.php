@@ -39,6 +39,24 @@ class scorm_vector_extract_service {
     /** @var string[] Bundled JS files to skip (not per-slide data). */
     private const ARTICULATE_JS_EXCLUDES = ['data.js', 'frame.js', 'paths.js'];
 
+    /** @var int Largest compressed package that will be opened. */
+    private const MAX_COMPRESSED_BYTES = 268435456;
+
+    /** @var int Largest number of zip entries that will be scanned. */
+    private const MAX_ENTRY_COUNT = 10000;
+
+    /** @var int Largest uncompressed size of one entry that will be read. */
+    private const MAX_ENTRY_UNCOMPRESSED_BYTES = 8388608;
+
+    /** @var int Largest total uncompressed bytes read from one package. */
+    private const MAX_EXPANDED_BYTES = 33554432;
+
+    /** @var int Uncompressed bytes accepted from the package currently being read. */
+    private int $expandedbytes = 0;
+
+    /** @var bool True once this package exceeded an expansion cap. */
+    private bool $limitexceeded = false;
+
     /**
      * Whether a zip file on disk is an Articulate Storyline HTML5 SCORM package.
      *
@@ -46,12 +64,8 @@ class scorm_vector_extract_service {
      * @return bool
      */
     public function is_articulate_storyline_package(string $zippath): bool {
-        if ($zippath === '' || !is_readable($zippath)) {
-            return false;
-        }
-
-        $zip = new \ZipArchive();
-        if ($zip->open($zippath) !== true) {
+        $zip = $this->open_bounded_zip($zippath);
+        if ($zip === null) {
             return false;
         }
 
@@ -71,12 +85,8 @@ class scorm_vector_extract_service {
      * @return bool
      */
     public function is_storyline_extractable(string $zippath): bool {
-        if ($zippath === '' || !is_readable($zippath)) {
-            return false;
-        }
-
-        $zip = new \ZipArchive();
-        if ($zip->open($zippath) !== true) {
+        $zip = $this->open_bounded_zip($zippath);
+        if ($zip === null) {
             return false;
         }
 
@@ -100,23 +110,21 @@ class scorm_vector_extract_service {
      * @return string Activity name, max 255 chars.
      */
     public function get_package_title_from_zip_path(string $zippath, string $fallbackfilename): string {
-        if ($zippath !== '' && is_readable($zippath)) {
-            $zip = new \ZipArchive();
-            if ($zip->open($zippath) === true) {
-                try {
-                    $manifestpath = $this->locate_manifest_in_zip($zip);
-                    if ($manifestpath !== null) {
-                        $raw = $zip->getFromName($manifestpath);
-                        if ($raw !== false && $raw !== '') {
-                            $title = $this->parse_package_title_from_manifest_xml($raw);
-                            if ($title !== null && $title !== '') {
-                                return \core_text::substr($title, 0, 255);
-                            }
+        $zip = $this->open_bounded_zip($zippath);
+        if ($zip !== null) {
+            try {
+                $manifestpath = $this->locate_manifest_in_zip($zip);
+                if ($manifestpath !== null) {
+                    $raw = $this->read_named_zip_entry($zip, $manifestpath);
+                    if ($raw !== null && $raw !== '' && !$this->limitexceeded) {
+                        $title = $this->parse_package_title_from_manifest_xml($raw);
+                        if ($title !== null && $title !== '') {
+                            return \core_text::substr($title, 0, 255);
                         }
                     }
-                } finally {
-                    $zip->close();
                 }
+            } finally {
+                $zip->close();
             }
         }
 
@@ -279,14 +287,17 @@ class scorm_vector_extract_service {
      * @return string Joined text sections (may be empty).
      */
     public function extract_sco_text_from_zip_path(string $zippath): string {
-        $zip = new \ZipArchive();
-        if ($zip->open($zippath) !== true) {
+        $zip = $this->open_bounded_zip($zippath);
+        if ($zip === null) {
             return '';
         }
 
         try {
             if ($this->is_articulate_storyline_zip($zip)) {
                 $storyline = $this->extract_articulate_storyline_slides($zip);
+                if ($this->limitexceeded) {
+                    return '';
+                }
                 if ($storyline !== '' && trim($storyline) !== '') {
                     return $storyline;
                 }
@@ -297,8 +308,8 @@ class scorm_vector_extract_service {
                 return '';
             }
 
-            $raw = $zip->getFromName($manifestpath);
-            if ($raw === false || $raw === '') {
+            $raw = $this->read_named_zip_entry($zip, $manifestpath);
+            if ($raw === null || $raw === '' || $this->limitexceeded) {
                 return '';
             }
 
@@ -316,6 +327,9 @@ class scorm_vector_extract_service {
 
             $sections = [];
             foreach ($hrefs as $href) {
+                if ($this->limitexceeded) {
+                    return '';
+                }
                 $resolved = $this->resolve_zip_inner_path($manifestdir, $href);
                 if ($resolved === null) {
                     continue;
@@ -326,8 +340,11 @@ class scorm_vector_extract_service {
                     continue;
                 }
 
-                $html = $zip->getFromName($resolved);
-                if ($html === false || $html === '') {
+                $html = $this->read_named_zip_entry($zip, $resolved);
+                if ($this->limitexceeded) {
+                    return '';
+                }
+                if ($html === null || $html === '') {
                     continue;
                 }
 
@@ -337,7 +354,7 @@ class scorm_vector_extract_service {
                 }
             }
 
-            return implode("\n\n---\n\n", $sections);
+            return $this->limitexceeded ? '' : implode("\n\n---\n\n", $sections);
         } finally {
             $zip->close();
         }
@@ -359,6 +376,134 @@ class scorm_vector_extract_service {
     }
 
     /**
+     * Open a zip only when its compressed size and entry count are within the extract caps.
+     *
+     * Resets the per-package expansion counters.
+     *
+     * @param string $zippath Absolute path to a local zip file.
+     * @return \ZipArchive|null Closed by the caller. Null when the path cannot be read or a cap is exceeded.
+     */
+    private function open_bounded_zip(string $zippath): ?\ZipArchive {
+        $this->expandedbytes = 0;
+        $this->limitexceeded = false;
+
+        if ($zippath === '' || !is_readable($zippath)) {
+            return null;
+        }
+
+        $compressed = @filesize($zippath);
+        if ($compressed === false || $compressed > self::MAX_COMPRESSED_BYTES) {
+            $this->limitexceeded = true;
+            debugging(
+                'local_dixeo SCORM extract refused: compressed package exceeds '
+                    . self::MAX_COMPRESSED_BYTES . ' bytes.',
+                DEBUG_DEVELOPER
+            );
+            return null;
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zippath) !== true) {
+            return null;
+        }
+
+        if ($zip->numFiles > self::MAX_ENTRY_COUNT) {
+            $this->limitexceeded = true;
+            debugging(
+                'local_dixeo SCORM extract refused: package has more than '
+                    . self::MAX_ENTRY_COUNT . ' entries.',
+                DEBUG_DEVELOPER
+            );
+            $zip->close();
+            return null;
+        }
+
+        return $zip;
+    }
+
+    /**
+     * Read one zip entry after its uncompressed size is accepted.
+     *
+     * Sets the package limit flag and returns null without reading when the entry, or the
+     * running total, would exceed the caps.
+     *
+     * @param \ZipArchive $zip Open zip.
+     * @param int $index Entry index from statIndex / locateName.
+     * @return string|null Entry bytes, or null when missing or refused.
+     */
+    private function read_zip_entry(\ZipArchive $zip, int $index): ?string {
+        if ($this->limitexceeded) {
+            return null;
+        }
+
+        $stat = $zip->statIndex($index);
+        if ($stat === false || !empty($stat['directory'])) {
+            return null;
+        }
+
+        $size = (int) ($stat['size'] ?? 0);
+        $name = (string) ($stat['name'] ?? $index);
+        if ($size < 0 || $size > self::MAX_ENTRY_UNCOMPRESSED_BYTES) {
+            $this->limitexceeded = true;
+            debugging(
+                "local_dixeo SCORM extract refused: entry exceeds uncompressed cap ({$name}).",
+                DEBUG_DEVELOPER
+            );
+            return null;
+        }
+
+        if ($this->expandedbytes + $size > self::MAX_EXPANDED_BYTES) {
+            $this->limitexceeded = true;
+            debugging(
+                'local_dixeo SCORM extract refused: expanded bytes would exceed '
+                    . self::MAX_EXPANDED_BYTES . '.',
+                DEBUG_DEVELOPER
+            );
+            return null;
+        }
+
+        $contents = $zip->getFromIndex($index);
+        if (!is_string($contents)) {
+            return null;
+        }
+
+        $actual = strlen($contents);
+        if (
+            $actual > self::MAX_ENTRY_UNCOMPRESSED_BYTES
+                || $this->expandedbytes + $actual > self::MAX_EXPANDED_BYTES
+        ) {
+            $this->limitexceeded = true;
+            debugging(
+                "local_dixeo SCORM extract refused: entry expanded past the cap ({$name}).",
+                DEBUG_DEVELOPER
+            );
+            return null;
+        }
+
+        $this->expandedbytes += $actual;
+        return $contents;
+    }
+
+    /**
+     * Read a named zip entry after its uncompressed size is accepted.
+     *
+     * @param \ZipArchive $zip Open zip.
+     * @param string $name Entry name as stored in the archive.
+     * @return string|null Entry bytes, or null when missing or refused.
+     */
+    private function read_named_zip_entry(\ZipArchive $zip, string $name): ?string {
+        $index = $zip->locateName($name, \ZipArchive::FL_NOCASE);
+        if ($index === false) {
+            $index = $zip->locateName(str_replace('/', '\\', $name), \ZipArchive::FL_NOCASE);
+        }
+        if ($index === false) {
+            return null;
+        }
+
+        return $this->read_zip_entry($zip, (int) $index);
+    }
+
+    /**
      * Extract markdown-style text from Articulate Storyline slide JS files.
      *
      * @param \ZipArchive $zip Open zip.
@@ -368,12 +513,15 @@ class scorm_vector_extract_service {
         $excludes = array_flip(array_map('strtolower', self::ARTICULATE_JS_EXCLUDES));
         $prefix = self::ARTICULATE_HTML5_JS_PREFIX;
         $slides = [];
-        $datajs = $zip->getFromName(self::ARTICULATE_HTML5_JS_PREFIX . 'data.js');
-        if ($datajs === false) {
-            $datajs = '';
+        $datajs = $this->read_named_zip_entry($zip, self::ARTICULATE_HTML5_JS_PREFIX . 'data.js') ?? '';
+        if ($this->limitexceeded) {
+            return '';
         }
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
+            if ($this->limitexceeded) {
+                return '';
+            }
             $stat = $zip->statIndex($i);
             if ($stat === false || !empty($stat['directory'])) {
                 continue;
@@ -398,8 +546,11 @@ class scorm_vector_extract_service {
                 continue;
             }
 
-            $js = $zip->getFromIndex($i);
-            if ($js === false || $js === '') {
+            $js = $this->read_zip_entry($zip, $i);
+            if ($this->limitexceeded) {
+                return '';
+            }
+            if ($js === null || $js === '') {
                 continue;
             }
 
