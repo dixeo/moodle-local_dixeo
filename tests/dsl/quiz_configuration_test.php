@@ -40,6 +40,7 @@ final class quiz_configuration_test extends \advanced_testcase {
         global $DB;
 
         $this->resetAfterTest(true);
+        $this->setAdminUser();
 
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();

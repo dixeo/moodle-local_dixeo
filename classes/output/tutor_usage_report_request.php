@@ -85,6 +85,31 @@ final class tutor_usage_report_request {
         if (!tutor_usage_report_service::can_view_course($this->courseid)) {
             require_capability('local/dixeo:viewtutorusage', \context_course::instance($this->courseid));
         }
+
+        if ($this->level === tutor_usage_report_service::LEVEL_USER) {
+            $inscope = (new tutor_usage_report_service())->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                $this->courseid,
+                $this->userid,
+                $this->resolved_roleids()
+            );
+            if ($inscope === []) {
+                throw new \moodle_exception('invaliduser');
+            }
+        }
+    }
+
+    /**
+     * Require a course login for course and user reports.
+     *
+     * Site reports stay on the system login already performed by the page.
+     */
+    public function require_course_login(): void {
+        if ($this->level === tutor_usage_report_service::LEVEL_SITE) {
+            return;
+        }
+
+        require_login($this->courseid);
     }
 
     /**

@@ -517,12 +517,15 @@ class tutor_usage_report_service {
      * @param int $courseid Course id for course/user levels.
      * @param int $userid User id for user level.
      * @param int[] $roleids Selected role ids.
-     * @return int[]
+     * @return int[] User ids. User level is empty unless that user is an active participant.
      */
     public function get_in_scope_userids(string $level, int $courseid, int $userid, array $roleids): array {
         global $DB;
 
-        if ($level === self::LEVEL_USER && $userid > 0) {
+        if ($level === self::LEVEL_USER) {
+            if ($userid < 1 || !$this->is_active_course_participant($courseid, $userid, $roleids)) {
+                return [];
+            }
             return [$userid];
         }
 
@@ -585,6 +588,58 @@ class tutor_usage_report_service {
         return array_map('intval', $DB->get_fieldset_sql($sql, array_merge([
             'contextlevel' => CONTEXT_COURSE,
         ], $roleparams, $courseparams)));
+    }
+
+    /**
+     * Whether a user is an active course participant, honoring the report role filter.
+     *
+     * Matches the course-level enrolment query: active enrolment, and a course-context
+     * role assignment when a role filter is set.
+     *
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Selected role ids. Empty means any active enrolment.
+     * @return bool
+     */
+    private function is_active_course_participant(int $courseid, int $userid, array $roleids): bool {
+        global $DB;
+
+        if ($courseid < 1 || $userid < 1) {
+            return false;
+        }
+
+        if ($roleids === []) {
+            $sql = "SELECT ue.id
+                      FROM {user_enrolments} ue
+                      JOIN {enrol} e ON e.id = ue.enrolid
+                     WHERE e.courseid = :courseid
+                       AND ue.userid = :userid
+                       AND ue.status = 0";
+            return $DB->record_exists_sql($sql, [
+                'courseid' => $courseid,
+                'userid' => $userid,
+            ]);
+        }
+
+        [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'role');
+        $sql = "SELECT ue.id
+                  FROM {user_enrolments} ue
+                  JOIN {enrol} e ON e.id = ue.enrolid
+                  JOIN {role_assignments} ra ON ra.userid = ue.userid
+                  JOIN {context} ctx ON ctx.id = ra.contextid
+                 WHERE e.courseid = :courseid
+                   AND ue.userid = :userid
+                   AND ue.status = 0
+                   AND ctx.contextlevel = :contextlevel
+                   AND ctx.instanceid = :courseid2
+                   AND ra.roleid {$rolesql}";
+
+        return $DB->record_exists_sql($sql, array_merge([
+            'courseid' => $courseid,
+            'courseid2' => $courseid,
+            'userid' => $userid,
+            'contextlevel' => CONTEXT_COURSE,
+        ], $roleparams));
     }
 
     /**
@@ -1951,12 +2006,12 @@ class tutor_usage_report_service {
         }
 
         $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($level !== self::LEVEL_USER && $userids !== []) {
+        if ($userids === []) {
+            $conditions[] = '1 = 0';
+        } else if ($level !== self::LEVEL_USER) {
             [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'scopeuser');
             $conditions[] = "e.userid {$insql}";
             $params = array_merge($params, $inparams);
-        } else if ($level !== self::LEVEL_USER && $userids === []) {
-            $conditions[] = '1 = 0';
         }
 
         return [
@@ -2000,12 +2055,12 @@ class tutor_usage_report_service {
         }
 
         $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($level !== self::LEVEL_USER && $userids !== []) {
+        if ($userids === []) {
+            $conditions[] = '1 = 0';
+        } else if ($level !== self::LEVEL_USER) {
             [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'scopeuser');
             $conditions[] = "s.userid {$insql}";
             $params = array_merge($params, $inparams);
-        } else if ($level !== self::LEVEL_USER && $userids === []) {
-            $conditions[] = '1 = 0';
         }
 
         return [
@@ -2049,12 +2104,12 @@ class tutor_usage_report_service {
         }
 
         $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($level !== self::LEVEL_USER && $userids !== []) {
+        if ($userids === []) {
+            $conditions[] = '1 = 0';
+        } else if ($level !== self::LEVEL_USER) {
             [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'openscopeuser');
             $conditions[] = "o.userid {$insql}";
             $params = array_merge($params, $inparams);
-        } else if ($level !== self::LEVEL_USER && $userids === []) {
-            $conditions[] = '1 = 0';
         }
 
         return [

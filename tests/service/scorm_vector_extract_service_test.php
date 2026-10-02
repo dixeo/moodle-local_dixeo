@@ -177,4 +177,104 @@ XML;
         $this->assertFalse($service->is_storyline_extractable($path));
         @unlink($path);
     }
+
+    /**
+     * A small zip whose slide entry declares an uncompressed size above the cap is not read.
+     */
+    public function test_extract_refuses_zip_entry_with_oversized_declared_length(): void {
+        global $CFG;
+
+        $slide = "window.globalProvideData('slide', '{\"id\":\"abcde12345\",\"title\":\"Intro\",\"text\":\"Hello Storyline\"}');";
+        $path = $CFG->tempdir . '/dixeo_test_scorm_bomb_' . uniqid('', true) . '.zip';
+        $this->write_stored_zip($path, [
+            ['name' => 'html5/data/js/data.js', 'data' => '// marker', 'size' => null],
+            ['name' => 'html5/data/js/abcde12345.js', 'data' => $slide, 'size' => 16 * 1024 * 1024],
+        ]);
+
+        $this->assertLessThan(4096, filesize($path));
+
+        $probe = new \ZipArchive();
+        $this->assertTrue($probe->open($path));
+        $stat = $probe->statName('html5/data/js/abcde12345.js');
+        $probe->close();
+        $this->assertIsArray($stat);
+        $this->assertGreaterThan(8 * 1024 * 1024, (int) $stat['size']);
+        $this->assertLessThan(4096, (int) $stat['comp_size']);
+
+        $service = new \local_dixeo\service\scorm_vector_extract_service();
+        $text = $service->extract_sco_text_from_zip_path($path);
+        $this->assertDebuggingCalled();
+        $this->assertSame('', $text);
+
+        $this->assertFalse($service->is_storyline_extractable($path));
+        $this->assertDebuggingCalled();
+        @unlink($path);
+    }
+
+    /**
+     * Write a stored-method zip, optionally lying about each entry's uncompressed size.
+     *
+     * @param string $path Destination path.
+     * @param array $entries Zip entries with name, data, and optional size.
+     */
+    private function write_stored_zip(string $path, array $entries): void {
+        $locals = '';
+        $central = '';
+        $offset = 0;
+        foreach ($entries as $entry) {
+            $name = $entry['name'];
+            $data = $entry['data'];
+            $size = $entry['size'] ?? strlen($data);
+            $crc = crc32($data) & 0xffffffff;
+            $namelen = strlen($name);
+            $local = pack(
+                'VvvvvvVVVvv',
+                0x04034b50,
+                20,
+                0,
+                0,
+                0,
+                0,
+                $crc,
+                strlen($data),
+                $size,
+                $namelen,
+                0
+            ) . $name . $data;
+            $central .= pack(
+                'VvvvvvvVVVvvvvvVV',
+                0x02014b50,
+                20,
+                20,
+                0,
+                0,
+                0,
+                0,
+                $crc,
+                strlen($data),
+                $size,
+                $namelen,
+                0,
+                0,
+                0,
+                0,
+                0,
+                $offset
+            ) . $name;
+            $locals .= $local;
+            $offset += strlen($local);
+        }
+        $eocd = pack(
+            'VvvvvVVv',
+            0x06054b50,
+            0,
+            0,
+            count($entries),
+            count($entries),
+            strlen($central),
+            strlen($locals),
+            0
+        );
+        $this->assertNotFalse(file_put_contents($path, $locals . $central . $eocd));
+    }
 }
