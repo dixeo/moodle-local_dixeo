@@ -188,6 +188,7 @@ $string['error:timeout'] = 'A operação expirou. Pode verificar o estado do tra
 $string['error:unexpected'] = 'Ocorreu um erro. Tente novamente ou peça ao administrador para verificar os registos do site.';
 $string['error:upstream_ai'] = 'Erro do serviço de IA. Tente novamente mais tarde.';
 $string['error:validation'] = 'Pedido inválido: {$a}';
+$string['error:validation_failed'] = 'O pedido é inválido. Verifique os valores e tente novamente.';
 $string['eventcreditreportexported'] = 'Relatório de utilização de créditos exportado';
 $string['eventcreditreportexporteddesc'] = 'O utilizador com id \'{$a->userid}\' exportou o relatório de utilização de créditos (vista={$a->view}, formato={$a->dataformat}, linhas={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Relatório de utilização de créditos visualizado';

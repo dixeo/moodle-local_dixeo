@@ -188,6 +188,7 @@ $string['error:timeout'] = 'L\'opération a expiré. Vous pouvez vérifier le st
 $string['error:unexpected'] = 'Une erreur est survenue. Veuillez réessayer ou demander à votre administrateur de consulter les journaux du site.';
 $string['error:upstream_ai'] = 'Erreur du service IA. Veuillez réessayer plus tard.';
 $string['error:validation'] = 'Requête invalide : {$a}';
+$string['error:validation_failed'] = 'La requête est invalide. Vérifiez les valeurs et réessayez.';
 $string['eventcreditreportexported'] = 'Rapport d\'utilisation des crédits exporté';
 $string['eventcreditreportexporteddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a exporté le rapport d\'utilisation des crédits (vue={$a->view}, format={$a->dataformat}, lignes={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Rapport d\'utilisation des crédits consulté';

@@ -188,6 +188,7 @@ $string['error:timeout'] = 'La operación ha caducado. Puede comprobar el estado
 $string['error:unexpected'] = 'Se ha producido un error. Vuelva a intentarlo o pida a su administrador que revise los registros del sitio.';
 $string['error:upstream_ai'] = 'Error del servicio de IA. Inténtelo de nuevo más tarde.';
 $string['error:validation'] = 'Solicitud no válida: {$a}';
+$string['error:validation_failed'] = 'La solicitud no es válida. Revise los valores e inténtelo de nuevo.';
 $string['eventcreditreportexported'] = 'Informe de uso de créditos exportado';
 $string['eventcreditreportexporteddesc'] = 'El usuario con id \'{$a->userid}\' exportó el informe de uso de créditos (vista={$a->view}, formato={$a->dataformat}, filas={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Informe de uso de créditos consultado';
