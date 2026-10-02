@@ -864,4 +864,104 @@ final class tutor_usage_report_test extends \advanced_testcase {
 
         $this->assertSame((int) $course->id, $request->courseid);
     }
+
+    /**
+     * User-level reports include only active participants in the course and role filter.
+     */
+    public function test_user_level_scope_requires_active_participant(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $teacher = $this->getDataGenerator()->create_user();
+        $outsider = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');
+
+        $now = time();
+        $recorder = new tutor_usage_recorder();
+        $recorder->record_message((int) $student->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $now);
+        $recorder->record_message((int) $outsider->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $now);
+
+        $service = new tutor_usage_report_service();
+        $studentroleids = tutor_usage_report_service::get_default_student_roleids();
+
+        $this->assertSame(
+            [(int) $student->id],
+            $service->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                (int) $course->id,
+                (int) $student->id,
+                $studentroleids
+            )
+        );
+        $this->assertSame(
+            [],
+            $service->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                (int) $course->id,
+                (int) $outsider->id,
+                $studentroleids
+            )
+        );
+        $this->assertSame(
+            [],
+            $service->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                (int) $course->id,
+                (int) $teacher->id,
+                $studentroleids
+            )
+        );
+        $this->assertSame(
+            [(int) $teacher->id],
+            $service->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                (int) $course->id,
+                (int) $teacher->id,
+                []
+            )
+        );
+
+        $studentkpis = $service->get_kpis(
+            tutor_usage_report_service::LEVEL_USER,
+            (int) $course->id,
+            (int) $student->id,
+            $now - DAYSECS,
+            $now + HOURSECS,
+            $studentroleids
+        );
+        $this->assertSame(1, (int) $studentkpis['messages']['raw']);
+
+        $outsiderkpis = $service->get_kpis(
+            tutor_usage_report_service::LEVEL_USER,
+            (int) $course->id,
+            (int) $outsider->id,
+            $now - DAYSECS,
+            $now + HOURSECS,
+            $studentroleids
+        );
+        $this->assertSame(0, (int) $outsiderkpis['messages']['raw']);
+
+        $this->setAdminUser();
+        $allowed = tutor_usage_report_request::from_renderable_params([
+            'level' => tutor_usage_report_service::LEVEL_USER,
+            'courseid' => (int) $course->id,
+            'userid' => (int) $student->id,
+            'rolescope' => tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+        ]);
+        $allowed->require_access();
+
+        $rejected = tutor_usage_report_request::from_renderable_params([
+            'level' => tutor_usage_report_service::LEVEL_USER,
+            'courseid' => (int) $course->id,
+            'userid' => (int) $outsider->id,
+            'rolescope' => tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+        ]);
+        try {
+            $rejected->require_access();
+            $this->fail('User-level access must reject a user who is not a course participant.');
+        } catch (\moodle_exception $exception) {
+            $this->assertSame('invaliduser', $exception->errorcode);
+        }
+    }
 }

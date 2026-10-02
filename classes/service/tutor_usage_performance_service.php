@@ -88,7 +88,19 @@ class tutor_usage_performance_service {
             return null;
         }
 
-        $highlightuserid = ($level === tutor_usage_report_service::LEVEL_USER && $userid > 0) ? $userid : 0;
+        $highlightuserid = 0;
+        if ($level === tutor_usage_report_service::LEVEL_USER && $userid > 0) {
+            $roleids = tutor_usage_report_service::get_roleids_for_scope($rolescope);
+            $inscope = (new tutor_usage_report_service())->get_in_scope_userids(
+                tutor_usage_report_service::LEVEL_USER,
+                $courseid,
+                $userid,
+                $roleids
+            );
+            if ($inscope !== []) {
+                $highlightuserid = $userid;
+            }
+        }
         if ($highlightuserid > 0) {
             $payload = $this->ensure_user_in_scatter($payload, $courseid, $highlightuserid, $canviewhidden);
         }
