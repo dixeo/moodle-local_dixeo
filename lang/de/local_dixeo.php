@@ -101,6 +101,7 @@ $string['credit_report_no_chart_data'] = 'Keine Diagrammdaten für den ausgewäh
 $string['credit_report_no_rows'] = 'Keine Kreditnutzungsdatensätze für den ausgewählten Zeitraum und die Filter gefunden.';
 $string['credit_report_period'] = 'Zeitraum';
 $string['credit_report_prev_period'] = 'Vorheriger Zeitraum';
+$string['credit_report_range_too_long'] = 'Benutzerdefinierte Zeiträume dürfen ein Jahr nicht überschreiten.';
 $string['credit_report_reset_filters'] = 'Zurücksetzen';
 $string['credit_report_summary'] = 'Zusammenfassung';
 $string['credit_report_view_custom'] = 'Benutzerdefinierter Zeitraum';

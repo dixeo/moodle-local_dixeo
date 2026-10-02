@@ -101,6 +101,7 @@ $string['credit_report_no_chart_data'] = 'No chart data for the selected period.
 $string['credit_report_no_rows'] = 'No credit usage records found for the selected period and filters.';
 $string['credit_report_period'] = 'Time period';
 $string['credit_report_prev_period'] = 'Previous period';
+$string['credit_report_range_too_long'] = 'Custom date ranges cannot exceed one year.';
 $string['credit_report_reset_filters'] = 'Reset';
 $string['credit_report_summary'] = 'Summary';
 $string['credit_report_view_custom'] = 'Custom range';
