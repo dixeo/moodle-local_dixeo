@@ -736,4 +736,55 @@ final class credit_usage_report_service_test extends \advanced_testcase {
         $this->assertSame(7, array_sum($histogram['values']));
         $this->assertSame(1, count(array_filter($histogram['values'])));
     }
+
+    /**
+     * A leap-year custom range is accepted.
+     */
+    public function test_resolve_period_accepts_custom_range_of_one_year(): void {
+        $service = new credit_usage_report_service();
+        $from = credit_usage_report_service::parse_date_from_param('2024-01-01');
+        $to = credit_usage_report_service::parse_date_to_param('2024-12-31');
+
+        $period = $service->resolve_period(
+            credit_usage_report_service::VIEW_CUSTOM,
+            null,
+            $from,
+            $to
+        );
+
+        $this->assertSame('2024-01-01', date('Y-m-d', $period['timestart']));
+        $this->assertSame('2024-12-31', date('Y-m-d', $period['timeend']));
+    }
+
+    /**
+     * Custom ranges longer than 366 days are rejected.
+     */
+    public function test_resolve_period_rejects_custom_range_over_one_year(): void {
+        $service = new credit_usage_report_service();
+        $from = make_timestamp(2020, 1, 1, 0, 0, 0);
+        $to = make_timestamp(2026, 1, 1, 23, 59, 59);
+
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('credit_report_range_too_long', 'local_dixeo'));
+        $service->resolve_period(
+            credit_usage_report_service::VIEW_CUSTOM,
+            null,
+            $from,
+            $to
+        );
+    }
+
+    /**
+     * The daily histogram refuses a span longer than 366 days before walking each day.
+     */
+    public function test_get_histogram_rejects_unbounded_span(): void {
+        $service = new credit_usage_report_service();
+
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('credit_report_range_too_long', 'local_dixeo'));
+        $service->get_histogram([
+            'timestart' => 1,
+            'timeend' => 1 + credit_usage_report_service::MAX_CUSTOM_RANGE_SECONDS + 1,
+        ]);
+    }
 }

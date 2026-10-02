@@ -101,6 +101,7 @@ $string['credit_report_no_chart_data'] = 'Aucune donnée de graphique pour la p�
 $string['credit_report_no_rows'] = 'Aucun enregistrement d\'utilisation de crédits pour la période et les filtres sélectionnés.';
 $string['credit_report_period'] = 'Période';
 $string['credit_report_prev_period'] = 'Période précédente';
+$string['credit_report_range_too_long'] = 'Les plages de dates personnalisées ne peuvent pas dépasser un an.';
 $string['credit_report_reset_filters'] = 'Réinitialiser';
 $string['credit_report_summary'] = 'Résumé';
 $string['credit_report_view_custom'] = 'Plage personnalisée';

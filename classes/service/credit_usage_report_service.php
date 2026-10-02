@@ -38,6 +38,9 @@ class credit_usage_report_service {
     /** @var string Custom date range view mode. */
     public const VIEW_CUSTOM = 'custom';
 
+    /** @var int Maximum custom range length in seconds (366 days). */
+    public const MAX_CUSTOM_RANGE_SECONDS = 31622400;
+
     /**
      * Parse a report date-from request value to a user-timezone midnight timestamp.
      *
@@ -285,6 +288,7 @@ class credit_usage_report_service {
      * @param int|null $datefrom Custom start timestamp.
      * @param int|null $dateto Custom end timestamp.
      * @return array{timestart: int, timeend: int, label: string, prevanchor: string|null, nextanchor: string|null}
+     * @throws \moodle_exception When a custom range is longer than {@see self::MAX_CUSTOM_RANGE_SECONDS}.
      */
     public function resolve_period(
         string $view,
@@ -316,6 +320,7 @@ class credit_usage_report_service {
                 $start = (new \DateTime())->setTimestamp($startts);
                 $end = (new \DateTime())->setTimestamp($endts);
             }
+            $this->require_bounded_period($start->getTimestamp(), $end->getTimestamp());
             $prev = null;
             $next = null;
             $label = userdate($start->getTimestamp(), '%d %b %Y') . ' - ' . userdate($end->getTimestamp(), '%d %b %Y');
@@ -368,9 +373,15 @@ class credit_usage_report_service {
      *
      * @param array $filters Report filters.
      * @return array{labels: string[], values: int[]}
+     * @throws \moodle_exception When the filter span exceeds {@see self::MAX_CUSTOM_RANGE_SECONDS}.
      */
     public function get_histogram(array $filters): array {
         global $DB;
+
+        $this->require_bounded_period(
+            (int) ($filters['timestart'] ?? 0),
+            (int) ($filters['timeend'] ?? 0)
+        );
 
         $built = $this->build_conditions($filters);
         $sql = "SELECT cu.timecreated, cu.credits
@@ -410,6 +421,22 @@ class credit_usage_report_service {
             'labels' => $labels,
             'values' => $values,
         ];
+    }
+
+    /**
+     * Reject a period long enough to make the daily histogram unbounded.
+     *
+     * @param int $timestart Period start timestamp.
+     * @param int $timeend Period end timestamp.
+     * @throws \moodle_exception When the span exceeds {@see self::MAX_CUSTOM_RANGE_SECONDS}.
+     */
+    private function require_bounded_period(int $timestart, int $timeend): void {
+        if (
+            $timestart > 0 && $timeend >= $timestart
+                && ($timeend - $timestart) > self::MAX_CUSTOM_RANGE_SECONDS
+        ) {
+            throw new \moodle_exception('credit_report_range_too_long', 'local_dixeo');
+        }
     }
 
     /**

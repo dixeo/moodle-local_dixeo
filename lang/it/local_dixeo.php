@@ -101,6 +101,7 @@ $string['credit_report_no_chart_data'] = 'Nessun dato grafico per il periodo sel
 $string['credit_report_no_rows'] = 'Nessun record di utilizzo crediti per il periodo e i filtri selezionati.';
 $string['credit_report_period'] = 'Periodo';
 $string['credit_report_prev_period'] = 'Periodo precedente';
+$string['credit_report_range_too_long'] = 'Gli intervalli di date personalizzati non possono superare un anno.';
 $string['credit_report_reset_filters'] = 'Reimposta';
 $string['credit_report_summary'] = 'Riepilogo';
 $string['credit_report_view_custom'] = 'Intervallo personalizzato';
