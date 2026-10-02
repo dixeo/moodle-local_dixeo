@@ -173,6 +173,7 @@ $string['dixeo_image_not_eligible'] = 'Questa immagine non può essere modificat
 $string['dixeo_pluginfile_not_found'] = 'Impossibile leggere il file immagine dallo spazio di archiviazione.';
 $string['dsl_error'] = 'Creazione del modulo non riuscita: {$a}';
 $string['editorimageorphaned'] = 'Image removed from editor content before completion';
+$string['error:activity_not_available'] = 'Il tipo di attività {$a} non è installato o non è abilitato.';
 $string['error:api_url_https_required'] = 'L\'URL dell\'API Dixeo deve essere un indirizzo HTTPS assoluto (ad esempio https://api.dixeo.com).';
 $string['error:authentication'] = 'Autenticazione fallita. Controlla la tua chiave API.';
 $string['error:connection'] = 'Connessione all\'API Dixeo fallita. Controlla la connessione di rete.';

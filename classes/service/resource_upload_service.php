@@ -66,10 +66,7 @@ class resource_upload_service {
 
         require_once($CFG->dirroot . '/mod/resource/lib.php');
 
-        $moduleid = $DB->get_field('modules', 'id', ['name' => self::MODULE_NAME]);
-        if (!$moduleid) {
-            throw new coding_exception('mod_resource is not installed on this site');
-        }
+        $moduleid = module_addinstance_service::require_for_course($courseid, self::MODULE_NAME);
 
         $usercontext = context_user::instance($USER->id);
         $fs = get_file_storage();
