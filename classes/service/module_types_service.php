@@ -128,6 +128,75 @@ class module_types_service {
     }
 
     /**
+     * Moodle activity plugin a Dixeo generation type is allowed to create.
+     *
+     * The type must appear in the catalogue as installed and not unsupported.
+     * The row's component selects the activity (for example h5p_quiz creates
+     * h5pactivity). When the catalogue cannot be loaded, only an installed
+     * activity name is accepted.
+     *
+     * @param string $type Dixeo module type, or a Moodle activity name when the catalogue is unavailable.
+     * @return string|null Moodle module name, or null when the type must not be created.
+     */
+    public function resolve_generation_module(string $type): ?string {
+        $type = clean_param($type, PARAM_ALPHANUMEXT);
+        if ($type === '') {
+            return null;
+        }
+
+        try {
+            $rows = $this->get_module_types_resolved();
+        } catch (api_exception $e) {
+            if ($this->client->is_configured()) {
+                debugging('Dixeo module catalogue is unavailable: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+            if (!plugin_installation_service::is_component_installed('mod_' . $type)) {
+                return null;
+            }
+            return $type;
+        }
+
+        foreach ($rows as $row) {
+            if (!is_array($row) || ($row['type'] ?? '') !== $type) {
+                continue;
+            }
+            if (array_key_exists('supported', $row) && $row['supported'] === false) {
+                return null;
+            }
+            if (empty($row['installed'])) {
+                return null;
+            }
+            $pluginname = plugin_installation_service::resolve_module_type_plugin_name($row);
+            return $pluginname !== '' ? $pluginname : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether a completed job's module type is the one that was authorised.
+     *
+     * The job may report either the requested Dixeo type or the Moodle activity
+     * that type creates.
+     *
+     * @param string $requested Type stored on the queue row.
+     * @param string $resulttype moduleType from the completed job.
+     * @param string $moodlemodule Activity plugin resolved for the request.
+     * @return bool
+     */
+    public static function result_matches_requested_type(
+        string $requested,
+        string $resulttype,
+        string $moodlemodule
+    ): bool {
+        $resulttype = clean_param($resulttype, PARAM_ALPHANUMEXT);
+        if ($resulttype === '') {
+            return false;
+        }
+        return $resulttype === $requested || $resulttype === $moodlemodule;
+    }
+
+    /**
      * Component identifier used for `modulename` / `pluginname` string lookups.
      *
      * Falls back to `mod_<type>` when the row carries no usable `component`.
