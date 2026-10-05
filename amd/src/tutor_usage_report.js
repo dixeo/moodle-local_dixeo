@@ -379,18 +379,25 @@ define([
     /**
      * Enable tooltips on this page.
      *
-     * Moodle 5 provides theme_boost/bootstrap/tooltip. Moodle 4.x does not, and uses $.fn.tooltip.
-     * The Bootstrap 5 module is loaded on demand so a missing module does not break the report on 4.x.
+     * theme_boost/bootstrap/tooltip is Bootstrap 5 on Moodle 5 (getOrCreateInstance) and
+     * Bootstrap 4 on Moodle 4.x. Info icons use the jQuery tooltip plugin for Bootstrap 4,
+     * and when that module is absent.
      */
     const initTooltips = () => {
-        require(['theme_boost/bootstrap/tooltip'], function(TooltipModule) {
-            const Tooltip = TooltipModule.default || TooltipModule;
-            initBootstrap5InfoTooltips(Tooltip);
-        }, function() {
+        const initJqueryTooltipsIfAvailable = () => {
             if (typeof $.fn.tooltip === 'function') {
                 initJqueryTooltips();
             }
-        });
+        };
+
+        require(['theme_boost/bootstrap/tooltip'], function(TooltipModule) {
+            const Tooltip = TooltipModule.default || TooltipModule;
+            if (typeof Tooltip.getOrCreateInstance === 'function') {
+                initBootstrap5InfoTooltips(Tooltip);
+                return;
+            }
+            initJqueryTooltipsIfAvailable();
+        }, initJqueryTooltipsIfAvailable);
     };
 
     /**
