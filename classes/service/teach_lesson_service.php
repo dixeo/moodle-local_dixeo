@@ -223,7 +223,7 @@ class teach_lesson_service {
         }
 
         $intro = trim((string) ($data['intro'] ?? ''));
-        $formatoptions = ['noclean' => true, 'para' => true, 'filter' => true];
+        $formatoptions = ['para' => true, 'filter' => true];
 
         $introhtml = '';
         if ($intro !== '') {
