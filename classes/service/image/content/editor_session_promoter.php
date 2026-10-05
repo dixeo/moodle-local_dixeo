@@ -92,10 +92,13 @@ final class editor_session_promoter {
      * @return string
      */
     public static function finalize_on_save(string $html, editor_image_context $ctx, int $userid): string {
+        // Drop editor-only shimmer hosts before shortcode/promote processing.
+        $html = html_helper::unwrap_display_frames($html);
         $target = $ctx->html_field_target();
         $shortcodeservice = new shortcode_service();
         $html = $shortcodeservice->process_html($html, $target, $userid);
-        return self::promote_html($html, $ctx, $userid);
+        $html = self::promote_html($html, $ctx, $userid);
+        return html_helper::unwrap_display_frames($html);
     }
 
     /**
@@ -126,7 +129,73 @@ final class editor_session_promoter {
             return $imghtml;
         }
 
-        return self::replace_src($imghtml, $moduleloc->get_pluginfile_token_src());
+        $out = self::replace_src($imghtml, $moduleloc->get_pluginfile_token_src());
+        $modulefile = $moduleloc->get_stored_file();
+        $placeholderhash = sha1(asset_helper::get_placeholder_binary());
+        $errorhash = sha1(asset_helper::get_error_binary());
+        $contenthash = $modulefile ? $modulefile->get_contenthash() : '';
+        $isplaceholder = $contenthash !== '' && $contenthash === $placeholderhash;
+        $iserror = $contenthash !== '' && $contenthash === $errorhash;
+
+        // Editor-draft apply updates the file bytes but never rewrites TinyMCE HTML.
+        // If the user saves while the img still carries dixeo-img-gen-pending, strip it
+        // once the promoted file is the final (or error) asset.
+        if (!$isplaceholder) {
+            $out = self::strip_gen_status_classes($out, $iserror);
+            if ($contenthash !== '') {
+                $out = self::set_contenthash_attr($out, $contenthash);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Remove generation status classes; optionally mark failed.
+     *
+     * @param string $imghtml
+     * @param bool $markfailed
+     * @return string
+     */
+    private static function strip_gen_status_classes(string $imghtml, bool $markfailed = false): string {
+        if (!preg_match('/\bclass="([^"]*)"/iu', $imghtml, $classmatch)) {
+            return $imghtml;
+        }
+
+        $classes = preg_split('/\s+/', trim($classmatch[1])) ?: [];
+        $classes = array_values(array_filter(
+            $classes,
+            static fn(string $c): bool => $c !== ''
+                && $c !== 'dixeo-img-gen-pending'
+                && $c !== 'dixeo-img-gen-failed'
+        ));
+        if ($markfailed && !in_array('dixeo-img-gen-failed', $classes, true)) {
+            $classes[] = 'dixeo-img-gen-failed';
+        }
+
+        return (string) (preg_replace(
+            '/\bclass="[^"]*"/iu',
+            'class="' . implode(' ', $classes) . '"',
+            $imghtml,
+            1
+        ) ?? $imghtml);
+    }
+
+    /**
+     * Set or replace data-dixeo-contenthash for display-time cache busting.
+     *
+     * @param string $imghtml
+     * @param string $contenthash
+     * @return string
+     */
+    private static function set_contenthash_attr(string $imghtml, string $contenthash): string {
+        $imghtml = preg_replace('/\s*\bdata-dixeo-contenthash="[^"]*"/iu', '', $imghtml) ?? $imghtml;
+        return (string) (preg_replace(
+            '/<img\b/iu',
+            '<img data-dixeo-contenthash="' . s($contenthash) . '"',
+            $imghtml,
+            1
+        ) ?? $imghtml);
     }
 
     /**
@@ -208,6 +277,7 @@ final class editor_session_promoter {
         }
 
         $htmltarget = $ctx->html_field_target();
+        $oldtarget = \local_dixeo\service\image\target_factory::from_job_record($job);
         $newfields = array_merge($to->to_record_fields(), [
             'id' => $job->id,
             'targettable' => $htmltarget->targettable,
@@ -219,6 +289,12 @@ final class editor_session_promoter {
         ]);
 
         $DB->update_record(job_repository::TABLE, (object) $newfields);
+
+        // Poll adhocs key off locationhash. After promote the draft-hash task can no
+        // longer find this row. Drop it and queue against the module location.
+        \local_dixeo\service\image\poll\manager::delete_queued($oldtarget);
+        $updated = $DB->get_record(job_repository::TABLE, ['id' => (int) $job->id], '*', MUST_EXIST);
+        \local_dixeo\service\image\poll\manager::ensure_poll_for_job($updated);
     }
 
     /**

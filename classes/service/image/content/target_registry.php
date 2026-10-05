@@ -25,6 +25,11 @@ namespace local_dixeo\service\image\content;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class target_registry {
+    /** Columns embedded in the pluginfile URL, bumped after a file swap so browsers refetch. */
+    private const URL_REVISION_FIELDS = [
+        'page' => 'revision',
+    ];
+
     /**
      * HTML field => corresponding format field name map.
      *
@@ -78,6 +83,51 @@ final class target_registry {
     ];
 
     /**
+     * Resolve an html_field_target from a content image location (modal apply path).
+     *
+     * @param location $location
+     * @return html_field_target|null
+     */
+    public static function resolve_from_location(location $location): ?html_field_target {
+        foreach (self::HANDLERS as $modname => $fields) {
+            foreach ($fields as $fieldname => $handler) {
+                if (
+                    $handler['component'] !== $location->component
+                    || $handler['filearea'] !== $location->filearea
+                ) {
+                    continue;
+                }
+
+                $context = \context::instance_by_id($location->contextid, IGNORE_MISSING);
+                if (!$context || $context->contextlevel !== CONTEXT_MODULE) {
+                    return null;
+                }
+
+                $cm = get_coursemodule_from_id(null, (int) $context->instanceid, 0, false, IGNORE_MISSING);
+                if (!$cm) {
+                    return null;
+                }
+
+                $instanceid = match ($handler['itemid']) {
+                    'record' => $location->itemid,
+                    default => (int) $cm->instance,
+                };
+
+                return self::resolve(
+                    $modname,
+                    $fieldname,
+                    $instanceid,
+                    $location->contextid,
+                    $location->courseid,
+                    (int) $cm->id
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve filearea html_field_target for a module HTML field after insert.
      *
      * @param string $modname Module plugin name or logical entity (slideshow_slide, glossary_entry).
@@ -123,6 +173,23 @@ final class target_registry {
             $cmid,
             $formatfield
         );
+    }
+
+    /**
+     * Bump the URL revision of a target row after its image file changed.
+     *
+     * @param string $table Target table.
+     * @param int $id Target row id.
+     */
+    public static function bump_url_revision(string $table, int $id): void {
+        global $DB;
+
+        $field = self::URL_REVISION_FIELDS[$table] ?? null;
+        if ($field === null) {
+            return;
+        }
+
+        $DB->execute("UPDATE {{$table}} SET {$field} = {$field} + 1 WHERE id = ?", [$id]);
     }
 
     /**

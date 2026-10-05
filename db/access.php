@@ -80,7 +80,7 @@ $capabilities = [
         ],
     ],
 
-    // Capability to generate embedded content images via filter_dixeo_imageeditor.
+    // Capability to generate embedded content images (shortcode / editor; local_dixeo).
     'local/dixeo:contentimagegenerate' => [
         'riskbitmask' => RISK_SPAM,
         'captype' => 'write',
@@ -91,7 +91,7 @@ $capabilities = [
         ],
     ],
 
-    // Capability to edit embedded content images via filter_dixeo_imageeditor.
+    // Capability to edit embedded content images (filter_dixeo_imageeditor modal UI).
     'local/dixeo:contentimageedit' => [
         'riskbitmask' => RISK_SPAM,
         'captype' => 'write',

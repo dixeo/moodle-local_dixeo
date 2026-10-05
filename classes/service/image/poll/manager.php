@@ -18,7 +18,9 @@ namespace local_dixeo\service\image\poll;
 
 
 use core\task\manager as core_task_manager;
+use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\image_target;
+use local_dixeo\service\image\target_factory;
 use local_dixeo\task\poll_image_job;
 
 /**
@@ -68,6 +70,65 @@ final class manager {
             $deleted++;
         }
         return $deleted;
+    }
+
+    /**
+     * Whether any poll adhoc (queued or running) exists for this target.
+     *
+     * @param image_target $target
+     * @return bool
+     */
+    public static function has_poll_task(image_target $target): bool {
+        $hash = $target->get_location_hash();
+        $tasks = core_task_manager::get_adhoc_tasks(self::task_classname(), false, true);
+        foreach ($tasks as $task) {
+            $data = $task->get_custom_data();
+            if (!is_object($data)) {
+                continue;
+            }
+            if ((string) ($data->locationhash ?? '') === $hash) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Requeue a poll when a pending/processing job has no adhoc task left.
+     *
+     * Adhoc runners can die after marking the row processing (OOM, timeout, kill)
+     * without requeueing, which leaves the UI stuck on generating forever.
+     *
+     * @param \stdClass $job Image job row.
+     * @return bool True when a new poll task was queued.
+     */
+    public static function ensure_poll_for_job(\stdClass $job): bool {
+        if (
+            !in_array(
+                (string) ($job->status ?? ''),
+                [
+                    job_repository::STATUS_PENDING,
+                    job_repository::STATUS_PROCESSING,
+                ],
+                true
+            )
+        ) {
+            return false;
+        }
+
+        $remotejobid = trim((string) ($job->jobid ?? ''));
+        $userid = (int) ($job->userid ?? 0);
+        if ($remotejobid === '' || $userid < 1) {
+            return false;
+        }
+
+        $target = target_factory::from_job_record($job);
+        if (self::has_poll_task($target)) {
+            return false;
+        }
+
+        self::queue_poll_task($target, $remotejobid, $userid, 0, 'generated', 0);
+        return true;
     }
 
     /**

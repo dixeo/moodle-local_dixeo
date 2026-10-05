@@ -118,4 +118,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'local/dixeo:viewusage',
     ],
+
+    // Poll pending content-image placeholders on course/activity pages.
+    'local_dixeo_get_content_image_status' => [
+        'classname' => 'local_dixeo\external\get_content_image_status',
+        'description' => 'Poll pending content image placeholder status for live page updates',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
 ];
