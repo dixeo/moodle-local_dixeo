@@ -216,6 +216,7 @@ $string['filesync_failed'] = 'File sync failed: {$a}';
 $string['filesync_files_count'] = '{$a} files synced';
 $string['filesync_label'] = 'Sync';
 $string['filesync_pause'] = 'Pause sync';
+$string['filesync_pending_deletion'] = 'Remote file deletion is still pending for this course';
 $string['filesync_progress'] = '{$a}% complete';
 $string['filesync_resync'] = 'Sync now';
 $string['filesync_status_disabled'] = 'Sync disabled';

@@ -134,6 +134,10 @@ class file_sync_service {
             return;
         }
 
+        if ($this->is_pending_deletion($courseid)) {
+            return;
+        }
+
         $wasenabled = $this->is_enabled($courseid);
 
         if ($this->repository->get_by_courseid($courseid) === null) {
@@ -196,6 +200,10 @@ class file_sync_service {
      * @throws \moodle_exception When sync fails or times out.
      */
     public function ensure_enabled_and_synchronized(int $courseid, int $userid, int $timeoutseconds = 120): void {
+        if ($this->is_pending_deletion($courseid)) {
+            throw new \moodle_exception('filesync_pending_deletion', 'local_dixeo');
+        }
+
         // A confirmed-clean course stays clean until content changes, and content changes
         // queue their own sync. Re-confirming on every message cost two hub round trips.
         if (self::recently_verified($courseid)) {
@@ -224,6 +232,17 @@ class file_sync_service {
         }
 
         throw new \moodle_exception('filesync_timeout', 'local_dixeo');
+    }
+
+    /**
+     * Whether remote file deletion for this course is still outstanding.
+     *
+     * @param int $courseid The course ID.
+     * @return bool
+     */
+    private function is_pending_deletion(int $courseid): bool {
+        $record = $this->repository->get_by_courseid($courseid);
+        return $record !== null && $record->syncstatus === 'pending_deletion';
     }
 
     /**

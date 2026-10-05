@@ -112,7 +112,7 @@ class course_ai_repository {
         global $DB;
 
         $record = $this->get_by_courseid($courseid);
-        if ($record === null) {
+        if ($record === null || $record->syncstatus === 'pending_deletion') {
             return;
         }
 
@@ -162,6 +162,12 @@ class course_ai_repository {
 
         $record = $this->get_or_create($courseid, $userid);
 
+        // Remote deletion must finish before sync can be turned on again, and a
+        // disable must not replace that state with paused.
+        if ($enabled && $record->syncstatus === 'pending_deletion') {
+            return;
+        }
+
         $update = new \stdClass();
         $update->id = $record->id;
         $update->enabled = $enabled ? 1 : 0;
@@ -178,7 +184,7 @@ class course_ai_repository {
             $update->disabledby = $userid;
             $update->disabledat = time();
             // Set status to paused when disabled but keeping files.
-            if ($record->syncstatus !== 'none') {
+            if ($record->syncstatus !== 'none' && $record->syncstatus !== 'pending_deletion') {
                 $update->syncstatus = 'paused';
             }
         }

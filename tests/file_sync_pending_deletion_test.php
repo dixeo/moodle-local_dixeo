@@ -38,6 +38,7 @@ use local_dixeo\task\process_remote_file_deletion;
  * Pending remote deletion behaviour.
  *
  * @covers \local_dixeo\service\file_sync_service
+ * @covers \local_dixeo\repository\course_ai_repository
  * @covers \local_dixeo\task\process_remote_file_deletion
  * @covers \local_dixeo\privacy\provider
  */
@@ -221,5 +222,82 @@ final class file_sync_pending_deletion_test extends \advanced_testcase {
         $record = $DB->get_record('local_dixeo_course_ai', ['courseid' => $course->id], '*', MUST_EXIST);
         $this->assertSame('pending_deletion', $record->syncstatus);
         $this->assertSame(0, (int) $record->enabled);
+    }
+
+    /**
+     * Re-enabling sync must not clear a pending remote deletion.
+     */
+    public function test_enable_sync_leaves_pending_deletion_unchanged(): void {
+        global $USER;
+
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $repo = new course_ai_repository();
+        $repo->mark_pending_deletion((int) $course->id);
+        $repo->record_pending_deletion_error((int) $course->id, 'still deleting');
+
+        $service = new file_sync_service($repo, $this->createMock(client::class));
+        $service->enable_sync((int) $course->id, (int) $USER->id);
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertSame('still deleting', $record->errormessage);
+    }
+
+    /**
+     * A status poll must not replace pending deletion with the remote sync status.
+     */
+    public function test_update_sync_status_does_not_overwrite_pending_deletion(): void {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $repo = new course_ai_repository();
+        $repo->mark_pending_deletion((int) $course->id);
+
+        $repo->update_sync_status((int) $course->id, 'synchronized', [
+            'filestotal' => 1,
+            'filescompleted' => 1,
+            'progresspercent' => 100,
+        ]);
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+    }
+
+    /**
+     * Disabling sync again must not rewrite pending deletion as paused.
+     */
+    public function test_set_enabled_false_keeps_pending_deletion(): void {
+        global $USER;
+
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $repo = new course_ai_repository();
+        $repo->mark_pending_deletion((int) $course->id);
+
+        $repo->set_enabled((int) $course->id, false, (int) $USER->id);
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+        $this->assertSame(0, (int) $record->enabled);
+    }
+
+    /**
+     * Tutor and generation preflight must fail closed while deletion is pending.
+     */
+    public function test_ensure_enabled_throws_while_pending_deletion(): void {
+        global $USER;
+
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $repo = new course_ai_repository();
+        $repo->mark_pending_deletion($courseid);
+        \cache::make('local_dixeo', 'filesyncverified')->set((string) $courseid, time());
+
+        $service = new file_sync_service($repo, $this->createMock(client::class));
+
+        $this->expectException(\moodle_exception::class);
+        $service->ensure_enabled_and_synchronized($courseid, (int) $USER->id);
     }
 }

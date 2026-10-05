@@ -216,6 +216,7 @@ $string['filesync_failed'] = 'Falha na sincronização de ficheiros: {$a}';
 $string['filesync_files_count'] = '{$a} ficheiros sincronizados';
 $string['filesync_label'] = 'Sincronizar';
 $string['filesync_pause'] = 'Pausar sincronização';
+$string['filesync_pending_deletion'] = 'A eliminação remota de ficheiros deste curso ainda está pendente';
 $string['filesync_progress'] = '{$a}% concluído';
 $string['filesync_resync'] = 'Sincronizar agora';
 $string['filesync_status_disabled'] = 'Sincronização desativada';
