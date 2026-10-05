@@ -385,30 +385,7 @@ h2:has(.dixeo-sync-indicator),
    2. Content image placeholders — [img-gen] async pending + shared shimmer
    ========================================================================== */
 
-/* img-fluid only caps content images at the column width, so a 1024px
-   illustration filled it edge to edge; cap and centre them in the text flow.
-   Qualified with img so it outranks .img-fluid, which the theme emits later. */
-img.dixeo-img-content {
-    display: block;
-    /* Cap at column width or 40rem, whichever is smaller (csstree lacks min()). */
-    /* stylelint-disable-next-line csstree/validator -- max-width: min() is valid CSS */
-    max-width: min(100%, 40rem);
-    height: auto;
-    margin: 1.5rem auto;
-}
-
-/* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png.
-   Display JS wraps a .dixeo-img-gen-frame (or reuses .dixeo-imageeditor-wrap) for ::before
-   and injects .dixeo-img-gen-status pills. Filter keeps its own .is-generating ::after label. */
-
-.dixeo-img-gen-frame {
-    display: inline-block;
-    max-width: 100%;
-    vertical-align: middle;
-    line-height: 0;
-    position: relative;
-}
-
+/* Pending/failed visuals come from local/dixeo/img/placeholder.png and error.png. */
 .dixeo-img-gen-pending,
 .dixeo-img-gen-failed {
     max-width: 100%;
