@@ -374,6 +374,7 @@ $string['privacy:metadata:tutor_usage_session:messagecount'] = 'Nachrichten in d
 $string['privacy:metadata:tutor_usage_session:timeend'] = 'Sitzungsendzeit';
 $string['privacy:metadata:tutor_usage_session:timestart'] = 'Sitzungsstartzeit';
 $string['privacy:metadata:tutor_usage_session:userid'] = 'Die Benutzer-ID';
+$string['privacy:path:conversation'] = 'Tutor-Konversation';
 $string['privacy:path:course_ai'] = 'Kurs-KI-Synchronisation';
 $string['privacy:path:credit_usage'] = 'Kreditnutzung';
 $string['privacy:path:image_jobs'] = 'Dixeo image jobs';

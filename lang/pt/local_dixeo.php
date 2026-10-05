@@ -374,6 +374,7 @@ $string['privacy:metadata:tutor_usage_session:messagecount'] = 'Mensagens na ses
 $string['privacy:metadata:tutor_usage_session:timeend'] = 'Hora de fim da sessão';
 $string['privacy:metadata:tutor_usage_session:timestart'] = 'Hora de início da sessão';
 $string['privacy:metadata:tutor_usage_session:userid'] = 'O id do utilizador';
+$string['privacy:path:conversation'] = 'Conversa do tutor';
 $string['privacy:path:course_ai'] = 'Sincronização AI do curso';
 $string['privacy:path:credit_usage'] = 'Utilização de créditos';
 $string['privacy:path:image_jobs'] = 'Dixeo image jobs';
