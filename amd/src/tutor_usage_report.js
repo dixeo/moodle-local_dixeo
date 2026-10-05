@@ -273,13 +273,9 @@ define([
     };
 
     /**
-     * Enable Bootstrap tooltips on KPI cards, KPI info icons, and summary table cells.
+     * Bootstrap 4 tooltips, used when Moodle still ships the jQuery plugin.
      */
-    const initTooltips = () => {
-        if (typeof $.fn.tooltip !== 'function') {
-            return;
-        }
-
+    const initJqueryTooltips = () => {
         const cards = document.querySelectorAll(
             '.dixeo-tutor-usage-report-kpi[data-toggle="tooltip"],' +
             '.dixeo-tutor-usage-report-stat[data-toggle="tooltip"]'
@@ -326,6 +322,82 @@ define([
                 $infoicons.tooltip('hide');
             }
         });
+    };
+
+    /**
+     * Click tooltips on KPI info icons using the Bootstrap 5 tooltip class.
+     *
+     * KPI cards and summary cells already carry data-bs-toggle="tooltip", so the Moodle 5
+     * theme loader initializes those. Info icons omit that attribute on purpose.
+     *
+     * @param {object} Tooltip Bootstrap tooltip constructor.
+     */
+    const initBootstrap5InfoTooltips = (Tooltip) => {
+        const hideOtherInfoTooltips = (current) => {
+            document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]').forEach((icon) => {
+                if (icon === current) {
+                    return;
+                }
+                const tooltip = Tooltip.getInstance(icon);
+                if (tooltip) {
+                    tooltip.hide();
+                }
+            });
+        };
+
+        const infoicons = document.querySelectorAll('.dixeo-tutor-usage-report-info[data-info]');
+        infoicons.forEach((icon) => {
+            Tooltip.getOrCreateInstance(icon, {
+                container: 'body',
+                placement: 'top',
+                trigger: 'click',
+                title: icon.dataset.info || '',
+            });
+
+            icon.addEventListener('show.bs.tooltip', () => {
+                hideOtherInfoTooltips(icon);
+            });
+        });
+
+        if (!infoicons.length) {
+            return;
+        }
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.dixeo-tutor-usage-report-info')) {
+                hideOtherInfoTooltips(null);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideOtherInfoTooltips(null);
+            }
+        });
+    };
+
+    /**
+     * Enable tooltips on this page.
+     *
+     * theme_boost/bootstrap/tooltip is Bootstrap 5 on Moodle 5 (getOrCreateInstance) and
+     * Bootstrap 4 on Moodle 4.x. Info icons use the jQuery tooltip plugin for Bootstrap 4,
+     * and when that module is absent.
+     */
+    const initTooltips = () => {
+        const initJqueryTooltipsIfAvailable = () => {
+            if (typeof $.fn.tooltip === 'function') {
+                initJqueryTooltips();
+            }
+        };
+
+        require(['theme_boost/bootstrap/tooltip'], function(TooltipModule) {
+            const Tooltip = TooltipModule.default || TooltipModule;
+            if (typeof Tooltip.getOrCreateInstance === 'function') {
+                initBootstrap5InfoTooltips(Tooltip);
+                return;
+            }
+            initJqueryTooltipsIfAvailable();
+        }, initJqueryTooltipsIfAvailable);
     };
 
     /**
