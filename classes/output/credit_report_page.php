@@ -67,6 +67,14 @@ class credit_report_page implements renderable, templatable {
         try {
             (new credit_usage_sync_service($creditservice))->sync_recent();
             return $this->build_template_data($output);
+        } catch (\moodle_exception $e) {
+            if ($e->errorcode === 'credit_report_range_too_long') {
+                throw $e;
+            }
+            return [
+                'configured' => true,
+                'error' => get_string('api_error', 'local_dixeo', $e->getMessage()),
+            ];
         } catch (\Exception $e) {
             return [
                 'configured' => true,

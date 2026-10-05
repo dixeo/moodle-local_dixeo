@@ -138,6 +138,46 @@ final class teach_lesson_service_test extends \advanced_testcase {
     }
 
     /**
+     * Lesson intro and content HTML are cleaned before they are returned for display.
+     */
+    public function test_finalize_from_job_strips_active_content(): void {
+        $this->resetAfterTest(true);
+
+        $mockjob = $this->getMockBuilder(job_service::class)
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+
+        $mockjob->method('get_job_status')->willReturn(new job_status(
+            jobid: 'test-job-id',
+            type: 'generate_module',
+            status: job_status::STATUS_COMPLETED,
+            progress: 100,
+            createdat: time(),
+            result: [
+                'moduleType' => 'page',
+                'data' => [
+                    'name' => 'Cells',
+                    'intro' => '<p>Safe intro</p><script>alert(1)</script>',
+                    'content' => '<p>Safe content</p><img src="x" onerror="alert(1)">',
+                ],
+            ]
+        ));
+
+        service_factory::set_test_job_service($mockjob);
+
+        $service = new teach_lesson_service(null, $mockjob);
+        $result = $service->finalize_from_job('test-job-id');
+
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('Safe intro', $result['introhtml']);
+        $this->assertStringContainsString('Safe content', $result['contenthtml']);
+        $this->assertStringNotContainsString('<script', strtolower($result['introhtml']));
+        $this->assertStringNotContainsString('onerror', strtolower($result['contenthtml']));
+
+        service_factory::reset();
+    }
+
+    /**
      * finalize_from_job rejects wrong module type.
      */
     public function test_finalize_from_job_wrong_module_type(): void {

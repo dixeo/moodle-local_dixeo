@@ -66,10 +66,7 @@ class scorm_creation_service {
         require_once($CFG->dirroot . '/mod/scorm/lib.php');
         require_once($CFG->dirroot . '/mod/scorm/locallib.php');
 
-        $moduleid = $DB->get_field('modules', 'id', ['name' => self::MODULE_NAME]);
-        if (!$moduleid) {
-            throw new coding_exception('mod_scorm is not installed on this site');
-        }
+        $moduleid = module_addinstance_service::require_for_course($courseid, self::MODULE_NAME);
 
         $usercontext = context_user::instance($USER->id);
         $fs = get_file_storage();

@@ -29,8 +29,10 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\service\module_activity_defaults_registry;
+use local_dixeo\service\module_addinstance_service;
 
 
 
@@ -143,11 +145,9 @@ class create_module_action {
         $modulename = $context['modulename'];
         $beforemod = $context['beforemod'] ?? null;
 
-        // Get the module ID from the modules table.
-        $moduleid = $DB->get_field('modules', 'id', ['name' => $modulename]);
-        if (!$moduleid) {
-            throw dsl_exception::module_creation_failed($modulename, 'Module type not found in database');
-        }
+        // Fail before any course_modules write when the type is unavailable
+        // or the user may not add it.
+        $moduleid = module_addinstance_service::require_for_course($courseid, (string) $modulename);
 
         // Start a transaction for atomic creation.
         $transaction = $DB->start_delegated_transaction();
@@ -165,6 +165,11 @@ class create_module_action {
             // Activity names are PARAM_TEXT. Remove any markup in the name if it exists.
             if (isset($moduledata->name)) {
                 $moduledata->name = clean_param((string) $moduledata->name, PARAM_TEXT);
+            }
+            foreach (['intro', 'content'] as $htmlfield) {
+                if (isset($moduledata->$htmlfield) && is_string($moduledata->$htmlfield)) {
+                    $moduledata->$htmlfield = generated_html::strip_active_content($moduledata->$htmlfield);
+                }
             }
 
             // Run module-specific pre-creation hooks if available.

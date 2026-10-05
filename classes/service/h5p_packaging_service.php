@@ -141,16 +141,12 @@ class h5p_packaging_service {
     ): array {
         global $CFG, $DB;
 
+        $moduleid = module_addinstance_service::require_for_course($courseid, self::MODULE_NAME);
+
         $resolvedlanguage = $language !== '' ? $language : current_language();
         $packagepath = $this->build_package($mainlibrary, $content, $name, $resolvedlanguage);
 
         require_once($CFG->dirroot . '/mod/h5pactivity/lib.php');
-
-        $moduleid = $DB->get_field('modules', 'id', ['name' => self::MODULE_NAME]);
-        if (!$moduleid) {
-            @unlink($packagepath);
-            throw new coding_exception('mod_h5pactivity is not installed on this site');
-        }
 
         $transaction = $DB->start_delegated_transaction();
         try {

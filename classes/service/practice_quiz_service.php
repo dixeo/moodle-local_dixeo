@@ -253,7 +253,6 @@ class practice_quiz_service {
         $introhtml = '';
         if ($intro !== '') {
             $introhtml = trim(format_text($intro, FORMAT_HTML, [
-                'noclean' => true,
                 'para' => true,
                 'filter' => true,
             ], $courseid ?? 0));

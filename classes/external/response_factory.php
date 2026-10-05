@@ -37,8 +37,8 @@ class response_factory {
     /**
      * Return a message that is safe to send to a client.
      *
-     * Business messages raised by the API are kept; anything else is logged for
-     * developers and replaced by a localised generic message.
+     * Known Dixeo API error types use a localised string. The remote detail is written
+     * to the developer log. Other failures use the same log and a generic string.
      *
      * @param \Throwable $exception The exception to describe.
      * @param string $fallbackkey The local_dixeo string key used when the detail is withheld.
@@ -48,7 +48,12 @@ class response_factory {
         global $CFG;
 
         if ($exception instanceof api_exception) {
-            return $exception->getMessage();
+            debugging(
+                'Dixeo API ' . $exception->get_error_type() . ': ' . $exception->getMessage(),
+                DEBUG_DEVELOPER
+            );
+            $stringkey = self::api_error_string_key($exception->get_error_type());
+            return get_string($stringkey ?? $fallbackkey, 'local_dixeo');
         }
 
         $detail = get_class($exception) . ': ' . $exception->getMessage();
@@ -63,6 +68,24 @@ class response_factory {
         }
 
         return get_string($fallbackkey, 'local_dixeo');
+    }
+
+    /**
+     * Language string for a stable Dixeo API error type.
+     *
+     * @param string $errortype RFC 7807 type, or the type stored on the exception.
+     * @return string|null local_dixeo string key, or null when the type is unknown.
+     */
+    private static function api_error_string_key(string $errortype): ?string {
+        return match ($errortype) {
+            'payment_required', 'insufficient_credits' => 'error:payment_required',
+            'validation_error' => 'error:validation_failed',
+            'job_not_found' => 'error:job_not_found',
+            'authentication', 'authentication_error', 'authentication_failed' => 'error:authentication',
+            'upstream_ai', 'upstream_ai_exception' => 'error:upstream_ai',
+            'rate_limit_exceeded', 'too_many_requests', 'too_many_requests_http' => 'error:rate_limit',
+            default => null,
+        };
     }
 
     /**

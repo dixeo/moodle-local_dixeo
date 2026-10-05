@@ -51,7 +51,7 @@ if ($usesadminsetup) {
     $PAGE->set_title(get_string('tutor_usage_report_nav', 'local_dixeo'));
     $PAGE->set_heading(get_string('tutor_usage_report_nav', 'local_dixeo'));
 } else {
-    require_login($request->courseid);
+    $request->require_course_login();
     $context = context_course::instance($request->courseid);
     $PAGE->set_context($context);
     $PAGE->set_url(new moodle_url('/local/dixeo/tutor_usage_report.php', $request->to_page_url_params()));

@@ -31,9 +31,11 @@ use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\client;
+use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
 use local_dixeo\privacy\provider;
 use local_dixeo\repository\job_repository;
+use local_dixeo\service\tutor_service;
 
 /**
  * Privacy provider tests.
@@ -308,5 +310,80 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
 
         $this->assertFalse($DB->record_exists('local_dixeo_jobs', ['jobid' => 'pre-course-job']));
         $this->assertTrue($DB->record_exists('local_dixeo_jobs', ['jobid' => 'course-job']));
+    }
+
+    /**
+     * Configured API client so conversation export and erasure run.
+     *
+     * @return void
+     */
+    private function configure_api_client(): void {
+        $client = $this->createMock(client::class);
+        $client->method('is_configured')->willReturn(true);
+        service_factory::set_test_client($client);
+    }
+
+    /**
+     * Export writes the tutor conversation, and erasure asks the API to delete it.
+     */
+    public function test_export_and_delete_include_tutor_conversation(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $this->insert_course_ai_record((int) $course->id, (int) $user->id);
+        $this->configure_api_client();
+
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->expects($this->once())
+            ->method('export_conversation')
+            ->with((int) $course->id, (int) $user->id)
+            ->willReturn([
+                ['id' => 'msg-1', 'role' => 'user', 'content' => 'How do I revise?', 'time' => 1750000000],
+            ]);
+        $tutor->expects($this->once())
+            ->method('delete_conversations')
+            ->with((int) $course->id, (int) $user->id)
+            ->willReturn(1);
+        service_factory::set_test_tutor_service($tutor);
+
+        $context = \context_course::instance((int) $course->id);
+        writer::reset();
+        $approved = new approved_contextlist($user, 'local_dixeo', [$context->id]);
+        provider::export_user_data($approved);
+
+        $exported = writer::with_context($context)->get_data([
+            get_string('privacy:path:conversation', 'local_dixeo'),
+        ]);
+        $this->assertSame('How do I revise?', $exported->messages[0]->content);
+
+        provider::delete_data_for_user($approved);
+    }
+
+    /**
+     * A failed conversation erasure is queued and is not reported as success.
+     */
+    public function test_delete_user_queues_conversation_erasure_when_api_fails(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $this->insert_course_ai_record((int) $course->id, (int) $user->id);
+        $this->configure_api_client();
+
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->expects($this->once())
+            ->method('delete_conversations')
+            ->willThrowException(new api_exception('server_error', 'upstream 503', 503));
+        service_factory::set_test_tutor_service($tutor);
+
+        $context = \context_course::instance((int) $course->id);
+        $approved = new approved_contextlist($user, 'local_dixeo', [$context->id]);
+
+        $this->expectException(api_exception::class);
+        try {
+            provider::delete_data_for_user($approved);
+        } finally {
+            if (class_exists(\block_dixeo_tutor\task\erase_conversations::class)) {
+                $tasks = \core\task\manager::get_adhoc_tasks('\\block_dixeo_tutor\\task\\erase_conversations');
+                $this->assertNotEmpty($tasks);
+            }
+        }
     }
 }

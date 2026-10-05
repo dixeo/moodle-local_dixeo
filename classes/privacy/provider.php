@@ -31,6 +31,8 @@ use core_privacy\local\request\contextlist;
 use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use local_dixeo\api\exception\api_exception;
+use local_dixeo\external\service_factory;
 
 /**
  * Privacy provider for course AI sync records and Dixeo API transfers.
@@ -333,6 +335,7 @@ class provider implements
         }
 
         $userid = (int) $contextlist->get_user()->id;
+        $failure = null;
 
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
@@ -380,6 +383,12 @@ class provider implements
             self::export_user_credit_usage($context, $userid, $courseid);
             self::export_user_image_jobs($context, $userid, $courseid);
             self::export_user_tutor_usage($context, $userid, $courseid);
+            $error = self::export_user_conversation($context, $userid, $courseid);
+            $failure ??= $error;
+        }
+
+        if ($failure !== null) {
+            throw $failure;
         }
     }
 
@@ -598,17 +607,21 @@ class provider implements
 
         if ($remotedeleted) {
             $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => $courseid]);
-            return;
+        } else {
+            // Keep a pending_deletion row so adhoc retry can finish the remote purge.
+            $repo = new \local_dixeo\repository\course_ai_repository();
+            $repo->mark_pending_deletion($courseid);
+            $repo->record_pending_deletion_error(
+                $courseid,
+                $lasterror !== '' ? $lasterror : 'Privacy purge remote deletion failed'
+            );
+            service_factory::get_file_sync_service()->queue_remote_deletion_retry($courseid);
         }
 
-        // Keep a pending_deletion row so adhoc retry can finish the remote purge.
-        $repo = new \local_dixeo\repository\course_ai_repository();
-        $repo->mark_pending_deletion($courseid);
-        $repo->record_pending_deletion_error(
-            $courseid,
-            $lasterror !== '' ? $lasterror : 'Privacy purge remote deletion failed'
-        );
-        \local_dixeo\external\service_factory::get_file_sync_service()->queue_remote_deletion_retry($courseid);
+        $conversationfailure = self::erase_tutor_conversations($courseid, null);
+        if ($conversationfailure !== null) {
+            throw $conversationfailure;
+        }
     }
 
     /**
@@ -696,6 +709,15 @@ class provider implements
 
         foreach ($courseids as $courseid) {
             self::delete_user_tutor_usage($userid, (int) $courseid);
+        }
+
+        $failure = null;
+        foreach ($courseids as $courseid) {
+            $error = self::erase_tutor_conversations((int) $courseid, $userid);
+            $failure ??= $error;
+        }
+        if ($failure !== null) {
+            throw $failure;
         }
     }
 
@@ -904,5 +926,89 @@ class provider implements
         foreach ($userids as $targetuserid) {
             self::delete_user_tutor_usage((int) $targetuserid, $courseid);
         }
+
+        $failure = null;
+        foreach ($userids as $targetuserid) {
+            $error = self::erase_tutor_conversations($courseid, (int) $targetuserid);
+            $failure ??= $error;
+        }
+        if ($failure !== null) {
+            throw $failure;
+        }
+    }
+
+    /**
+     * Export one user's tutor conversation for a course when the API is configured.
+     *
+     * @param \context $context Course context receiving the export.
+     * @param int $userid User id.
+     * @param int $courseid Course id.
+     * @return api_exception|null Failure to rethrow after every context is attempted.
+     */
+    private static function export_user_conversation(\context $context, int $userid, int $courseid): ?api_exception {
+        if ($courseid <= 0 || !self::conversations_available()) {
+            return null;
+        }
+
+        try {
+            $messages = service_factory::get_tutor_service()->export_conversation($courseid, $userid);
+        } catch (api_exception $e) {
+            return $e;
+        }
+
+        if ($messages === []) {
+            return null;
+        }
+
+        $exported = [];
+        foreach ($messages as $message) {
+            $exported[] = (object) [
+                'role' => (string) ($message['role'] ?? ''),
+                'content' => (string) ($message['content'] ?? ''),
+                'time' => transform::datetime((int) ($message['time'] ?? 0)),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:conversation', 'local_dixeo')],
+            (object) ['messages' => $exported]
+        );
+
+        return null;
+    }
+
+    /**
+     * Erase tutor conversations for a course, a user, or both.
+     *
+     * A failed call is queued for retry when the tutor block provides that task, then
+     * returned so the privacy callback does not finish as a success.
+     *
+     * @param int|null $courseid Course id, or null for every course.
+     * @param int|null $userid User id, or null for every user.
+     * @return api_exception|null The failure to rethrow once local erasure is done.
+     */
+    private static function erase_tutor_conversations(?int $courseid, ?int $userid): ?api_exception {
+        if (!self::conversations_available()) {
+            return null;
+        }
+
+        try {
+            service_factory::get_tutor_service()->delete_conversations($courseid, $userid);
+            return null;
+        } catch (api_exception $e) {
+            if (class_exists(\block_dixeo_tutor\task\erase_conversations::class)) {
+                \block_dixeo_tutor\task\erase_conversations::queue($courseid, $userid);
+            }
+            return $e;
+        }
+    }
+
+    /**
+     * Whether this site has sent tutor data to Dixeo.
+     *
+     * @return bool
+     */
+    private static function conversations_available(): bool {
+        return service_factory::get_client()->is_configured();
     }
 }
