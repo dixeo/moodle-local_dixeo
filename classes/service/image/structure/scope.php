@@ -30,7 +30,12 @@ final class scope {
     /** Apply job bytes to Moodle course overview files. objectid = course id. */
     public const SCOPE_COURSE_OVERVIEW = image_target::KIND_COURSE_OVERVIEW;
 
-    /** Apply job bytes to format_dixeo chapter image file area. objectid = course_sections.id. */
+    /**
+     * Apply job bytes to the course format's section image.
+     *
+     * objectid = course_sections.id. format_dixeo uses the chapter image file area.
+     * format_tiles uses the tile photo file area and section photo option.
+     */
     public const SCOPE_FORMAT_SECTION = image_target::KIND_FORMAT_SECTION;
 
     /**

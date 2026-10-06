@@ -282,6 +282,93 @@ final class writer_test extends \advanced_testcase {
     }
 
     /**
+     * Test a tiles course stores the section image as a tile photo the format can read.
+     */
+    public function test_apply_section_on_tiles_course_stores_tile_photo(): void {
+        global $DB, $USER;
+
+        $this->setAdminUser();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['format' => 'topics', 'numsections' => 2], ['createsections' => true]);
+        $courseid = (int) $course->id;
+        $DB->set_field('course', 'format', 'tiles', ['id' => $courseid]);
+        $section = $this->get_section_one($courseid);
+        $sid = (int) $section->id;
+
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
+            $sid,
+            ['image_base64' => base64_encode(self::fixture_png_bytes())],
+            (int) $USER->id
+        );
+
+        $context = context_course::instance($courseid);
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, 'format_tiles', 'tilephoto', $sid, 'id', false);
+        $this->assertCount(1, $files);
+        $file = reset($files);
+        $this->assertSame('/tilephoto/', $file->get_filepath());
+        $this->assertSame('image/png', $file->get_mimetype());
+
+        $filename = $this->tiles_section_photo_filename($courseid, $sid);
+        $this->assertSame($file->get_filename(), $filename);
+
+        $dixeofiles = $fs->get_area_files(
+            $context->id,
+            'format_dixeo',
+            'chapterimage',
+            $sid,
+            'id',
+            false
+        );
+        $this->assertCount(0, $dixeofiles);
+    }
+
+    /**
+     * Test regenerating a tiles section photo replaces the file and the recorded filename.
+     */
+    public function test_regenerate_tiles_section_replaces_photo(): void {
+        global $DB, $USER;
+
+        $this->setAdminUser();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['format' => 'topics', 'numsections' => 2], ['createsections' => true]);
+        $courseid = (int) $course->id;
+        $DB->set_field('course', 'format', 'tiles', ['id' => $courseid]);
+        $section = $this->get_section_one($courseid);
+        $sid = (int) $section->id;
+        $first = self::fixture_png_bytes();
+        $second = self::fixture_jpeg_bytes();
+        $this->assertNotSame(sha1($first), sha1($second));
+
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
+            $sid,
+            ['image_base64' => base64_encode($first)],
+            (int) $USER->id
+        );
+        $context = context_course::instance($courseid);
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, 'format_tiles', 'tilephoto', $sid, 'id', false);
+        $this->assertCount(1, $files);
+        $hashafterfirst = reset($files)->get_contenthash();
+        $filenameafterfirst = $this->tiles_section_photo_filename($courseid, $sid);
+
+        writer::apply_from_job_result(
+            scope::SCOPE_FORMAT_SECTION,
+            $sid,
+            ['image_base64' => base64_encode($second)],
+            (int) $USER->id
+        );
+        $files = $fs->get_area_files($context->id, 'format_tiles', 'tilephoto', $sid, 'id', false);
+        $this->assertCount(1, $files);
+        $this->assertNotSame($hashafterfirst, reset($files)->get_contenthash());
+        $filenameaftersecond = $this->tiles_section_photo_filename($courseid, $sid);
+        $this->assertSame(reset($files)->get_filename(), $filenameaftersecond);
+        $this->assertNotSame($filenameafterfirst, $filenameaftersecond);
+    }
+
+    /**
 
      * Test apply from job result course scope matches direct overview apply.
 
@@ -304,6 +391,34 @@ final class writer_test extends \advanced_testcase {
         $url = course_summary_exporter::get_course_image(get_course($course->id));
         $this->assertNotEmpty($url);
         $this->assertStringContainsString('pluginfile.php', (string) $url);
+    }
+
+    /**
+     * Filename format_tiles will use for this section photo.
+     *
+     * @param int $courseid
+     * @param int $sectionid course_sections.id
+     * @return string
+     */
+    private function tiles_section_photo_filename(int $courseid, int $sectionid): string {
+        global $DB;
+
+        if (class_exists(\format_tiles\local\format_option::class)) {
+            $value = \format_tiles\local\format_option::get(
+                $courseid,
+                \format_tiles\local\format_option::OPTION_SECTION_PHOTO,
+                $sectionid
+            );
+            return (string) $value;
+        }
+
+        $value = $DB->get_field('course_format_options', 'value', [
+            'courseid' => $courseid,
+            'format' => 'tiles',
+            'sectionid' => $sectionid,
+            'name' => 'tilephoto',
+        ], IGNORE_MISSING);
+        return (string) $value;
     }
 
     /**
