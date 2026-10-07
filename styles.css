@@ -392,6 +392,24 @@ h2:has(.dixeo-sync-indicator),
     height: auto;
 }
 
+/*
+ * The editor wraps a pending img in a span. An inline span's box is only the
+ * line height, so the absolute shimmer (and status pill) miss the image.
+ * inline-block matches .dixeo-imageeditor-wrap and sizes the host to the img.
+ */
+.dixeo-img-gen-frame {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: bottom;
+    line-height: 0;
+}
+
+.dixeo-img-gen-frame > img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
 /* Shimmer hosts: pending shortcode frame/wrap, and filter generating states. */
 .dixeo-img-gen-frame:has(> img.dixeo-img-gen-pending),
 .dixeo-imageeditor-wrap:has(> img.dixeo-img-gen-pending),
