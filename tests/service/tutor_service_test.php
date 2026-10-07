@@ -175,7 +175,7 @@ final class tutor_service_test extends \advanced_testcase {
         );
     }
 
-    public function test_submit_system_message_passes_context_without_instructions(): void {
+    public function test_submit_system_message_attaches_course_structure_when_instructions_empty(): void {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
         $context = ['schema' => 'proactive', 'version' => 1, 'body' => 'Context line'];
@@ -191,7 +191,7 @@ final class tutor_service_test extends \advanced_testcase {
                         && ($payload['context'] ?? null) === $context
                         && ($payload['requireResponse'] ?? null) === true
                         && ($payload['message'] ?? null) === 'Context line'
-                        && ($payload['instructions'] ?? null) === 'Context line'
+                        && str_contains((string) ($payload['instructions'] ?? ''), '## Course Structure')
                         && !isset($payload['includeInstructions']);
                 })
             )
@@ -202,6 +202,100 @@ final class tutor_service_test extends \advanced_testcase {
             (int) $course->id,
             2,
             tutor_message::system($context, 'Context line')
+        );
+    }
+
+    public function test_submit_practice_quiz_review_appends_course_structure(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'name' => 'VO2 Max Primer',
+            'content' => 'Intro',
+        ]);
+        $context = [
+            'schema' => 'practice_quiz_review',
+            'version' => 1,
+            'title' => 'Practice check',
+            'questions' => [],
+        ];
+        $this->stub_file_sync_service();
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_job')
+            ->with(
+                '/v1/tutor/messages',
+                $this->callback(function (array $payload): bool {
+                    $instructions = (string) ($payload['instructions'] ?? '');
+                    $structurepos = strrpos($instructions, '## Course Structure');
+                    return ($payload['role'] ?? '') === 'system'
+                        && ($payload['mode'] ?? '') === tutor_message::MODE_QUIZ
+                        && ($payload['context']['schema'] ?? '') === 'practice_quiz_review'
+                        && $structurepos !== false
+                        && !str_contains($instructions, '[Practice quiz review]')
+                        && str_contains($instructions, 'VO2 Max Primer');
+                })
+            )
+            ->willReturn(operation_result::pending('job-review', 'pending', 0));
+
+        $service = new tutor_service($mockjob);
+        $service->submit(
+            (int) $course->id,
+            2,
+            tutor_message::system(
+                $context,
+                'Practice check',
+                null,
+                true
+            ),
+            tutor_message::MODE_QUIZ
+        );
+    }
+
+    public function test_submit_proactive_system_message_appends_course_structure(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('page', [
+            'course' => $course->id,
+            'name' => 'Endurance Basics',
+            'content' => 'Intro',
+        ]);
+        $context = [
+            'schema' => 'proactive',
+            'version' => 1,
+            'events' => [['type' => 'quiz_graded', 'quizname' => 'Unit quiz', 'grade' => '8', 'maxgrade' => '10']],
+        ];
+        $this->stub_file_sync_service();
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_job')
+            ->with(
+                '/v1/tutor/messages',
+                $this->callback(function (array $payload): bool {
+                    $instructions = (string) ($payload['instructions'] ?? '');
+                    $structurepos = strrpos($instructions, '## Course Structure');
+                    return ($payload['role'] ?? '') === 'system'
+                        && ($payload['requireResponse'] ?? null) === true
+                        && ($payload['context']['schema'] ?? '') === 'proactive'
+                        && $structurepos !== false
+                        && !str_contains($instructions, 'The learner completed the quiz')
+                        && str_contains($instructions, 'Endurance Basics');
+                })
+            )
+            ->willReturn(operation_result::pending('job-proactive', 'pending', 0));
+
+        $service = new tutor_service($mockjob);
+        $service->submit(
+            (int) $course->id,
+            2,
+            tutor_message::system(
+                $context,
+                '',
+                null,
+                true
+            )
         );
     }
 
