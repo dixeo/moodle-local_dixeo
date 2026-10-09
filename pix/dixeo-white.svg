@@ -1,0 +1,26 @@
+<svg width="1200" height="1200" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1"><g transform="scale(16.87259440149019) translate(-15.439377042982311, -14.43937513563368)">
+    <g fill="#ffffff">
+        <title xmlns="http://www.w3.org/2000/svg">Artboard 29</title>
+        <path xmlns="http://www.w3.org/2000/svg"
+              d="
+              M76,31.05
+              l-21-12
+              a8,8,0,0,0-7.94,0
+              l-21,12
+              A8,8,0,0,0,22,38
+              V62
+              a8,8,0,0,0,4,6.95
+              l21,12
+              a8,8,0,0,0,7.94,0
+              l21-12
+              A8,8,0,0,0,80,62
+              V38
+              A8,8,0,0,0,76,31.05Z
+              M51,74,30,62
+              V41.07
+              A30,30,0,0,1,58,70Z
+              M72,62
+              l-6.38,3.65A38.09,38.09,0,0,0,36.89,34.06L51,26,72,38Z"/>
+    </g>
+</g>
+</svg>

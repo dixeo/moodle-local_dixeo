@@ -65,6 +65,22 @@ final class course_edit_form_test extends \advanced_testcase {
             $mform->getElement(course_edit_form::HEADER)->toHtml()
         );
         $this->assertSame('Course intent', $mform->getElement(course_edit_form::FIELD)->getValue());
+
+        $button = $mform->getElement(course_edit_form::OPEN_BUTTON);
+        $this->assertSame('button', $button->getAttribute('type'));
+        $this->assertStringContainsString(get_string('settings_button', 'local_dixeo'), $button->getValue());
+        $this->assertStringContainsString('local-dixeo-settings-logo', $button->getValue());
+        $this->assertStringContainsString('width="16"', $button->getValue());
+        $this->assertSame('local-dixeo-settings-open', $button->getAttribute('data-action'));
+        $this->assertSame('local-dixeo-settings-open', $button->getAttribute('parentclass'));
+        $this->assertSame($course->fullname, $button->getAttribute('data-course-name'));
+        $override = new \ReflectionProperty($button, 'customclassoverride');
+        $this->assertSame('btn-primary', $override->getValue($button));
+
+        $index = new \ReflectionProperty($mform, '_elementIndex');
+        $positions = $index->getValue($mform);
+        $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
+        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::OPEN_BUTTON]);
     }
 
     /**

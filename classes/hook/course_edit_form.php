@@ -19,9 +19,10 @@ namespace local_dixeo\hook;
 use local_dixeo\external\service_factory;
 
 /**
- * Learning intent on the course edit form.
+ * Learning intent and the Dixeo settings button on the course edit form.
  *
  * The textarea is course-only. A save that does not include the field leaves the stored value unchanged.
+ * The settings button opens an empty modal and does not submit the form.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -34,14 +35,33 @@ class course_edit_form {
     /** @var string Header element that groups Dixeo course fields. */
     public const HEADER = 'local_dixeo_settings';
 
+    /** @var string Button that opens the Dixeo settings modal. */
+    public const OPEN_BUTTON = 'local_dixeo_settings_open';
+
     /**
-     * Add the Dixeo header and the learning intent textarea.
+     * Add the Dixeo header, the settings button, then the learning intent textarea.
+     *
+     * The button is the first control in the section.
      *
      * @param \core_course\hook\after_form_definition $hook Course form definition hook.
      */
     public static function definition(\core_course\hook\after_form_definition $hook): void {
+        global $OUTPUT, $PAGE;
+
         $mform = $hook->mform;
         $mform->addElement('header', self::HEADER, get_string('settings_category', 'local_dixeo'));
+        $logo = \html_writer::img($OUTPUT->image_url('dixeo-white', 'local_dixeo'), '', [
+            'class' => 'local-dixeo-settings-logo',
+            'alt' => '',
+            'aria-hidden' => 'true',
+            'width' => 16,
+            'height' => 16,
+        ]);
+        $mform->addElement('button', self::OPEN_BUTTON, $logo . get_string('settings_button', 'local_dixeo'), [
+            'data-action' => 'local-dixeo-settings-open',
+            'type' => 'button',
+            'parentclass' => 'local-dixeo-settings-open',
+        ], ['customclassoverride' => 'btn-primary']);
         $mform->addElement(
             'textarea',
             self::FIELD,
@@ -50,6 +70,7 @@ class course_edit_form {
         );
         $mform->setType(self::FIELD, PARAM_TEXT);
         $mform->addHelpButton(self::FIELD, 'learning_intent', 'local_dixeo');
+        $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
     }
 
     /**
@@ -73,6 +94,11 @@ class course_edit_form {
             )->get_value();
         }
         $mform->getElement(self::FIELD)->setValue($value);
+        if ($mform->elementExists(self::OPEN_BUTTON)) {
+            $mform->getElement(self::OPEN_BUTTON)->updateAttributes([
+                'data-course-name' => self::element_text($mform->getElementValue('fullname')),
+            ]);
+        }
     }
 
     /**
@@ -107,9 +133,17 @@ class course_edit_form {
      * @return int
      */
     private static function course_id(mixed $raw): int {
+        return (int) self::element_text($raw);
+    }
+
+    /**
+     * @param mixed $raw Value from a form element.
+     * @return string
+     */
+    private static function element_text(mixed $raw): string {
         if (is_array($raw)) {
             $raw = reset($raw);
         }
-        return (int) $raw;
+        return (string) $raw;
     }
 }
