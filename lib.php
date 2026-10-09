@@ -110,3 +110,28 @@ function local_dixeo_is_valid_job_uuid(string $jobid): bool {
         $jobid
     );
 }
+
+/**
+ * Dixeo settings owned by local_dixeo.
+ *
+ * Plain arrays so the catalogue does not depend on loader classes. A setting with no `core`
+ * key does not override a Moodle setting. A `core` key names the Moodle admin setting it overrides.
+ *
+ * @return array[]
+ */
+function local_dixeo_dixeo_settings(): array {
+    return [
+        [
+            'key' => 'learning_intent',
+            'shortname' => 'learning_intent',
+            'component' => 'local_dixeo',
+            'type' => 'textarea',
+            'default' => '',
+            'levels' => ['course'],
+            'feature' => 'courses',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'learning_intent_desc',
+            'sensitive' => false,
+        ],
+    ];
+}
