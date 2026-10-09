@@ -78,6 +78,7 @@ final class catalogue_test extends \advanced_testcase {
         $this->assertFalse($setting->has_core());
         $this->assertTrue(get_string_manager()->string_exists('enabled', 'local_dixeo'));
         $this->assertTrue(get_string_manager()->string_exists('enabled_help', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('enabled_course', 'local_dixeo'));
         $this->assertTrue(get_string_manager()->string_exists('enabled_course_help', 'local_dixeo'));
     }
 

@@ -29,6 +29,9 @@ if ($hassiteconfig) {
     // Create settings page.
     $settings = new admin_settingpage('local_dixeo', get_string('pluginname', 'local_dixeo'));
 
+    // Master switch. This page stays available so the site can be turned back on.
+    $settings->add(new \local_dixeo\admin_setting_enabled());
+
     // API Configuration section.
     $settings->add(new admin_setting_heading(
         'local_dixeo/api_config',

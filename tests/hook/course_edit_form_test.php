@@ -29,7 +29,7 @@ use local_dixeo\external\service_factory;
 use local_dixeo\settings\resolver;
 
 /**
- * Course form tests for learning intent.
+ * Course form tests for the Dixeo section.
  *
  * @covers \local_dixeo\hook\course_edit_form
  */
@@ -77,10 +77,68 @@ final class course_edit_form_test extends \advanced_testcase {
         $override = new \ReflectionProperty($button, 'customclassoverride');
         $this->assertSame('btn-primary', $override->getValue($button));
 
+        $enabled = $mform->getElement(course_edit_form::ENABLED);
+        $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::ENABLED));
+        $this->assertSame('1', $this->element_value($enabled->getValue()));
+        $this->assertStringContainsString(
+            get_string('enabled_course_help', 'local_dixeo'),
+            $enabled->_helpbutton
+        );
+
         $index = new \ReflectionProperty($mform, '_elementIndex');
         $positions = $index->getValue($mform);
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
-        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::OPEN_BUTTON]);
+        $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
+        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::ENABLED]);
+    }
+
+    /**
+     * Course off stays on the form, including the switch and learning intent.
+     */
+    public function test_course_off_still_shows_the_dixeo_section(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'enabled',
+            \context_course::instance($course->id),
+            '0'
+        );
+
+        $form = $this->edit_form($course, $DB);
+        $form->definition_after_data();
+        $mform = $form->get_quick_form();
+
+        $this->assertTrue($mform->elementExists(course_edit_form::HEADER));
+        $this->assertTrue($mform->elementExists(course_edit_form::OPEN_BUTTON));
+        $this->assertTrue($mform->elementExists(course_edit_form::FIELD));
+        $this->assertSame('0', $this->element_value($mform->getElement(course_edit_form::ENABLED)->getValue()));
+    }
+
+    /**
+     * Dixeo off removes the whole Dixeo section from the course form.
+     */
+    public function test_dixeo_off_omits_the_course_section(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'enabled',
+            \context_system::instance(),
+            '0'
+        );
+
+        $form = $this->edit_form($course, $DB);
+        $mform = $form->get_quick_form();
+
+        $this->assertFalse($mform->elementExists(course_edit_form::HEADER));
+        $this->assertFalse($mform->elementExists(course_edit_form::OPEN_BUTTON));
+        $this->assertFalse($mform->elementExists(course_edit_form::ENABLED));
+        $this->assertFalse($mform->elementExists(course_edit_form::FIELD));
     }
 
     /**
@@ -108,6 +166,44 @@ final class course_edit_form_test extends \advanced_testcase {
         $empty = $config->get('local_dixeo', 'learning_intent', $context);
         $this->assertSame('', $empty->get_value());
         $this->assertSame(resolver::LAYER_SITE, $empty->get_source());
+    }
+
+    /**
+     * Saving the course switch stores Off on the course and leaves the Dixeo layer on.
+     */
+    public function test_course_save_stores_the_switch_and_ignores_a_missing_field(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $config = service_factory::get_settings_config();
+
+        $record = get_course($course->id);
+        $record->{course_edit_form::ENABLED} = '0';
+        update_course($record);
+
+        $this->assertFalse($config->enabled_for($context));
+        $this->assertTrue($config->enabled_for(\context_system::instance()));
+        $this->assertFalse(get_config('local_dixeo', 'enabled'));
+
+        $unchanged = get_course($course->id);
+        update_course($unchanged);
+        $this->assertFalse($config->enabled_for($context));
+
+        $restored = get_course($course->id);
+        $restored->{course_edit_form::ENABLED} = '1';
+        update_course($restored);
+        $this->assertTrue($config->enabled_for($context));
+        $this->assertSame(resolver::LAYER_SITE, $config->get('local_dixeo', 'enabled', $context)->get_source());
+    }
+
+    /**
+     * @param mixed $raw Value from a form element.
+     * @return string
+     */
+    private function element_value(mixed $raw): string {
+        if (is_array($raw)) {
+            $raw = reset($raw);
+        }
+        return (string) $raw;
     }
 
     /**

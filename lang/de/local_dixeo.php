@@ -177,6 +177,7 @@ $string['dixeo_pluginfile_not_found'] = 'Die Bilddatei konnte nicht aus dem Spei
 $string['dsl_error'] = 'Modulerstellung fehlgeschlagen: {$a}';
 $string['editorimageorphaned'] = 'Image removed from editor content before completion';
 $string['enabled'] = 'Dixeo aktivieren';
+$string['enabled_course'] = 'Dixeo aktivieren';
 $string['enabled_course_help'] = 'Dixeo-Funktionen in diesem Kurs aktivieren oder deaktivieren.';
 $string['enabled_help'] = 'Dixeo-Funktionen global aktivieren oder deaktivieren.';
 $string['error:activity_not_available'] = 'Der Aktivitätstyp {$a} ist nicht installiert oder nicht aktiviert.';

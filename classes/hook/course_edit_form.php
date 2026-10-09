@@ -19,10 +19,10 @@ namespace local_dixeo\hook;
 use local_dixeo\external\service_factory;
 
 /**
- * Learning intent and the Dixeo settings button on the course edit form.
+ * Dixeo course settings on the course edit form.
  *
- * The textarea is course-only. A save that does not include the field leaves the stored value unchanged.
- * The settings button opens an empty modal and does not submit the form.
+ * The section is omitted when the Dixeo layer is off. The settings button is the first control.
+ * The course switch and learning intent follow it. A save that omits a field leaves that stored value unchanged.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -38,15 +38,22 @@ class course_edit_form {
     /** @var string Button that opens the Dixeo settings modal. */
     public const OPEN_BUTTON = 'local_dixeo_settings_open';
 
+    /** @var string Course edit form element for the course on/off switch. */
+    public const ENABLED = 'local_dixeo_enabled';
+
     /**
-     * Add the Dixeo header, the settings button, then the learning intent textarea.
+     * Add the Dixeo header, the settings button, the course switch, then learning intent.
      *
-     * The button is the first control in the section.
+     * The button is the first control in the section. Nothing is added when the Dixeo layer is off.
      *
      * @param \core_course\hook\after_form_definition $hook Course form definition hook.
      */
     public static function definition(\core_course\hook\after_form_definition $hook): void {
         global $OUTPUT, $PAGE;
+
+        if (!service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+            return;
+        }
 
         $mform = $hook->mform;
         $mform->addElement('header', self::HEADER, get_string('settings_category', 'local_dixeo'));
@@ -62,6 +69,9 @@ class course_edit_form {
             'type' => 'button',
             'parentclass' => 'local-dixeo-settings-open',
         ], ['customclassoverride' => 'btn-primary']);
+        $mform->addElement('selectyesno', self::ENABLED, get_string('enabled', 'local_dixeo'));
+        $mform->setType(self::ENABLED, PARAM_INT);
+        $mform->addHelpButton(self::ENABLED, 'enabled_course', 'local_dixeo');
         $mform->addElement(
             'textarea',
             self::FIELD,
@@ -74,30 +84,36 @@ class course_edit_form {
     }
 
     /**
-     * Fill the textarea from the course value. A new course shows the shipped default.
+     * Fill learning intent and the course switch. A new course shows the Dixeo value for the switch.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
      */
     public static function definition_after_data(\core_course\hook\after_form_definition_after_data $hook): void {
         $mform = $hook->mform;
-        if (!$mform->elementExists(self::FIELD)) {
-            return;
-        }
-
-        $courseid = self::course_id($mform->getElementValue('id'));
-        $value = '';
-        if ($courseid > 0) {
-            $value = service_factory::get_settings_config()->get(
-                'local_dixeo',
-                'learning_intent',
-                \context_course::instance($courseid)
-            )->get_value();
-        }
-        $mform->getElement(self::FIELD)->setValue($value);
         if ($mform->elementExists(self::OPEN_BUTTON)) {
             $mform->getElement(self::OPEN_BUTTON)->updateAttributes([
                 'data-course-name' => self::element_text($mform->getElementValue('fullname')),
             ]);
+        }
+        if (!$mform->elementExists(self::FIELD) && !$mform->elementExists(self::ENABLED)) {
+            return;
+        }
+
+        $courseid = self::course_id($mform->getElementValue('id'));
+        $config = service_factory::get_settings_config();
+        $coursecontext = $courseid > 0 ? \context_course::instance($courseid) : null;
+        if ($mform->elementExists(self::FIELD)) {
+            $intent = '';
+            if ($coursecontext !== null) {
+                $intent = $config->get('local_dixeo', 'learning_intent', $coursecontext)->get_value();
+            }
+            $mform->getElement(self::FIELD)->setValue($intent);
+        }
+        if ($mform->elementExists(self::ENABLED)) {
+            $enabledcontext = $coursecontext ?? \context_system::instance();
+            $mform->getElement(self::ENABLED)->setValue(
+                $config->get('local_dixeo', 'enabled', $enabledcontext)->get_value()
+            );
         }
     }
 
@@ -108,24 +124,33 @@ class course_edit_form {
      */
     public static function submission(\core_course\hook\after_form_submission $hook): void {
         $data = $hook->get_data();
-        if (!property_exists($data, self::FIELD)) {
+        $intent = null;
+        $enabled = null;
+        if (property_exists($data, self::FIELD)) {
+            $intent = (string) $data->{self::FIELD};
+            unset($data->{self::FIELD});
+        }
+        if (property_exists($data, self::ENABLED)) {
+            $enabled = (string) $data->{self::ENABLED};
+            unset($data->{self::ENABLED});
+        }
+        if ($intent === null && $enabled === null) {
             return;
         }
-
-        $value = (string) $data->{self::FIELD};
-        unset($data->{self::FIELD});
 
         $courseid = (int) ($data->id ?? 0);
         if ($courseid <= 0) {
             return;
         }
 
-        service_factory::get_settings_config()->set(
-            'local_dixeo',
-            'learning_intent',
-            \context_course::instance($courseid),
-            $value
-        );
+        $config = service_factory::get_settings_config();
+        $context = \context_course::instance($courseid);
+        if ($intent !== null) {
+            $config->set('local_dixeo', 'learning_intent', $context, $intent);
+        }
+        if ($enabled !== null) {
+            $config->set('local_dixeo', 'enabled', $context, $enabled);
+        }
     }
 
     /**

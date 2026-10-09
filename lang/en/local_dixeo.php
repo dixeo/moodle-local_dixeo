@@ -177,6 +177,7 @@ $string['dixeo_pluginfile_not_found'] = 'Could not read the image file from stor
 $string['dsl_error'] = 'Module creation failed: {$a}';
 $string['editorimageorphaned'] = 'Image removed from editor content before completion';
 $string['enabled'] = 'Enable Dixeo';
+$string['enabled_course'] = 'Enable Dixeo';
 $string['enabled_course_help'] = 'Enable or disable Dixeo features in this course.';
 $string['enabled_help'] = 'Enable or disable Dixeo features globally.';
 $string['error:activity_not_available'] = 'The activity type {$a} is not installed or not enabled.';
