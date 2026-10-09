@@ -51,11 +51,11 @@ final class catalogue_test extends \advanced_testcase {
         $this->assertSame(['course'], $setting->get_levels());
         $this->assertSame('courses', $setting->get_feature());
         $this->assertSame('dixeo_core', $setting->get_plugingroup());
-        $this->assertSame('learning_intent_desc', $setting->get_help());
+        $this->assertSame('learning_intent_help', $setting->get_help());
         $this->assertFalse($setting->is_sensitive());
         $this->assertFalse($setting->has_core());
         $this->assertTrue(get_string_manager()->string_exists('learning_intent', 'local_dixeo'));
-        $this->assertTrue(get_string_manager()->string_exists('learning_intent_desc', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('learning_intent_help', 'local_dixeo'));
     }
 
     /**
@@ -101,7 +101,7 @@ final class catalogue_test extends \advanced_testcase {
             'levels' => ['dixeo'],
             'feature' => 'courses',
             'plugingroup' => 'dixeo_core',
-            'help' => 'learning_intent_desc',
+            'help' => 'learning_intent_help',
             'sensitive' => false,
             'core' => $core,
         ];

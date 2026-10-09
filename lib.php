@@ -130,7 +130,7 @@ function local_dixeo_dixeo_settings(): array {
             'levels' => ['course'],
             'feature' => 'courses',
             'plugingroup' => 'dixeo_core',
-            'help' => 'learning_intent_desc',
+            'help' => 'learning_intent_help',
             'sensitive' => false,
         ],
     ];

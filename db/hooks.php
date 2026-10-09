@@ -17,7 +17,7 @@
 /**
  * Hook callbacks for the Dixeo plugin.
  *
- * Defines hooks for injecting the sync indicator into course pages.
+ * Injects course-page indicators and adds Learning intent to the course edit form.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -37,5 +37,17 @@ $callbacks = [
         'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
         'callback' => [\local_dixeo\hook\output\content_image_pending_injector::class, 'callback'],
         'priority' => 400,
+    ],
+    [
+        'hook' => \core_course\hook\after_form_definition::class,
+        'callback' => [\local_dixeo\hook\course_edit_form::class, 'definition'],
+    ],
+    [
+        'hook' => \core_course\hook\after_form_definition_after_data::class,
+        'callback' => [\local_dixeo\hook\course_edit_form::class, 'definition_after_data'],
+    ],
+    [
+        'hook' => \core_course\hook\after_form_submission::class,
+        'callback' => [\local_dixeo\hook\course_edit_form::class, 'submission'],
     ],
 ];
