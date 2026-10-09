@@ -66,6 +66,9 @@ class poll_image_job extends \core\task\adhoc_task {
         if ($target->get_courseid() < 1 || $jobid === '' || $userid < 1) {
             return;
         }
+        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($target->get_courseid()))) {
+            return;
+        }
 
         $job = job_repository::get_by_target($target);
         if (!$job) {

@@ -44,6 +44,9 @@ function local_dixeo_extend_settings_navigation(settings_navigation $settingsnav
  * @param context_course $context Course context.
  */
 function local_dixeo_extend_navigation_course(navigation_node $navigation, stdClass $course, context_course $context): void {
+    if (!\local_dixeo\external\service_factory::get_settings_config()->enabled_for($context)) {
+        return;
+    }
     if (!\local_dixeo\service\tutor_usage_report_service::can_view_course((int) $course->id)) {
         return;
     }

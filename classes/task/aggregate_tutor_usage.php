@@ -16,6 +16,7 @@
 
 namespace local_dixeo\task;
 
+use local_dixeo\external\service_factory;
 use local_dixeo\service\tutor_usage_aggregator;
 
 /**
@@ -41,6 +42,10 @@ class aggregate_tutor_usage extends \core\task\scheduled_task {
      * Execute aggregation for all pending calendar days through yesterday.
      */
     public function execute(): void {
+        if (!service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+            return;
+        }
+
         $aggregator = new tutor_usage_aggregator();
         $result = $aggregator->aggregate_pending_days();
         $daycount = count($result['days']);

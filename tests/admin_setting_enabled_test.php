@@ -56,6 +56,40 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
+     * The Image generation section is omitted while Dixeo is off and returns when it is on.
+     */
+    public function test_image_generation_section_follows_the_dixeo_switch(): void {
+        $config = \local_dixeo\external\service_factory::get_settings_config();
+        $system = \context_system::instance();
+
+        $config->set('local_dixeo', 'enabled', $system, '0');
+        $off = $this->settings_page();
+        $this->assertTrue(isset($off->settings->local_dixeoenabled));
+        $this->assertTrue(isset($off->settings->local_dixeoapi_url));
+        $this->assertFalse(isset($off->settings->local_dixeoimage_generation));
+        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_enabled));
+        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_course_mode));
+        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_section_mode));
+        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_content_mode));
+
+        $config->set('local_dixeo', 'enabled', $system, '1');
+        $on = $this->settings_page();
+        $this->assertTrue(isset($on->settings->local_dixeoimage_generation));
+        $this->assertTrue(isset($on->settings->local_dixeoimage_generation_content_mode));
+    }
+
+    /**
+     * Reload the Dixeo admin page from the current switch value.
+     *
+     * @return \admin_settingpage
+     */
+    private function settings_page(): \admin_settingpage {
+        $page = admin_get_root(true, true)->locate('local_dixeo');
+        $this->assertInstanceOf(\admin_settingpage::class, $page);
+        return $page;
+    }
+
+    /**
      * A null write, used when no value was posted, does not turn Dixeo off.
      */
     public function test_null_write_leaves_the_stored_value_unchanged(): void {

@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\url_helper;
@@ -109,6 +110,7 @@ class get_content_image_status extends external_api {
                     continue;
                 }
                 self::validate_context($context);
+                service_factory::get_settings_config()->require_enabled($context);
                 $seencontexts[$contextid] = true;
             }
 

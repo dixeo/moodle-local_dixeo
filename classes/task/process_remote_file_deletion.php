@@ -54,6 +54,10 @@ class process_remote_file_deletion extends adhoc_task {
         }
 
         $courseid = (int) $data->courseid;
+        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($courseid))) {
+            mtrace("process_remote_file_deletion: Dixeo is off for course {$courseid}, skipping");
+            return;
+        }
         mtrace("process_remote_file_deletion: Retrying remote delete for course {$courseid}");
 
         $service = service_factory::get_file_sync_service();

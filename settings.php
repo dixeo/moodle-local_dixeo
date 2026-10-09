@@ -65,59 +65,61 @@ if ($hassiteconfig) {
         PARAM_ALPHANUMEXT
     ));
 
-    // Image generation section.
-    $settings->add(new admin_setting_heading(
-        'local_dixeo/image_generation',
-        get_string('image_generation', 'local_dixeo'),
-        get_string('image_generation_desc', 'local_dixeo')
-    ));
+    // Image generation is a Dixeo feature, so the section is omitted while Dixeo is off.
+    if (\local_dixeo\external\service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+        $settings->add(new admin_setting_heading(
+            'local_dixeo/image_generation',
+            get_string('image_generation', 'local_dixeo'),
+            get_string('image_generation_desc', 'local_dixeo')
+        ));
 
-    $settings->add(new admin_setting_configcheckbox(
-        'local_dixeo/image_generation_enabled',
-        get_string('image_generation_enabled', 'local_dixeo'),
-        get_string('image_generation_enabled_desc', 'local_dixeo'),
-        1
-    ));
+        $settings->add(new admin_setting_configcheckbox(
+            'local_dixeo/image_generation_enabled',
+            get_string('image_generation_enabled', 'local_dixeo'),
+            get_string('image_generation_enabled_desc', 'local_dixeo'),
+            1
+        ));
 
-    $imagemodechoices = [
-        'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
-        'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
-        'generate_edit' => get_string('image_generation_mode_generate_edit', 'local_dixeo'),
-    ];
+        $imagemodechoices = [
+            'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
+            'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
+            'generate_edit' => get_string('image_generation_mode_generate_edit', 'local_dixeo'),
+        ];
 
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_course_mode',
-        get_string('image_generation_course_mode', 'local_dixeo'),
-        get_string('image_generation_course_mode_desc', 'local_dixeo'),
-        'generate_edit',
-        $imagemodechoices
-    ));
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_course_mode',
+            get_string('image_generation_course_mode', 'local_dixeo'),
+            get_string('image_generation_course_mode_desc', 'local_dixeo'),
+            'generate_edit',
+            $imagemodechoices
+        ));
 
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_section_mode',
-        get_string('image_generation_section_mode', 'local_dixeo'),
-        get_string('image_generation_section_mode_desc', 'local_dixeo'),
-        'generate_edit',
-        $imagemodechoices
-    ));
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_section_mode',
+            get_string('image_generation_section_mode', 'local_dixeo'),
+            get_string('image_generation_section_mode_desc', 'local_dixeo'),
+            'generate_edit',
+            $imagemodechoices
+        ));
 
-    $contentmodechoices = [
-        'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
-        'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
-    ];
-    if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
-        $contentmodechoices['generate_edit'] = get_string('image_generation_mode_generate_edit', 'local_dixeo');
+        $contentmodechoices = [
+            'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
+            'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
+        ];
+        if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
+            $contentmodechoices['generate_edit'] = get_string('image_generation_mode_generate_edit', 'local_dixeo');
+        }
+
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_content_mode',
+            get_string('image_generation_content_mode', 'local_dixeo'),
+            get_string('image_generation_content_mode_desc', 'local_dixeo'),
+            \local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')
+                ? 'generate_edit'
+                : 'generate',
+            $contentmodechoices
+        ));
     }
-
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_content_mode',
-        get_string('image_generation_content_mode', 'local_dixeo'),
-        get_string('image_generation_content_mode_desc', 'local_dixeo'),
-        \local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')
-            ? 'generate_edit'
-            : 'generate',
-        $contentmodechoices
-    ));
 
     // Credit Balance Display section.
     $settings->add(new admin_setting_heading(

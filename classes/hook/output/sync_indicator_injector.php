@@ -56,6 +56,10 @@ class sync_indicator_injector {
             return;
         }
 
+        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($COURSE->id))) {
+            return;
+        }
+
         // Check capability (view indicator with generate; manage actions need syncfiles).
         $context = \context_course::instance($COURSE->id);
         if (!has_capability('local/dixeo:generate', $context) && !has_capability('local/dixeo:syncfiles', $context)) {

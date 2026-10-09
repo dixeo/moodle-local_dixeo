@@ -63,6 +63,10 @@ class process_file_sync extends adhoc_task {
         }
 
         $courseid = (int) $data->courseid;
+        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($courseid))) {
+            mtrace("process_file_sync: Dixeo is off for course {$courseid}, skipping");
+            return;
+        }
 
         mtrace("process_file_sync: Starting sync for course {$courseid}");
 

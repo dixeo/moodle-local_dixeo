@@ -99,6 +99,34 @@ final class config {
     }
 
     /**
+     * Stop when Dixeo features must not run in $context.
+     *
+     * @param \context $context System, course, or a context inside a course.
+     * @throws \moodle_exception When {@see self::enabled_for()} is false.
+     */
+    public function require_enabled(\context $context): void {
+        if (!$this->enabled_for($context)) {
+            throw new \moodle_exception('error:dixeo_disabled', 'local_dixeo');
+        }
+    }
+
+    /**
+     * Editing-mode text for a block that is hidden because Dixeo is off.
+     *
+     * The Dixeo layer asks for an administrator. A course that is off while the
+     * Dixeo layer is on names that course.
+     *
+     * @param \context $context Page context used by {@see self::enabled_for()}.
+     * @return string
+     */
+    public function disabled_block_text(\context $context): string {
+        $siteoff = $this->get(self::COMPONENT, self::ENABLED, \context_system::instance())->get_value() !== '1';
+        $incourse = $context->get_course_context(false) instanceof \context;
+        $identifier = (!$siteoff && $incourse) ? 'disabled_block_course' : 'disabled_block_site';
+        return get_string($identifier, 'local_dixeo');
+    }
+
+    /**
      * @param string $component Frankenstyle component.
      * @param string $name Catalogue key.
      * @return definition

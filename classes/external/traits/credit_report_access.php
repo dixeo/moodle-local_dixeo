@@ -16,6 +16,8 @@
 
 namespace local_dixeo\external\traits;
 
+use local_dixeo\external\service_factory;
+
 /**
  * Trait for credit report access checks in external APIs.
  *
@@ -38,6 +40,7 @@ trait credit_report_access {
         ) {
             require_capability('local/dixeo:manage', $context);
         }
+        service_factory::get_settings_config()->require_enabled($context);
         return $context;
     }
 }

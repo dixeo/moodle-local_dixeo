@@ -205,6 +205,22 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * require_enabled throws when the Dixeo layer is off and passes when it is on.
+     */
+    public function test_require_enabled_throws_when_dixeo_is_off(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $system = \context_system::instance();
+
+        $config->require_enabled($system);
+
+        $config->set('local_dixeo', 'enabled', $system, '0');
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('error:dixeo_disabled', 'local_dixeo'));
+        $config->require_enabled($system);
+    }
+
+    /**
      * Reading the switch does not require an edit capability.
      */
     public function test_enabled_for_does_not_require_an_edit_capability(): void {

@@ -57,6 +57,23 @@ final class get_module_types_test extends \advanced_testcase {
         return (int) $course->id;
     }
 
+    /**
+     * A course that is off cannot list module types.
+     */
+    public function test_execute_rejects_a_course_when_dixeo_is_off(): void {
+        $courseid = $this->create_test_course();
+        service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'enabled',
+            \context_course::instance($courseid),
+            '0'
+        );
+
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('error:dixeo_disabled', 'local_dixeo'));
+        get_module_types::execute($courseid);
+    }
+
     public function test_classic_type_label_is_replaced_by_moodle_modulename_string(): void {
         $this->mock_catalogue([
             ['type' => 'page', 'label' => 'Page (API)', 'description' => '', 'category' => 'content', 'component' => 'mod_page'],
