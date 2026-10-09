@@ -26,7 +26,7 @@
 namespace local_dixeo\settings;
 
 /**
- * Storage and capability tests for learning intent.
+ * Storage and capability tests for catalogue settings.
  *
  * @covers \local_dixeo\settings\config
  */
@@ -113,6 +113,107 @@ final class config_test extends \advanced_testcase {
 
         $this->expectException(\coding_exception::class);
         (new config())->get('local_dixeo', 'learning_intent', \context_coursecat::instance($category->id));
+    }
+
+    /**
+     * With nothing stored, Dixeo is on for the site and for a course.
+     */
+    public function test_unset_enabled_is_on(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $config = new config();
+
+        $this->assertTrue($config->enabled_for(\context_system::instance()));
+        $this->assertTrue($config->enabled_for(\context_course::instance($course->id)));
+        $this->assertFalse(get_config('local_dixeo', 'enabled'));
+    }
+
+    /**
+     * Dixeo off stays off even when the course stores On.
+     */
+    public function test_dixeo_off_wins_over_a_course_on_override(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $coursecontext = \context_course::instance($course->id);
+
+        $config->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $config->set('local_dixeo', 'enabled', $coursecontext, '1');
+
+        $this->assertSame('1', $config->get('local_dixeo', 'enabled', $coursecontext)->get_value());
+        $this->assertFalse($config->enabled_for($coursecontext));
+        $this->assertFalse($config->enabled_for(\context_system::instance()));
+    }
+
+    /**
+     * Course off applies to that course and its modules, and leaves other courses on.
+     */
+    public function test_course_off_applies_to_that_course_only(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $other = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $coursecontext = \context_course::instance($course->id);
+
+        $config->set('local_dixeo', 'enabled', $coursecontext, '0');
+
+        $this->assertFalse($config->enabled_for($coursecontext));
+        $this->assertFalse($config->enabled_for(\context_module::instance($page->cmid)));
+        $this->assertTrue($config->enabled_for(\context_course::instance($other->id)));
+        $this->assertTrue($config->enabled_for(\context_system::instance()));
+    }
+
+    /**
+     * Saving On at the Dixeo layer removes the plugin-config row.
+     */
+    public function test_setting_dixeo_on_deletes_the_plugin_config_row(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $system = \context_system::instance();
+
+        $config->set('local_dixeo', 'enabled', $system, '0');
+        $this->assertSame('0', get_config('local_dixeo', 'enabled'));
+
+        $config->set('local_dixeo', 'enabled', $system, '1');
+
+        $this->assertFalse(get_config('local_dixeo', 'enabled'));
+        $this->assertTrue($config->enabled_for($system));
+    }
+
+    /**
+     * Editing the Dixeo layer requires moodle/site:config.
+     */
+    public function test_user_without_site_config_cannot_set_the_dixeo_layer(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+
+        $this->expectException(\required_capability_exception::class);
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+    }
+
+    /**
+     * Editing the course layer of the switch requires moodle/course:update.
+     */
+    public function test_user_without_course_update_cannot_set_enabled(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $this->setUser($user);
+
+        $this->expectException(\required_capability_exception::class);
+        (new config())->set('local_dixeo', 'enabled', \context_course::instance($course->id), '0');
+    }
+
+    /**
+     * Reading the switch does not require an edit capability.
+     */
+    public function test_enabled_for_does_not_require_an_edit_capability(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $this->setUser($user);
+
+        $this->assertTrue((new config())->enabled_for(\context_course::instance($course->id)));
     }
 
     /**

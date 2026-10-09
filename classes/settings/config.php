@@ -22,6 +22,7 @@ namespace local_dixeo\settings;
  * A setting is stored only at levels it declares. The Dixeo level, when declared, is plugin
  * config. A course value is a row in local_dixeo_setting, written only when it differs from
  * the parent. A course-only setting has no Dixeo parent, so that parent is the shipped default.
+ * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
  * Callers do not query the table.
  *
  * @package    local_dixeo
@@ -31,6 +32,12 @@ namespace local_dixeo\settings;
 final class config {
     /** @var string Course and activity override table. */
     public const TABLE = 'local_dixeo_setting';
+
+    /** @var string Component that owns the master switch. */
+    private const COMPONENT = 'local_dixeo';
+
+    /** @var string Catalogue key for the master switch. */
+    private const ENABLED = 'enabled';
 
     /**
      * Effective value at $context, falling back through the parent chain.
@@ -67,6 +74,28 @@ final class config {
             return;
         }
         $this->write_stored($definition, $context, $level, $value);
+    }
+
+    /**
+     * Whether Dixeo features run in $context.
+     *
+     * The Dixeo layer is absolute. Off is off everywhere, including a course whose own
+     * value is On. When the Dixeo layer is On, a course and contexts inside it use the
+     * course value. Any other context follows the Dixeo layer. This read does not
+     * require an edit capability.
+     *
+     * @param \context $context System, course, or a context inside a course.
+     * @return bool
+     */
+    public function enabled_for(\context $context): bool {
+        if ($this->get(self::COMPONENT, self::ENABLED, \context_system::instance())->get_value() !== '1') {
+            return false;
+        }
+        $coursecontext = $context->get_course_context(false);
+        if (!$coursecontext instanceof \context) {
+            return true;
+        }
+        return $this->get(self::COMPONENT, self::ENABLED, $coursecontext)->get_value() === '1';
     }
 
     /**
