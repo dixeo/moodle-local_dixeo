@@ -59,6 +59,29 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * The master switch is a bool at the Dixeo and course levels and does not override a core setting.
+     */
+    public function test_load_returns_enabled_without_core_target(): void {
+        $settings = catalogue::load();
+
+        $this->assertArrayHasKey('enabled', $settings);
+        $setting = $settings['enabled'];
+        $this->assertSame('enabled', $setting->get_shortname());
+        $this->assertSame('local_dixeo', $setting->get_component());
+        $this->assertSame('bool', $setting->get_type());
+        $this->assertSame('1', $setting->get_default());
+        $this->assertSame(['dixeo', 'course'], $setting->get_levels());
+        $this->assertSame('dixeo', $setting->get_feature());
+        $this->assertSame('dixeo_core', $setting->get_plugingroup());
+        $this->assertSame('enabled_help', $setting->get_help());
+        $this->assertFalse($setting->is_sensitive());
+        $this->assertFalse($setting->has_core());
+        $this->assertTrue(get_string_manager()->string_exists('enabled', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('enabled_help', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('enabled_course_help', 'local_dixeo'));
+    }
+
+    /**
      * A core target that exists in the admin tree is kept.
      */
     public function test_existing_core_target_is_accepted(): void {

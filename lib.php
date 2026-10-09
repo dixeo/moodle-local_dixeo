@@ -133,5 +133,17 @@ function local_dixeo_dixeo_settings(): array {
             'help' => 'learning_intent_help',
             'sensitive' => false,
         ],
+        [
+            'key' => 'enabled',
+            'shortname' => 'enabled',
+            'component' => 'local_dixeo',
+            'type' => 'bool',
+            'default' => '1',
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'dixeo',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'enabled_help',
+            'sensitive' => false,
+        ],
     ];
 }
