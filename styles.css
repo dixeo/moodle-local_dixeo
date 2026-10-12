@@ -804,6 +804,7 @@ h2:has(.dixeo-sync-indicator),
 }
 
 .local-dixeo-settings-modal .form-control,
+.local-dixeo-settings-modal .form-select,
 .local-dixeo-settings-modal .btn {
     min-height: 44px;
 }
@@ -815,12 +816,37 @@ h2:has(.dixeo-sync-indicator),
     min-height: 12rem;
 }
 
+.local-dixeo-settings-category-select,
+label[for="local-dixeo-settings-category"] {
+    display: none;
+}
+
 .local-dixeo-settings-categories {
     flex: 0 0 11rem;
 }
 
 .local-dixeo-settings-list {
     flex: 1 1 auto;
+    overflow-x: auto;
+}
+
+@media (max-width: 767.98px) {
+    .local-dixeo-settings-body {
+        flex-direction: column;
+    }
+
+    .local-dixeo-settings-categories {
+        display: none;
+    }
+
+    label[for="local-dixeo-settings-category"] {
+        display: inline;
+    }
+
+    .local-dixeo-settings-category-select {
+        display: block;
+        width: 100%;
+    }
 }
 
 .local-dixeo-settings-footer [data-region="local-dixeo-settings-unsaved"] {

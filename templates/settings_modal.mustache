@@ -26,6 +26,12 @@
         </span>
     </div>
     <div class="local-dixeo-settings-body">
+        <label class="visually-hidden" for="local-dixeo-settings-category">
+            {{#str}}settings_modal_categories, local_dixeo{{/str}}
+        </label>
+        <select id="local-dixeo-settings-category" class="form-select local-dixeo-settings-category-select">
+            <option value="all" selected>{{#str}}settings_modal_all, local_dixeo{{/str}}</option>
+        </select>
         <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
             <button type="button"
                     class="btn btn-primary"
