@@ -21,7 +21,13 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['core/ajax', 'core/modal', 'core/str', 'core/templates'], function(Ajax, Modal, Str, Templates) {
+define([
+    'core/ajax',
+    'core/modal',
+    'core/notification',
+    'core/str',
+    'core/templates',
+], function(Ajax, Modal, Notification, Str, Templates) {
     let bound = false;
 
     /**
@@ -124,7 +130,78 @@ define(['core/ajax', 'core/modal', 'core/str', 'core/templates'], function(Ajax,
     };
 
     /**
-     * Open the settings shell. Moodle's modal traps focus and closes on Escape.
+     * The shell is dirty when data-dirty is "1".
+     *
+     * @param {HTMLElement} shell
+     * @returns {boolean}
+     */
+    const isDirty = function(shell) {
+        return shell.dataset.dirty === '1';
+    };
+
+    /**
+     * Close, or ask first when the shell is dirty. Declining leaves it open.
+     *
+     * @param {Object} modal
+     * @param {HTMLElement} shell
+     * @returns {Promise}
+     */
+    const requestClose = function(modal, shell) {
+        if (shell.dataset.closing === '1') {
+            return Promise.resolve();
+        }
+        if (!isDirty(shell)) {
+            modal.destroy();
+            return Promise.resolve();
+        }
+        shell.dataset.closing = '1';
+        return Str.get_strings([
+            {key: 'settings_modal_unsaved_title', component: 'local_dixeo'},
+            {key: 'settings_modal_unsaved_confirm', component: 'local_dixeo'},
+            {key: 'settings_modal_unsaved_close', component: 'local_dixeo'},
+        ]).then(function(strings) {
+            return Notification.saveCancelPromise(strings[0], strings[1], strings[2], {
+                triggerElement: shell,
+            });
+        }).then(function() {
+            modal.destroy();
+            return null;
+        }).catch(function() {
+            delete shell.dataset.closing;
+            return null;
+        });
+    };
+
+    /**
+     * Cancel, the header close button, and Escape share one close path.
+     *
+     * @param {Object} modal
+     * @param {HTMLElement} shell
+     */
+    const bindClose = function(modal, shell) {
+        const root = modal.getRoot()[0];
+        root.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            requestClose(modal, shell);
+        }, true);
+        root.addEventListener('click', function(event) {
+            const hide = event.target.closest('[data-action="hide"]');
+            const cancel = event.target.closest('[data-action="local-dixeo-settings-cancel"]');
+            if (!hide && !cancel) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            requestClose(modal, shell);
+        }, true);
+    };
+
+    /**
+     * Open the settings shell. Moodle's modal traps focus.
      *
      * @param {HTMLElement} button
      * @returns {Promise}
@@ -145,6 +222,7 @@ define(['core/ajax', 'core/modal', 'core/str', 'core/templates'], function(Ajax,
             }).then(function(modal) {
                 Templates.runTemplateJS(rendered.js);
                 const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+                bindClose(modal, shell);
                 return loadSettings(shell, button.dataset.contextid);
             });
         });
