@@ -128,4 +128,14 @@ $functions = [
         'capabilities' => '',
         'readonlysession' => true,
     ],
+
+    // Read catalogue settings for the Dixeo or course level.
+    'local_dixeo_get_settings' => [
+        'classname' => 'local_dixeo\external\get_settings',
+        'description' => 'Read Dixeo settings for a system or course context',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
 ];
