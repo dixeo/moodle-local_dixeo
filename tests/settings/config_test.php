@@ -350,6 +350,51 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * A stored change is logged once, without the text, and a repeat is not logged.
+     */
+    public function test_set_records_a_change_and_ignores_a_repeat(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $sink = $this->redirectEvents();
+        $config->set('local_dixeo', 'learning_intent', $context, 'Course intent');
+        $events = $this->setting_events($sink);
+        $this->assertCount(1, $events);
+        $this->assertStringNotContainsString('Course intent', $events[0]->get_description());
+        $this->assertSame('local_dixeo', $events[0]->other['component']);
+        $this->assertSame('learning_intent', $events[0]->other['name']);
+        $this->assertArrayNotHasKey('value', $events[0]->other);
+        $this->assertEquals($context->id, $events[0]->contextid);
+
+        $sink->clear();
+        $config->set('local_dixeo', 'learning_intent', $context, 'Course intent');
+        $this->assertCount(0, $this->setting_events($sink));
+
+        $sink->clear();
+        $config->set('local_dixeo', 'learning_intent', $context, '');
+        $cleared = $this->setting_events($sink);
+        $this->assertCount(1, $cleared);
+        $this->assertStringNotContainsString('Course intent', $cleared[0]->get_description());
+
+        $sink->clear();
+        $config->set('local_dixeo', 'learning_intent', $context, '');
+        $this->assertCount(0, $this->setting_events($sink));
+    }
+
+    /**
+     * @param \phpunit_event_sink $sink Event sink.
+     * @return \local_dixeo\event\setting_updated[]
+     */
+    private function setting_events(\phpunit_event_sink $sink): array {
+        return array_values(array_filter(
+            $sink->get_events(),
+            static fn($event) => $event instanceof \local_dixeo\event\setting_updated
+        ));
+    }
+
+    /**
      * @param array[] $rows Layer rows.
      * @param string $name Catalogue key.
      * @return array

@@ -68,12 +68,21 @@ final class config {
         $this->require_edit($level, $context);
         $value = clean_param($value, PARAM_TEXT);
         $stored = $this->stored_values($definition, $context, $level);
+        $current = $this->own_value($definition, $context, $level);
 
         if (!resolver::stores_override($level, $value, $stored)) {
+            if ($current === null) {
+                return;
+            }
             $this->delete_stored($definition, $context, $level);
+            $this->notify_updated($definition, $context);
+            return;
+        }
+        if ($current === $value) {
             return;
         }
         $this->write_stored($definition, $context, $level, $value);
+        $this->notify_updated($definition, $context);
     }
 
     /**
@@ -309,6 +318,37 @@ final class config {
             $stored[resolver::LAYER_COURSE] = $this->read_course($definition, $context);
         }
         return $stored;
+    }
+
+    /**
+     * Own stored value at the level being written, or null when that level has no row.
+     *
+     * @param definition $definition Catalogue entry.
+     * @param \context $context Context being written.
+     * @param string $level Dixeo or course.
+     * @return string|null
+     */
+    private function own_value(definition $definition, \context $context, string $level): ?string {
+        if ($level === resolver::LAYER_DIXEO) {
+            return $this->read_dixeo($definition);
+        }
+        return $this->read_course($definition, $context);
+    }
+
+    /**
+     * Record that a stored value changed. The log names the key and context, not the text.
+     *
+     * @param definition $definition Catalogue entry.
+     * @param \context $context Context that changed.
+     */
+    private function notify_updated(definition $definition, \context $context): void {
+        \local_dixeo\event\setting_updated::create([
+            'context' => $context,
+            'other' => [
+                'component' => $definition->get_component(),
+                'name' => $definition->get_key(),
+            ],
+        ])->trigger();
     }
 
     /**
