@@ -408,6 +408,7 @@ $string['settings_modal_breadcrumb'] = 'Site / Dixeo / Course: {$a}';
 $string['settings_modal_categories'] = 'Categories';
 $string['settings_modal_count'] = '{$a} settings';
 $string['settings_modal_customised'] = 'Customised only';
+$string['settings_modal_empty'] = 'Clear the search, turn off Customised only, or pick another area.';
 $string['settings_modal_error'] = 'Dixeo settings could not be loaded.';
 $string['settings_modal_loading'] = 'Loading settings';
 $string['settings_modal_save_course'] = 'Save the course before loading its Dixeo settings.';

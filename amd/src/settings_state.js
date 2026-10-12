@@ -261,6 +261,46 @@ define([], function() {
     };
 
     /**
+     * Search text for one row: label, shortname, plugin id, feature id, and help.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @param {string} label
+     * @param {string} help
+     * @returns {string}
+     */
+    const searchText = function(setting, label, help) {
+        return [label, setting.shortname, setting.component, setting.feature, help].join('\n').toLowerCase();
+    };
+
+    /**
+     * Whether a row stays visible. Search, Customised only, and the category all apply.
+     * Customised means the draft has its own value, including one that is not saved yet.
+     *
+     * @param {Object} entry Row from {@link entryFor}, with haystack set.
+     * @param {{query: string, customisedOnly: boolean, category: string}} filter
+     * @returns {boolean}
+     */
+    const matches = function(entry, filter) {
+        if (filter.customisedOnly && entry.draft === entry.parent) {
+            return false;
+        }
+        const query = (filter.query || '').trim().toLowerCase();
+        if (query && String(entry.haystack || '').indexOf(query) === -1) {
+            return false;
+        }
+        if (filter.category && filter.category !== 'all') {
+            const setting = entry.setting;
+            const same = setting.feature === filter.category ||
+                setting.plugingroup === filter.category ||
+                setting.component === filter.category;
+            if (!same) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    /**
      * How many drafts differ from the saved value.
      *
      * @param {Object} entries Map of row entries.
@@ -321,5 +361,7 @@ define([], function() {
         draftView: draftView,
         dirtyCount: dirtyCount,
         changedSettings: changedSettings,
+        searchText: searchText,
+        matches: matches,
     };
 });

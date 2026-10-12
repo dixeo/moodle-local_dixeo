@@ -408,6 +408,7 @@ $string['settings_modal_breadcrumb'] = 'Site / Dixeo / Cours : {$a}';
 $string['settings_modal_categories'] = 'Catégories';
 $string['settings_modal_count'] = '{$a} paramètres';
 $string['settings_modal_customised'] = 'Personnalisés uniquement';
+$string['settings_modal_empty'] = 'Effacez la recherche, désactivez Personnalisés uniquement, ou choisissez une autre zone.';
 $string['settings_modal_error'] = 'Les paramètres Dixeo n\'ont pas pu être chargés.';
 $string['settings_modal_loading'] = 'Chargement des paramètres';
 $string['settings_modal_save_course'] = 'Enregistrez le cours avant de charger ses paramètres Dixeo.';

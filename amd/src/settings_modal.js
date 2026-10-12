@@ -50,7 +50,7 @@ define([
     };
 
     /**
-     * Clear the search box and the Customised pill. Neither filters the list.
+     * Clear the search box, the Customised pill, and the category. Opening starts from All.
      *
      * @param {HTMLElement} shell
      */
@@ -61,8 +61,9 @@ define([
         }
         const pill = shell.querySelector('[data-action="local-dixeo-settings-customised"]');
         if (pill) {
-            pill.setAttribute('aria-pressed', 'false');
+            setPressed(pill, false);
         }
+        setCategory(shell, 'all');
     };
 
     /**
@@ -85,6 +86,120 @@ define([
         if (count) {
             count.textContent = text;
         }
+    };
+
+    /**
+     * @param {HTMLElement} button
+     * @param {boolean} pressed
+     */
+    const setPressed = function(button, pressed) {
+        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        button.classList.toggle('btn-primary', pressed);
+        button.classList.toggle('btn-outline-secondary', !pressed);
+    };
+
+    /**
+     * Keep the category buttons and the small-screen select on the same value.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} category
+     */
+    const setCategory = function(shell, category) {
+        shell.querySelectorAll('.local-dixeo-settings-categories [data-category]').forEach(function(button) {
+            setPressed(button, button.dataset.category === category);
+        });
+        const select = shell.querySelector('#local-dixeo-settings-category');
+        if (select) {
+            select.value = category;
+        }
+    };
+
+    /**
+     * The category button that is pressed, or the select when no button is pressed.
+     *
+     * @param {HTMLElement} shell
+     * @returns {string}
+     */
+    const selectedCategory = function(shell) {
+        const pressed = shell.querySelector('.local-dixeo-settings-categories [data-category][aria-pressed="true"]');
+        if (pressed && pressed.dataset.category) {
+            return pressed.dataset.category;
+        }
+        const select = shell.querySelector('#local-dixeo-settings-category');
+        return select && select.value ? select.value : 'all';
+    };
+
+    /**
+     * Hide rows that miss the search, the Customised pill, or the category. The count is how many remain.
+     *
+     * @param {HTMLElement} shell
+     */
+    const applyFilter = function(shell) {
+        const session = sessions.get(shell);
+        if (!session) {
+            return;
+        }
+        const search = shell.querySelector('#local-dixeo-settings-search');
+        const pill = shell.querySelector('[data-action="local-dixeo-settings-customised"]');
+        const filter = {
+            query: search ? search.value : '',
+            customisedOnly: pill ? pill.getAttribute('aria-pressed') === 'true' : false,
+            category: selectedCategory(shell),
+        };
+        let shown = 0;
+        shell.querySelectorAll('.local-dixeo-settings-row').forEach(function(row) {
+            const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
+            const visible = entry ? State.matches(entry, filter) : false;
+            row.hidden = !visible;
+            if (visible) {
+                shown = shown + 1;
+            }
+        });
+        const table = shell.querySelector('.local-dixeo-settings-table');
+        const empty = shell.querySelector('[data-region="local-dixeo-settings-empty"]');
+        if (table) {
+            table.hidden = shown === 0;
+        }
+        if (empty) {
+            empty.hidden = shown !== 0;
+        }
+        if (session.toolbarCount) {
+            setCount(shell, session.toolbarCount.replace('{$a}', String(shown)));
+        }
+    };
+
+    /**
+     * Search, Customised only, and the category filter together and leave the draft in place.
+     *
+     * @param {HTMLElement} shell
+     */
+    const bindFilter = function(shell) {
+        shell.addEventListener('input', function(event) {
+            if (event.target.closest('#local-dixeo-settings-search')) {
+                applyFilter(shell);
+            }
+        });
+        shell.addEventListener('click', function(event) {
+            const pill = event.target.closest('[data-action="local-dixeo-settings-customised"]');
+            if (pill) {
+                setPressed(pill, pill.getAttribute('aria-pressed') !== 'true');
+                applyFilter(shell);
+                return;
+            }
+            const category = event.target.closest('.local-dixeo-settings-categories [data-category]');
+            if (category) {
+                setCategory(shell, category.dataset.category || 'all');
+                applyFilter(shell);
+            }
+        });
+        shell.addEventListener('change', function(event) {
+            const select = event.target.closest('#local-dixeo-settings-category');
+            if (!select) {
+                return;
+            }
+            setCategory(shell, select.value || 'all');
+            applyFilter(shell);
+        });
     };
 
     /**
@@ -115,6 +230,9 @@ define([
             {key: 'settings_modal_unsaved_count', component: 'local_dixeo'},
             {key: 'settings_modal_unsaved_none', component: 'local_dixeo'},
         ];
+        const extraAt = requests.length;
+        requests.push({key: 'settings_modal_count', component: 'local_dixeo'});
+        requests.push({key: 'settings_modal_empty', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -136,7 +254,9 @@ define([
             const entries = {};
             const rows = settings.map(function(setting, index) {
                 const labelAt = fixedCount + (index * 2);
-                entries[setting.component + '/' + setting.name] = State.entryFor(setting);
+                const entry = State.entryFor(setting);
+                entry.haystack = State.searchText(setting, strings[labelAt], strings[labelAt + 1]);
+                entries[setting.component + '/' + setting.name] = entry;
                 return State.rowView(setting, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
             });
             sessions.set(shell, {
@@ -144,11 +264,13 @@ define([
                 entries: entries,
                 countLabel: strings[12],
                 noneLabel: strings[13],
+                toolbarCount: strings[extraAt],
                 contextid: contextid,
                 saving: false,
             });
             const context = {
                 rows: rows,
+                emptytext: strings[extraAt + 1],
                 coursecolumn: strings[3],
                 sitecolumn: strings[4],
                 dixeocolumn: strings[5],
@@ -200,9 +322,7 @@ define([
                 const settings = result && Array.isArray(result.settings) ? result.settings : [];
                 setList(shell, '');
                 return renderRows(shell, settings, id).then(function() {
-                    return Str.get_string('settings_modal_count', 'local_dixeo', settings.length);
-                }).then(function(label) {
-                    setCount(shell, label);
+                    applyFilter(shell);
                     return null;
                 });
             }).catch(function() {
@@ -349,6 +469,7 @@ define([
         clearSaveError(shell);
         paintRow(row, entry, session.labels);
         publishDirty(shell);
+        applyFilter(shell);
     };
 
     /**
@@ -588,6 +709,7 @@ define([
                 bindAdvanced(shell);
                 bindDraft(shell);
                 bindSave(modal, shell);
+                bindFilter(shell);
                 return loadSettings(shell, button.dataset.contextid);
             });
         });

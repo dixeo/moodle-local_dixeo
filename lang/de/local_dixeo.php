@@ -408,6 +408,7 @@ $string['settings_modal_breadcrumb'] = 'Website / Dixeo / Kurs: {$a}';
 $string['settings_modal_categories'] = 'Kategorien';
 $string['settings_modal_count'] = '{$a} Einstellungen';
 $string['settings_modal_customised'] = 'Nur angepasst';
+$string['settings_modal_empty'] = 'Löschen Sie die Suche, schalten Sie „Nur angepasst“ aus oder wählen Sie einen anderen Bereich.';
 $string['settings_modal_error'] = 'Die Dixeo-Einstellungen konnten nicht geladen werden.';
 $string['settings_modal_loading'] = 'Einstellungen werden geladen';
 $string['settings_modal_save_course'] = 'Speichern Sie den Kurs, bevor seine Dixeo-Einstellungen geladen werden können.';

@@ -408,6 +408,7 @@ $string['settings_modal_breadcrumb'] = 'Sitio / Dixeo / Curso: {$a}';
 $string['settings_modal_categories'] = 'Categorías';
 $string['settings_modal_count'] = '{$a} ajustes';
 $string['settings_modal_customised'] = 'Solo personalizados';
+$string['settings_modal_empty'] = 'Borre la búsqueda, desactive Solo personalizados o elija otra área.';
 $string['settings_modal_error'] = 'No se han podido cargar los ajustes de Dixeo.';
 $string['settings_modal_loading'] = 'Cargando ajustes';
 $string['settings_modal_save_course'] = 'Guarde el curso antes de cargar sus ajustes de Dixeo.';

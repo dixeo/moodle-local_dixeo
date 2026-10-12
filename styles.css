@@ -846,6 +846,12 @@ label[for="local-dixeo-settings-category"] {
     align-items: start;
 }
 
+.local-dixeo-settings-row[hidden],
+.local-dixeo-settings-table[hidden],
+.local-dixeo-settings-empty[hidden] {
+    display: none;
+}
+
 .local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-head,
 .local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-row {
     grid-template-columns: minmax(14rem, 1.6fr) minmax(12rem, 1fr);
