@@ -67,7 +67,7 @@ body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--inline 
     display: inline-flex !important;
 }
 
-/* Ensure parent elements don't clip the dropdown */
+/* Keep the pill visible when a theme clips the course title. */
 h1:has(.dixeo-sync-indicator),
 h2:has(.dixeo-sync-indicator),
 .page-header-headings:has(.dixeo-sync-indicator),
@@ -75,13 +75,6 @@ h2:has(.dixeo-sync-indicator),
 .page-header-headings,
 #page-header {
     overflow: visible !important;
-}
-
-/* Force dropdown to be visible */
-.dixeo-sync-dropdown.show {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
 }
 
 /* ==========================================================================
@@ -195,153 +188,6 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   1. File sync indicator — dropdown panel
-   ========================================================================== */
-
-.dropdown-menu.dixeo-sync-dropdown {
-    min-width: 260px;
-    max-width: 300px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.08);
-    overflow: visible;
-    padding: 0;
-    margin-top: 0.5rem;
-    z-index: 9999 !important;
-    position: absolute !important;
-}
-
-/* When dropdown is open, ensure it's fully visible */
-.dixeo-sync-indicator.show .dixeo-sync-dropdown,
-.dixeo-sync-dropdown.show {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-
-/* Header */
-.dixeo-sync-dropdown__header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.875rem 1rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: #1e293b;
-}
-
-.dixeo-sync-dropdown__header-icon {
-    font-size: 1rem;
-    color: #3b82f6;
-}
-
-/* Status section */
-.dixeo-sync-dropdown__status {
-    padding: 0.875rem 1rem;
-}
-
-.dixeo-sync-dropdown__status-text {
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: #1e293b;
-    margin: 0 0 0.25rem 0;
-}
-
-.dixeo-sync-dropdown__status-meta {
-    font-size: 0.75rem;
-    color: #64748b;
-    margin: 0;
-}
-
-/* Progress bar */
-.dixeo-sync-dropdown__progress {
-    height: 4px;
-    margin-top: 0.625rem;
-    background: #e2e8f0;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.dixeo-sync-dropdown__progress-bar {
-    height: 100%;
-    background: #3b82f6;
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-
-/* Error message */
-.dixeo-sync-dropdown__error {
-    padding: 0.625rem 1rem;
-    background: #fef2f2;
-    color: #991b1b;
-    font-size: 0.75rem;
-    border-top: 1px solid #fecaca;
-}
-
-/* Actions */
-.dixeo-sync-dropdown__actions {
-    padding: 0.375rem;
-    border-top: 1px solid #e2e8f0;
-}
-
-.dixeo-sync-dropdown__action {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    border: none;
-    border-radius: 0.375rem;
-    background: transparent;
-    color: #334155;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    text-align: left;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background-color 0.1s ease;
-}
-
-.dixeo-sync-dropdown__action:hover {
-    background: #f1f5f9;
-    text-decoration: none;
-    color: #1e293b;
-}
-
-.dixeo-sync-dropdown__action--danger {
-    color: #dc2626;
-}
-
-.dixeo-sync-dropdown__action--danger:hover {
-    background: #fef2f2;
-    color: #b91c1c;
-}
-
-.dixeo-sync-dropdown__action-icon {
-    width: 16px;
-    text-align: center;
-    opacity: 0.7;
-}
-
-/* Toggle actions based on enabled state via data attribute */
-#dixeo-sync-indicator[data-enabled="true"] [data-action="enable"],
-#dixeo-sync-indicator[data-enabled="1"] [data-action="enable"] {
-    display: none;
-}
-
-#dixeo-sync-indicator[data-enabled="false"] [data-action="resync"],
-#dixeo-sync-indicator[data-enabled="false"] [data-action="pause"],
-#dixeo-sync-indicator[data-enabled="false"] [data-action="disable"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="resync"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="pause"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="disable"] {
-    display: none;
-}
-
-/* ==========================================================================
    1. File sync indicator — responsive
    ========================================================================== */
 
@@ -364,10 +210,6 @@ h2:has(.dixeo-sync-indicator),
     .dixeo-sync-btn__count {
         font-size: 0.6875rem;
     }
-
-    .dropdown-menu.dixeo-sync-dropdown {
-        min-width: 240px;
-    }
 }
 
 /* Touch devices - larger targets */
@@ -375,10 +217,6 @@ h2:has(.dixeo-sync-indicator),
     .dixeo-sync-btn {
         min-height: 36px;
         padding: 0.5rem 0.75rem;
-    }
-
-    .dixeo-sync-dropdown__action {
-        min-height: 44px;
     }
 }
 
@@ -496,8 +334,7 @@ h2:has(.dixeo-sync-indicator),
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
-    .dixeo-sync-btn,
-    .dixeo-sync-dropdown__progress-bar {
+    .dixeo-sync-btn {
         transition: none;
     }
 

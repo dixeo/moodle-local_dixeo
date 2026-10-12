@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Dixeo settings modal shell opened from the course edit form.
+ * Dixeo settings modal opened from the course edit form and the file sync pill.
  *
  * @module     local_dixeo/settings_modal
  * @copyright  2026 Dixeo
@@ -790,9 +790,10 @@ define([
      *
      * @param {HTMLElement} shell
      * @param {string} contextid Course context id, empty when the course is new.
+     * @param {boolean} openStatus Open the Status panel once the rows are ready.
      * @returns {Promise}
      */
-    const loadSettings = function(shell, contextid) {
+    const loadSettings = function(shell, contextid, openStatus) {
         resetControls(shell);
         const id = parseInt(contextid, 10);
         if (!id) {
@@ -817,6 +818,9 @@ define([
                 setList(shell, '');
                 return renderRows(shell, settings, id).then(function() {
                     applyFilter(shell);
+                    if (openStatus) {
+                        showStatus(shell);
+                    }
                     return null;
                 });
             }).catch(function() {
@@ -824,6 +828,10 @@ define([
                     return null;
                 }
                 setList(shell, strings[1]);
+                if (openStatus) {
+                    showStatus(shell);
+                    return null;
+                }
                 return Str.get_string('settings_modal_count', 'local_dixeo', 0).then(function(label) {
                     setCount(shell, label);
                     return null;
@@ -1241,7 +1249,7 @@ define([
                     bindSave(modal, shell);
                     bindFilter(shell);
                     bindStatus(shell);
-                    return loadSettings(shell, button.dataset.contextid);
+                    return loadSettings(shell, button.dataset.contextid, button.dataset.initial === 'status');
                 });
             });
         });
@@ -1249,7 +1257,7 @@ define([
 
     return {
         /**
-         * Listen for the course-form button. The listener does not submit the form.
+         * Listen for the button that opens the modal. The listener does not submit the course form.
          */
         init: function() {
             if (bound) {
