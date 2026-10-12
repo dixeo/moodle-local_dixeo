@@ -35,6 +35,9 @@ define([
     /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
     const sessions = new WeakMap();
 
+    /** True while the category controls are being rebuilt, so their change event does not loop. */
+    let paintingCategories = false;
+
     /**
      * Course name currently typed on the edit form.
      *
@@ -63,6 +66,7 @@ define([
         if (pill) {
             setPressed(pill, false);
         }
+        setGrouping(shell, 'feature');
         setCategory(shell, 'all');
     };
 
@@ -99,34 +103,32 @@ define([
     };
 
     /**
-     * Keep the category buttons and the small-screen select on the same value.
-     *
      * @param {HTMLElement} shell
      * @param {string} category
      */
     const setCategory = function(shell, category) {
-        shell.querySelectorAll('.local-dixeo-settings-categories [data-category]').forEach(function(button) {
-            setPressed(button, button.dataset.category === category);
-        });
-        const select = shell.querySelector('#local-dixeo-settings-category');
-        if (select) {
-            select.value = category;
-        }
+        shell.dataset.category = category || 'all';
     };
 
     /**
-     * The category button that is pressed, or the select when no button is pressed.
-     *
      * @param {HTMLElement} shell
      * @returns {string}
      */
     const selectedCategory = function(shell) {
-        const pressed = shell.querySelector('.local-dixeo-settings-categories [data-category][aria-pressed="true"]');
-        if (pressed && pressed.dataset.category) {
-            return pressed.dataset.category;
-        }
-        const select = shell.querySelector('#local-dixeo-settings-category');
-        return select && select.value ? select.value : 'all';
+        return shell.dataset.category || 'all';
+    };
+
+    /**
+     * Feature is the default. Changing it selects All features or All plugins.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} grouping feature or plugin.
+     */
+    const setGrouping = function(shell, grouping) {
+        shell.dataset.grouping = grouping === 'plugin' ? 'plugin' : 'feature';
+        shell.querySelectorAll('[data-grouping]').forEach(function(button) {
+            setPressed(button, button.dataset.grouping === shell.dataset.grouping);
+        });
     };
 
     /**
@@ -166,6 +168,65 @@ define([
         if (session.toolbarCount) {
             setCount(shell, session.toolbarCount.replace('{$a}', String(shown)));
         }
+        renderCategories(shell);
+    };
+
+    /**
+     * Fill the category list and the small-screen select from the loaded settings.
+     *
+     * @param {HTMLElement} shell
+     */
+    const renderCategories = function(shell) {
+        const session = sessions.get(shell);
+        const list = shell.querySelector('[data-region="local-dixeo-settings-category-list"]');
+        const select = shell.querySelector('#local-dixeo-settings-category');
+        if (!session || !list || !select || !session.allFeatures) {
+            return;
+        }
+        const search = shell.querySelector('#local-dixeo-settings-search');
+        const pill = shell.querySelector('[data-action="local-dixeo-settings-customised"]');
+        const items = State.categoryItems(session.entries, shell.dataset.grouping, {
+            query: search ? search.value : '',
+            customisedOnly: !!(pill && pill.getAttribute('aria-pressed') === 'true'),
+            category: selectedCategory(shell),
+        }, {
+            allFeatures: session.allFeatures,
+            allPlugins: session.allPlugins,
+            preferences: session.preferences,
+        });
+        paintingCategories = true;
+        list.replaceChildren();
+        select.replaceChildren();
+        items.forEach(function(item) {
+            if (item.preferences) {
+                const divider = document.createElement('hr');
+                divider.className = 'local-dixeo-settings-category-divider';
+                list.appendChild(divider);
+            }
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn';
+            button.dataset.category = item.value;
+            button.hidden = !!item.hidden;
+            const name = document.createElement('span');
+            name.textContent = item.label;
+            const count = document.createElement('span');
+            count.className = 'local-dixeo-settings-category-count';
+            count.textContent = String(item.count);
+            button.appendChild(name);
+            button.appendChild(count);
+            setPressed(button, item.value === selectedCategory(shell));
+            list.appendChild(button);
+
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label + ' (' + item.count + ')';
+            option.hidden = !!item.hidden;
+            option.disabled = !!item.hidden;
+            select.appendChild(option);
+        });
+        select.value = selectedCategory(shell);
+        paintingCategories = false;
     };
 
     /**
@@ -186,6 +247,13 @@ define([
                 applyFilter(shell);
                 return;
             }
+            const grouping = event.target.closest('[data-grouping]');
+            if (grouping) {
+                setGrouping(shell, grouping.dataset.grouping);
+                setCategory(shell, 'all');
+                applyFilter(shell);
+                return;
+            }
             const category = event.target.closest('.local-dixeo-settings-categories [data-category]');
             if (category) {
                 setCategory(shell, category.dataset.category || 'all');
@@ -193,6 +261,9 @@ define([
             }
         });
         shell.addEventListener('change', function(event) {
+            if (paintingCategories) {
+                return;
+            }
             const select = event.target.closest('#local-dixeo-settings-category');
             if (!select) {
                 return;
@@ -233,6 +304,9 @@ define([
         const extraAt = requests.length;
         requests.push({key: 'settings_modal_count', component: 'local_dixeo'});
         requests.push({key: 'settings_modal_empty', component: 'local_dixeo'});
+        requests.push({key: 'settings_modal_all_features', component: 'local_dixeo'});
+        requests.push({key: 'settings_modal_all_plugins', component: 'local_dixeo'});
+        requests.push({key: 'settings_modal_preferences', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -265,6 +339,9 @@ define([
                 countLabel: strings[12],
                 noneLabel: strings[13],
                 toolbarCount: strings[extraAt],
+                allFeatures: strings[extraAt + 2],
+                allPlugins: strings[extraAt + 3],
+                preferences: strings[extraAt + 4],
                 contextid: contextid,
                 saving: false,
             });

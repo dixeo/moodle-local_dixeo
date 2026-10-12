@@ -6,7 +6,7 @@
     Example context (json):
     {}
 }}
-<div class="local-dixeo-settings-modal">
+<div class="local-dixeo-settings-modal" data-grouping="feature" data-category="all">
     <div class="local-dixeo-settings-toolbar">
         <label class="visually-hidden" for="local-dixeo-settings-search">
             {{#str}}settings_modal_search, local_dixeo{{/str}}
@@ -26,20 +26,25 @@
         </span>
     </div>
     <div class="local-dixeo-settings-body">
-        <label class="visually-hidden" for="local-dixeo-settings-category">
-            {{#str}}settings_modal_categories, local_dixeo{{/str}}
-        </label>
-        <select id="local-dixeo-settings-category" class="form-select local-dixeo-settings-category-select">
-            <option value="all" selected>{{#str}}settings_modal_all, local_dixeo{{/str}}</option>
-        </select>
-        <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
-            <button type="button"
-                    class="btn btn-primary"
-                    data-category="all"
-                    aria-pressed="true">
-                {{#str}}settings_modal_all, local_dixeo{{/str}}
-            </button>
-        </nav>
+        <div class="local-dixeo-settings-category-pane">
+            <label class="visually-hidden" for="local-dixeo-settings-category">
+                {{#str}}settings_modal_categories, local_dixeo{{/str}}
+            </label>
+            <select id="local-dixeo-settings-category" class="form-select local-dixeo-settings-category-select">
+                <option value="all" selected>{{#str}}settings_modal_all_features, local_dixeo{{/str}}</option>
+            </select>
+            <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
+                <div data-region="local-dixeo-settings-category-list"></div>
+            </nav>
+            <div class="local-dixeo-settings-grouping" role="group" aria-label="{{#str}}settings_grouping, local_dixeo{{/str}}">
+                <button type="button" class="btn btn-primary" data-grouping="feature" aria-pressed="true">
+                    {{#str}}settings_group_feature, local_dixeo{{/str}}
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-grouping="plugin" aria-pressed="false">
+                    {{#str}}settings_group_plugin, local_dixeo{{/str}}
+                </button>
+            </div>
+        </div>
         <div class="local-dixeo-settings-list" data-region="local-dixeo-settings-list"></div>
     </div>
     <div class="local-dixeo-settings-footer">

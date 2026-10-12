@@ -288,16 +288,88 @@ define([], function() {
         if (query && String(entry.haystack || '').indexOf(query) === -1) {
             return false;
         }
-        if (filter.category && filter.category !== 'all') {
-            const setting = entry.setting;
-            const same = setting.feature === filter.category ||
-                setting.plugingroup === filter.category ||
-                setting.component === filter.category;
-            if (!same) {
-                return false;
-            }
+        return categoryMatches(entry, filter.category);
+    };
+
+    /**
+     * All matches every row. A feature or plugin value matches that group. Preferences matches none.
+     *
+     * @param {Object} entry Row from {@link entryFor}.
+     * @param {string} category all, preferences, feature:id, or plugin:id.
+     * @returns {boolean}
+     */
+    const categoryMatches = function(entry, category) {
+        const value = category || 'all';
+        if (value === 'all') {
+            return true;
         }
-        return true;
+        if (value === 'preferences') {
+            return false;
+        }
+        if (value.indexOf('feature:') === 0) {
+            return entry.setting.feature === value.substring('feature:'.length);
+        }
+        if (value.indexOf('plugin:') === 0) {
+            return entry.setting.plugingroup === value.substring('plugin:'.length);
+        }
+        return false;
+    };
+
+    /**
+     * Category buttons for the current grouping. Empty groups stay hidden unless selected.
+     * Preferences is always last and has no settings.
+     *
+     * @param {Object} entries Map of row entries.
+     * @param {string} grouping feature or plugin.
+     * @param {{query: string, customisedOnly: boolean, category: string}} filter
+     * @param {{allFeatures: string, allPlugins: string, preferences: string}} labels
+     * @returns {Array}
+     */
+    const categoryItems = function(entries, grouping, filter, labels) {
+        const mode = grouping === 'plugin' ? 'plugin' : 'feature';
+        const selected = filter.category || 'all';
+        const countFor = function(category) {
+            return Object.keys(entries).filter(function(key) {
+                return matches(entries[key], {
+                    query: filter.query,
+                    customisedOnly: filter.customisedOnly,
+                    category: category,
+                });
+            }).length;
+        };
+        const items = [{
+            value: 'all',
+            label: mode === 'plugin' ? labels.allPlugins : labels.allFeatures,
+            count: countFor('all'),
+            preferences: false,
+        }];
+        const seen = {};
+        Object.keys(entries).forEach(function(key) {
+            const setting = entries[key].setting;
+            const id = mode === 'plugin' ? setting.plugingroup : setting.feature;
+            if (id) {
+                seen[id] = true;
+            }
+        });
+        Object.keys(seen).sort().forEach(function(id) {
+            const value = mode + ':' + id;
+            items.push({
+                value: value,
+                label: id,
+                count: countFor(value),
+                preferences: false,
+            });
+        });
+        items.push({
+            value: 'preferences',
+            label: labels.preferences,
+            count: 0,
+            preferences: true,
+        });
+        items.forEach(function(item) {
+            item.hidden = item.count === 0 && item.value !== selected && !item.preferences;
+        });
+        return items;
     };
 
     /**
@@ -363,5 +435,6 @@ define([], function() {
         changedSettings: changedSettings,
         searchText: searchText,
         matches: matches,
+        categoryItems: categoryItems,
     };
 });
