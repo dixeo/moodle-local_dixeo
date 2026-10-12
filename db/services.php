@@ -138,4 +138,13 @@ $functions = [
         'capabilities' => '',
         'readonlysession' => true,
     ],
+
+    // Save catalogue settings for the Dixeo or course level.
+    'local_dixeo_save_settings' => [
+        'classname' => 'local_dixeo\external\save_settings',
+        'description' => 'Save Dixeo settings for a system or course context',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => '',
+    ],
 ];
