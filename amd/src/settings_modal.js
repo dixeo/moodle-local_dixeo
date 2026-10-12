@@ -23,11 +23,13 @@
 
 define([
     'core/ajax',
+    'core/config',
     'core/modal',
     'core/notification',
     'core/str',
     'core/templates',
-], function(Ajax, Modal, Notification, Str, Templates) {
+    'local_dixeo/settings_state',
+], function(Ajax, Config, Modal, Notification, Str, Templates, State) {
     let bound = false;
 
     /**
@@ -83,6 +85,56 @@ define([
     };
 
     /**
+     * Replace the list with one read-only row per setting.
+     *
+     * @param {HTMLElement} shell
+     * @param {Array} settings
+     * @returns {Promise}
+     */
+    const renderRows = function(shell, settings) {
+        if (!settings.length) {
+            return Promise.resolve();
+        }
+        const requests = [
+            {key: 'settings_value_on', component: 'local_dixeo'},
+            {key: 'settings_value_off', component: 'local_dixeo'},
+        ];
+        settings.forEach(function(setting) {
+            requests.push({key: setting.name, component: setting.component});
+            requests.push({key: setting.help, component: setting.component});
+        });
+        return Str.get_strings(requests).then(function(strings) {
+            const onLabel = strings[0];
+            const offLabel = strings[1];
+            const rows = settings.map(function(setting, index) {
+                const labelAt = 2 + (index * 2);
+                return {
+                    component: setting.component,
+                    name: setting.name,
+                    label: strings[labelAt],
+                    help: strings[labelAt + 1],
+                    shortname: setting.shortname,
+                    shortnameurl: State.shortnameUrl(setting, Config.wwwroot),
+                    isbool: setting.type === 'bool',
+                    istextarea: setting.type === 'textarea',
+                    displayvalue: State.displayValue(setting, onLabel, offLabel),
+                };
+            });
+            return Templates.renderForPromise('local_dixeo/settings_rows', {rows: rows}).then(function(rendered) {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+                if (list) {
+                    list.innerHTML = rendered.html;
+                }
+                Templates.runTemplateJS(rendered.js);
+                return null;
+            });
+        });
+    };
+
+    /**
      * Load the course settings, or explain that a new course must be saved first.
      *
      * @param {HTMLElement} shell
@@ -112,7 +164,9 @@ define([
                 }
                 const settings = result && Array.isArray(result.settings) ? result.settings : [];
                 setList(shell, '');
-                return Str.get_string('settings_modal_count', 'local_dixeo', settings.length).then(function(label) {
+                return renderRows(shell, settings).then(function() {
+                    return Str.get_string('settings_modal_count', 'local_dixeo', settings.length);
+                }).then(function(label) {
                     setCount(shell, label);
                     return null;
                 });

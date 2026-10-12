@@ -830,6 +830,41 @@ label[for="local-dixeo-settings-category"] {
     overflow-x: auto;
 }
 
+.local-dixeo-settings-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e6e7e3;
+}
+
+.local-dixeo-settings-row-name,
+.local-dixeo-settings-row-value {
+    flex: 1 1 50%;
+    min-width: 0;
+}
+
+.local-dixeo-settings-row-label {
+    font-weight: 700;
+}
+
+.local-dixeo-settings-row-shortname {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-family: ui-monospace, monospace;
+    color: #0676cc;
+}
+
+.local-dixeo-settings-row-help {
+    margin-top: 2px;
+}
+
+.local-dixeo-settings-row-value .btn,
+.local-dixeo-settings-row-value .form-control {
+    width: 100%;
+    min-height: 44px;
+}
+
 @media (max-width: 767.98px) {
     .local-dixeo-settings-body {
         flex-direction: column;

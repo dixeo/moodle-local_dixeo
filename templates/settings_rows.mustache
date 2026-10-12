@@ -1,0 +1,44 @@
+{{!
+    @template local_dixeo/settings_rows
+
+    Read-only rows for the settings modal list.
+
+    Context variables required for this template:
+    * rows - array - One object per setting.
+
+    Example context (json):
+    {
+        "rows": [
+            {
+                "label": "Enable Dixeo",
+                "shortname": "enabled",
+                "shortnameurl": "http://dixeo.local/admin/settings.php?section=local_dixeo#id_s_local_dixeo_enabled",
+                "help": "Enable or disable Dixeo features globally.",
+                "isbool": true,
+                "displayvalue": "On"
+            }
+        ]
+    }
+}}
+{{#rows}}
+<div class="local-dixeo-settings-row" data-component="{{component}}" data-name="{{name}}">
+    <div class="local-dixeo-settings-row-name">
+        <div class="local-dixeo-settings-row-label">{{label}}</div>
+        {{#shortnameurl}}
+        <a class="local-dixeo-settings-row-shortname" href="{{shortnameurl}}">{{shortname}}</a>
+        {{/shortnameurl}}
+        {{^shortnameurl}}
+        <span class="local-dixeo-settings-row-shortname">{{shortname}}</span>
+        {{/shortnameurl}}
+        <div class="local-dixeo-settings-row-help">{{help}}</div>
+    </div>
+    <div class="local-dixeo-settings-row-value">
+        {{#isbool}}
+        <button type="button" class="btn btn-outline-secondary" disabled>{{displayvalue}}</button>
+        {{/isbool}}
+        {{#istextarea}}
+        <textarea class="form-control" rows="3" readonly>{{displayvalue}}</textarea>
+        {{/istextarea}}
+    </div>
+</div>
+{{/rows}}
