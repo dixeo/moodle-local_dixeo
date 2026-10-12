@@ -32,6 +32,9 @@ if ($hassiteconfig) {
     // Master switch. This page stays available so the site can be turned back on.
     $settings->add(new \local_dixeo\admin_setting_enabled());
 
+    // Dixeo default for courses created after this change. Existing courses are unchanged.
+    $settings->add(new \local_dixeo\admin_setting_filesync_enabled_default());
+
     // API Configuration section.
     $settings->add(new admin_setting_heading(
         'local_dixeo/api_config',

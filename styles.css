@@ -1344,7 +1344,8 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-modal .btn.local-dixeo-settings-supplied,
-.local-dixeo-settings-modal .form-control.local-dixeo-settings-supplied {
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-supplied,
+.local-dixeo-settings-modal .form-select.local-dixeo-settings-supplied {
     opacity: 1;
     border: 2px solid #0676cc;
     background: #fff;
@@ -1353,7 +1354,8 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-modal .btn.local-dixeo-settings-inherited,
-.local-dixeo-settings-modal .form-control.local-dixeo-settings-inherited {
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-inherited,
+.local-dixeo-settings-modal .form-select.local-dixeo-settings-inherited {
     opacity: 1;
     border: 1px solid #d3d6d2;
     background: #fafaf9;

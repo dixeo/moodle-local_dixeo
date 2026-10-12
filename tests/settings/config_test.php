@@ -233,15 +233,22 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
-     * The Dixeo layer lists enabled only, and requires moodle/site:config.
+     * The Dixeo layer lists settings declared there, and requires moodle/site:config.
      */
-    public function test_system_layers_list_enabled_only(): void {
+    public function test_system_layers_list_dixeo_settings(): void {
         $this->setAdminUser();
         $rows = (new config())->get_layers(\context_system::instance());
         $names = array_column($rows, 'name');
 
         $this->assertContains('enabled', $names);
+        $this->assertContains('filesync_enabled_default', $names);
+        $this->assertContains('filesync_pill', $names);
         $this->assertNotContains('learning_intent', $names);
+        $this->assertSame([], $this->layer_named($rows, 'filesync_enabled_default')['options']);
+        $this->assertSame(
+            ['hidden', 'coursetitle', 'footer'],
+            $this->layer_named($rows, 'filesync_pill')['options']
+        );
 
         $enabled = $this->layer_named($rows, 'enabled');
         $this->assertFalse($enabled['coremissing']);
@@ -280,6 +287,8 @@ final class config_test extends \advanced_testcase {
         $names = array_column((new config())->get_layers($context), 'name');
         $this->assertContains('enabled', $names);
         $this->assertContains('learning_intent', $names);
+        $this->assertContains('filesync_pill', $names);
+        $this->assertNotContains('filesync_enabled_default', $names);
 
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->setUser($student);
@@ -315,6 +324,33 @@ final class config_test extends \advanced_testcase {
         $this->assertFalse($coursecleared['customised']);
         $this->assertSame('1', $cleared['value']);
         $this->assertSame(resolver::LAYER_SITE, $cleared['source']);
+    }
+
+    /**
+     * A select stores a course override and rejects a value that is not an option.
+     */
+    public function test_select_stores_an_option_and_rejects_any_other_value(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $shipped = $config->get('local_dixeo', 'filesync_pill', $context);
+        $this->assertSame('coursetitle', $shipped->get_value());
+        $this->assertSame(resolver::LAYER_SITE, $shipped->get_source());
+
+        $config->set('local_dixeo', 'filesync_pill', $context, 'footer');
+        $override = $config->get('local_dixeo', 'filesync_pill', $context);
+        $this->assertSame('footer', $override->get_value());
+        $this->assertSame(resolver::LAYER_COURSE, $override->get_source());
+
+        $config->set('local_dixeo', 'filesync_pill', $context, 'coursetitle');
+        $cleared = $config->get('local_dixeo', 'filesync_pill', $context);
+        $this->assertSame('coursetitle', $cleared->get_value());
+        $this->assertSame(resolver::LAYER_SITE, $cleared->get_source());
+
+        $this->expectException(\coding_exception::class);
+        $config->set('local_dixeo', 'filesync_pill', $context, 'sidebar');
     }
 
     /**

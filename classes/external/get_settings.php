@@ -79,6 +79,10 @@ class get_settings extends external_api {
                     'feature' => new external_value(PARAM_ALPHANUMEXT, 'Feature group'),
                     'plugingroup' => new external_value(PARAM_ALPHANUMEXT, 'Plugin group'),
                     'help' => new external_value(PARAM_ALPHANUMEXT, 'Help string key'),
+                    'options' => new external_multiple_structure(
+                        new external_value(PARAM_ALPHANUMEXT, 'Allowed value for a select'),
+                        'Allowed values for a select. Empty for every other type.'
+                    ),
                     'coremissing' => new external_value(PARAM_BOOL, 'True when a declared core target cannot be resolved'),
                     'value' => new external_value(PARAM_RAW, 'Effective value'),
                     'source' => new external_value(PARAM_ALPHA, 'Layer that supplied the effective value'),

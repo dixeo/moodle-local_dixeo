@@ -43,6 +43,7 @@ final class definition {
      * @param string $plugingroup Plugin-group id.
      * @param string $help Language-string key for the help text, in $component.
      * @param bool $sensitive True when the value must be hidden from users who cannot edit the Dixeo layer.
+     * @param string[] $options Allowed values for a select. Empty for every other type.
      * @param core_target|null $core Moodle admin setting this entry overrides, or null when Dixeo-only.
      */
     public function __construct(
@@ -56,6 +57,7 @@ final class definition {
         private string $plugingroup,
         private string $help,
         private bool $sensitive,
+        private array $options,
         private ?core_target $core,
     ) {
     }
@@ -83,10 +85,6 @@ final class definition {
             }
         }
 
-        if ($type === 'select' && (!isset($raw['options']) || !is_array($raw['options']) || $raw['options'] === [])) {
-            throw new \coding_exception("Dixeo setting \"{$key}\" is a select and must declare options.");
-        }
-
         $core = null;
         if (array_key_exists('core', $raw)) {
             if (!is_array($raw['core'])) {
@@ -103,19 +101,52 @@ final class definition {
             throw new \coding_exception("Dixeo setting \"{$key}\" must declare sensitive as a boolean.");
         }
 
+        $default = (string) $raw['default'];
+        $options = $type === 'select' ? self::require_options($key, $raw['options'] ?? null, $default) : [];
+
         return new self(
             $key,
             self::require_string($raw, 'shortname'),
             self::require_string($raw, 'component'),
             $type,
-            (string) $raw['default'],
+            $default,
             array_values($levels),
             self::require_string($raw, 'feature'),
             self::require_string($raw, 'plugingroup'),
             self::require_string($raw, 'help'),
             $raw['sensitive'],
+            $options,
             $core,
         );
+    }
+
+    /**
+     * Select options are a non-empty list of unique ids, and the default is one of them.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param mixed $options Raw options list.
+     * @param string $default Shipped default.
+     * @return string[]
+     */
+    private static function require_options(string $key, mixed $options, string $default): array {
+        if (!is_array($options) || $options === [] || !array_is_list($options)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" is a select and must declare options.");
+        }
+
+        $clean = [];
+        foreach ($options as $option) {
+            if (!is_string($option) || !preg_match('/^[a-zA-Z0-9_]+$/', $option)) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" has an invalid option.");
+            }
+            if (in_array($option, $clean, true)) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" repeats option \"{$option}\".");
+            }
+            $clean[] = $option;
+        }
+        if (!in_array($default, $clean, true)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" default is not one of its options.");
+        }
+        return $clean;
     }
 
     /**
@@ -199,6 +230,15 @@ final class definition {
      */
     public function is_sensitive(): bool {
         return $this->sensitive;
+    }
+
+    /**
+     * Allowed values for a select. Empty for every other type.
+     *
+     * @return string[]
+     */
+    public function get_options(): array {
+        return $this->options;
     }
 
     /**

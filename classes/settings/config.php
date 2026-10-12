@@ -67,6 +67,9 @@ final class config {
         $level = $this->level_for($definition, $context);
         $this->require_edit($level, $context);
         $value = clean_param($value, PARAM_TEXT);
+        if ($definition->get_type() === 'select' && !in_array($value, $definition->get_options(), true)) {
+            throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
+        }
         $stored = $this->stored_values($definition, $context, $level);
         $current = $this->own_value($definition, $context, $level);
 
@@ -228,6 +231,7 @@ final class config {
             'feature' => $definition->get_feature(),
             'plugingroup' => $definition->get_plugingroup(),
             'help' => $definition->get_help(),
+            'options' => $definition->get_options(),
             'coremissing' => false,
             'value' => $effective['value'],
             'source' => $effective['source'],

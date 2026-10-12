@@ -52,6 +52,19 @@ define([], function() {
     };
 
     /**
+     * Label for one select value. The raw value is used when no label was loaded.
+     *
+     * @param {Object} setting Catalogue row. optionlabels maps a value to its text.
+     * @param {string} value
+     * @returns {string}
+     */
+    const optionLabel = function(setting, value) {
+        const labels = setting.optionlabels || {};
+        const key = value || '';
+        return labels[key] || key;
+    };
+
+    /**
      * Text for a parent cell. Null means the layer is absent and the cell stays blank.
      * An empty value with no own row is absent too. A stored empty string displays the empty label.
      *
@@ -67,6 +80,9 @@ define([], function() {
         }
         if (setting.type === 'bool') {
             return layer.value === '1' ? labels.on : labels.off;
+        }
+        if (setting.type === 'select') {
+            return optionLabel(setting, layer.value);
         }
         if (layer.value) {
             return layer.value;
@@ -171,6 +187,9 @@ define([], function() {
     const displayFor = function(setting, value, labels) {
         if (setting.type === 'bool') {
             return value === '1' ? labels.on : labels.off;
+        }
+        if (setting.type === 'select') {
+            return optionLabel(setting, value);
         }
         return value || '';
     };
@@ -410,6 +429,14 @@ define([], function() {
             shortnameurl: shortnameUrl(setting, wwwroot),
             isbool: setting.type === 'bool',
             istextarea: setting.type === 'textarea',
+            isselect: setting.type === 'select',
+            options: (Array.isArray(setting.options) ? setting.options : []).map(function(value) {
+                return {
+                    value: value,
+                    label: optionLabel(setting, value),
+                    selected: value === entry.draft,
+                };
+            }),
             displayvalue: view.display,
             valueon: view.pressed,
             hassite: site !== null,

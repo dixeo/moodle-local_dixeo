@@ -106,6 +106,14 @@
                       rows="3"
                       data-action="local-dixeo-settings-value">{{displayvalue}}</textarea>
             {{/istextarea}}
+            {{#isselect}}
+            <select class="form-select local-dixeo-settings-control {{valueclass}}"
+                    data-action="local-dixeo-settings-value">
+                {{#options}}
+                <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                {{/options}}
+            </select>
+            {{/isselect}}
         </div>
     </div>
     {{/rows}}

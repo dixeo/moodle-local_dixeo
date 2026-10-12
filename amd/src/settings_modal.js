@@ -311,6 +311,12 @@ define([
             requests.push({key: setting.name, component: setting.component});
             requests.push({key: setting.help, component: setting.component});
         });
+        const optionAt = requests.length;
+        settings.forEach(function(setting) {
+            (Array.isArray(setting.options) ? setting.options : []).forEach(function(option) {
+                requests.push({key: setting.name + '_' + option, component: setting.component});
+            });
+        });
         return Str.get_strings(requests).then(function(strings) {
             const labels = {
                 on: strings[0],
@@ -324,12 +330,19 @@ define([
                 revert: strings[10],
             };
             const entries = {};
+            let optionCursor = optionAt;
             const rows = settings.map(function(setting, index) {
                 const labelAt = fixedCount + (index * 2);
-                const entry = State.entryFor(setting);
-                entry.haystack = State.searchText(setting, strings[labelAt], strings[labelAt + 1]);
+                const optionlabels = {};
+                (Array.isArray(setting.options) ? setting.options : []).forEach(function(option) {
+                    optionlabels[option] = strings[optionCursor];
+                    optionCursor = optionCursor + 1;
+                });
+                const labelled = Object.assign({}, setting, {optionlabels: optionlabels});
+                const entry = State.entryFor(labelled);
+                entry.haystack = State.searchText(labelled, strings[labelAt], strings[labelAt + 1]);
                 entries[setting.component + '/' + setting.name] = entry;
-                return State.rowView(setting, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
+                return State.rowView(labelled, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
             });
             sessions.set(shell, {
                 labels: labels,
@@ -481,7 +494,7 @@ define([
         }
         const control = row.querySelector('[data-action="local-dixeo-settings-value"]');
         if (control) {
-            if (control.tagName === 'TEXTAREA') {
+            if (control.tagName === 'TEXTAREA' || control.tagName === 'SELECT') {
                 if (control.value !== entry.draft) {
                     control.value = entry.draft;
                 }
@@ -644,6 +657,22 @@ define([
             const session = sessions.get(shell);
             const control = event.target.closest('[data-action="local-dixeo-settings-value"]');
             if (!session || session.saving || !control || control.tagName !== 'TEXTAREA') {
+                return;
+            }
+            const row = control.closest('.local-dixeo-settings-row');
+            if (!row) {
+                return;
+            }
+            const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
+            if (!entry) {
+                return;
+            }
+            commitDraft(shell, row, entry, control.value);
+        });
+        shell.addEventListener('change', function(event) {
+            const session = sessions.get(shell);
+            const control = event.target.closest('select[data-action="local-dixeo-settings-value"]');
+            if (!session || session.saving || !control) {
                 return;
             }
             const row = control.closest('.local-dixeo-settings-row');
