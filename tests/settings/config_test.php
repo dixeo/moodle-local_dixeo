@@ -233,6 +233,151 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * The Dixeo layer lists enabled only, and requires moodle/site:config.
+     */
+    public function test_system_layers_list_enabled_only(): void {
+        $this->setAdminUser();
+        $rows = (new config())->get_layers(\context_system::instance());
+        $names = array_column($rows, 'name');
+
+        $this->assertContains('enabled', $names);
+        $this->assertNotContains('learning_intent', $names);
+
+        $enabled = $this->layer_named($rows, 'enabled');
+        $this->assertFalse($enabled['coremissing']);
+        $this->assertSame('1', $enabled['value']);
+        $this->assertSame(resolver::LAYER_SITE, $enabled['source']);
+        $this->assertSame(
+            [resolver::LAYER_SITE, resolver::LAYER_DIXEO],
+            array_column($enabled['layers'], 'level')
+        );
+        $dixeo = $this->layer_level($enabled, resolver::LAYER_DIXEO);
+        $this->assertNull($dixeo['stored']);
+        $this->assertFalse($dixeo['customised']);
+        $this->assertSame('1', $dixeo['value']);
+    }
+
+    /**
+     * Opening the Dixeo layer requires moodle/site:config.
+     */
+    public function test_user_without_site_config_cannot_read_layers(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+
+        $this->expectException(\required_capability_exception::class);
+        (new config())->get_layers(\context_system::instance());
+    }
+
+    /**
+     * A course lists both settings for a teacher, and rejects a student.
+     */
+    public function test_course_layers_require_course_update(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->setUser($teacher);
+
+        $names = array_column((new config())->get_layers($context), 'name');
+        $this->assertContains('enabled', $names);
+        $this->assertContains('learning_intent', $names);
+
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($student);
+        $this->expectException(\required_capability_exception::class);
+        (new config())->get_layers($context);
+    }
+
+    /**
+     * A course Off row is customised, and matching the parent removes that flag.
+     */
+    public function test_course_override_is_customised_until_it_matches_the_parent(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $config->set('local_dixeo', 'enabled', $context, '0');
+        $enabled = $this->layer_named($config->get_layers($context), 'enabled');
+        $this->assertSame('0', $enabled['value']);
+        $this->assertSame(resolver::LAYER_COURSE, $enabled['source']);
+        $courseoff = $this->layer_level($enabled, resolver::LAYER_COURSE);
+        $this->assertSame('0', $courseoff['stored']);
+        $this->assertTrue($courseoff['customised']);
+        $parent = $this->layer_level($enabled, resolver::LAYER_DIXEO);
+        $this->assertSame('1', $parent['value']);
+        $this->assertNull($parent['stored']);
+        $this->assertFalse($parent['customised']);
+
+        $config->set('local_dixeo', 'enabled', $context, '1');
+        $cleared = $this->layer_named($config->get_layers($context), 'enabled');
+        $coursecleared = $this->layer_level($cleared, resolver::LAYER_COURSE);
+        $this->assertNull($coursecleared['stored']);
+        $this->assertFalse($coursecleared['customised']);
+        $this->assertSame('1', $cleared['value']);
+        $this->assertSame(resolver::LAYER_SITE, $cleared['source']);
+    }
+
+    /**
+     * An empty learning intent has no course row and no Dixeo layer.
+     */
+    public function test_empty_learning_intent_is_not_customised(): void {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $rows = (new config())->get_layers(\context_course::instance($course->id));
+        $intent = $this->layer_named($rows, 'learning_intent');
+
+        $this->assertSame('', $intent['value']);
+        $this->assertSame(resolver::LAYER_SITE, $intent['source']);
+        $this->assertSame(
+            [resolver::LAYER_SITE, resolver::LAYER_COURSE],
+            array_column($intent['layers'], 'level')
+        );
+        $course = $this->layer_level($intent, resolver::LAYER_COURSE);
+        $this->assertNull($course['stored']);
+        $this->assertFalse($course['customised']);
+        $this->assertSame('', $course['value']);
+    }
+
+    /**
+     * Layers are not available outside the system and course contexts.
+     */
+    public function test_layers_reject_other_contexts(): void {
+        $this->setAdminUser();
+        $category = $this->getDataGenerator()->create_category();
+
+        $this->expectException(\coding_exception::class);
+        (new config())->get_layers(\context_coursecat::instance($category->id));
+    }
+
+    /**
+     * @param array[] $rows Layer rows.
+     * @param string $name Catalogue key.
+     * @return array
+     */
+    private function layer_named(array $rows, string $name): array {
+        foreach ($rows as $row) {
+            if ($row['name'] === $name) {
+                return $row;
+            }
+        }
+        $this->fail("Setting {$name} was not returned.");
+    }
+
+    /**
+     * @param array $row One catalogue row from get_layers.
+     * @param string $level Site, Dixeo, or course.
+     * @return array
+     */
+    private function layer_level(array $row, string $level): array {
+        foreach ($row['layers'] as $layer) {
+            if ($layer['level'] === $level) {
+                return $layer;
+            }
+        }
+        $this->fail("Layer {$level} was not returned.");
+    }
+
+    /**
      * @param \context_course $context Course context.
      * @return array<string, int|string>
      */

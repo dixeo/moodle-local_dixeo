@@ -77,6 +77,37 @@ final class config {
     }
 
     /**
+     * Catalogue rows for the level opened at $context.
+     *
+     * A system context is the Dixeo layer and requires moodle/site:config. A course
+     * context requires moodle/course:update. Each row is the effective value plus
+     * every layer in that setting's chain. A layer's stored value is null when that
+     * layer has no own row. Customised is true only for an own stored row. A
+     * sensitive setting is omitted unless the user has moodle/site:config.
+     * {@see self::get()} is unchanged and does not require a capability.
+     *
+     * @param \context $context System context or a course context.
+     * @return array[]
+     */
+    public function get_layers(\context $context): array {
+        $level = $this->open_level($context);
+        $this->require_edit($level, $context);
+        $seesensitive = has_capability('moodle/site:config', \context_system::instance());
+
+        $rows = [];
+        foreach (catalogue::load() as $definition) {
+            if (!in_array($level, $definition->get_levels(), true)) {
+                continue;
+            }
+            if ($definition->is_sensitive() && !$seesensitive) {
+                continue;
+            }
+            $rows[] = $this->layer_row($definition, $context, $level);
+        }
+        return $rows;
+    }
+
+    /**
      * Whether Dixeo features run in $context.
      *
      * The Dixeo layer is absolute. Off is off everywhere, including a course whose own
@@ -138,6 +169,93 @@ final class config {
             }
         }
         throw new \coding_exception("Dixeo setting \"{$component}/{$name}\" is not in the catalogue.");
+    }
+
+    /**
+     * Dixeo or course, for a context the layer read accepts.
+     *
+     * @param \context $context Requested context.
+     * @return string
+     */
+    private function open_level(\context $context): string {
+        if ($context->contextlevel == CONTEXT_SYSTEM) {
+            return resolver::LAYER_DIXEO;
+        }
+        if ($context->contextlevel == CONTEXT_COURSE) {
+            return resolver::LAYER_COURSE;
+        }
+        throw new \coding_exception('Dixeo settings layers are only available for the system or a course.');
+    }
+
+    /**
+     * One catalogue row and the layers that lead to its effective value.
+     *
+     * A loaded definition has already resolved any core target, so the row is not coremissing.
+     *
+     * @param definition $definition Catalogue entry declared at $level.
+     * @param \context $context System or course context.
+     * @param string $level Dixeo or course.
+     * @return array
+     */
+    private function layer_row(definition $definition, \context $context, string $level): array {
+        $stored = $this->stored_values($definition, $context, $level);
+        $effective = resolver::effective($level, $stored);
+        $layers = [];
+        foreach ($this->chain_for($definition, $level) as $layer) {
+            $own = $layer === resolver::LAYER_SITE ? null : ($stored[$layer] ?? null);
+            $layers[] = [
+                'level' => $layer,
+                'value' => $this->value_at($layer, $stored),
+                'stored' => $own,
+                'customised' => $own !== null,
+            ];
+        }
+
+        return [
+            'component' => $definition->get_component(),
+            'name' => $definition->get_key(),
+            'shortname' => $definition->get_shortname(),
+            'type' => $definition->get_type(),
+            'feature' => $definition->get_feature(),
+            'plugingroup' => $definition->get_plugingroup(),
+            'help' => $definition->get_help(),
+            'coremissing' => false,
+            'value' => $effective['value'],
+            'source' => $effective['source'],
+            'layers' => $layers,
+        ];
+    }
+
+    /**
+     * Site, then Dixeo when this setting declares it, then course when that is the opened level.
+     *
+     * @param definition $definition Catalogue entry.
+     * @param string $level Dixeo or course.
+     * @return string[]
+     */
+    private function chain_for(definition $definition, string $level): array {
+        $chain = [resolver::LAYER_SITE];
+        if (in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
+            $chain[] = resolver::LAYER_DIXEO;
+        }
+        if ($level === resolver::LAYER_COURSE) {
+            $chain[] = resolver::LAYER_COURSE;
+        }
+        return $chain;
+    }
+
+    /**
+     * Effective text at one layer, walking parents when that layer has no own row.
+     *
+     * @param string $layer Site, Dixeo, or course.
+     * @param array<string, string|null> $stored Own values. Null means no row.
+     * @return string
+     */
+    private function value_at(string $layer, array $stored): string {
+        if ($layer === resolver::LAYER_SITE) {
+            return (string) ($stored[resolver::LAYER_SITE] ?? '');
+        }
+        return resolver::effective($layer, $stored)['value'];
     }
 
     /**
