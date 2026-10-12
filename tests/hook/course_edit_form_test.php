@@ -202,7 +202,7 @@ final class course_edit_form_test extends \advanced_testcase {
         update_course($cleared);
         $empty = $config->get('local_dixeo', 'learning_intent', $context);
         $this->assertSame('', $empty->get_value());
-        $this->assertSame(resolver::LAYER_SITE, $empty->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $empty->get_source());
     }
 
     /**
@@ -229,7 +229,7 @@ final class course_edit_form_test extends \advanced_testcase {
         $restored->{course_edit_form::ENABLED} = '1';
         update_course($restored);
         $this->assertTrue($config->enabled_for($context));
-        $this->assertSame(resolver::LAYER_SITE, $config->get('local_dixeo', 'enabled', $context)->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $config->get('local_dixeo', 'enabled', $context)->get_source());
     }
 
     /**

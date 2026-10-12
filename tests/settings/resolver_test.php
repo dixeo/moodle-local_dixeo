@@ -96,4 +96,30 @@ final class resolver_test extends \advanced_testcase {
             resolver::LAYER_SITE => '',
         ]));
     }
+
+    /**
+     * A Dixeo plugin setting has no site value. The catalogue default is the Dixeo layer.
+     */
+    public function test_dixeo_only_setting_uses_the_catalogue_default(): void {
+        $stored = [
+            resolver::LAYER_DIXEO => null,
+            resolver::LAYER_COURSE => null,
+        ];
+        $course = resolver::effective(resolver::LAYER_COURSE, $stored, 'coursetitle');
+        $this->assertSame('coursetitle', $course['value']);
+        $this->assertSame(resolver::LAYER_DIXEO, $course['source']);
+
+        $stored[resolver::LAYER_DIXEO] = 'footer';
+        $override = resolver::effective(resolver::LAYER_COURSE, $stored, 'coursetitle');
+        $this->assertSame('footer', $override['value']);
+        $this->assertSame(resolver::LAYER_DIXEO, $override['source']);
+
+        $this->assertFalse(resolver::stores_override(resolver::LAYER_DIXEO, 'coursetitle', [
+            resolver::LAYER_DIXEO => null,
+        ], 'coursetitle'));
+        $this->assertTrue(resolver::stores_override(resolver::LAYER_DIXEO, 'footer', [
+            resolver::LAYER_DIXEO => null,
+        ], 'coursetitle'));
+        $this->assertFalse(resolver::stores_override(resolver::LAYER_COURSE, 'footer', $stored, 'coursetitle'));
+    }
 }

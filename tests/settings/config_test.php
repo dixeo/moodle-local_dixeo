@@ -47,7 +47,7 @@ final class config_test extends \advanced_testcase {
         $resolved = (new config())->get('local_dixeo', 'learning_intent', \context_course::instance($course->id));
 
         $this->assertSame('', $resolved->get_value());
-        $this->assertSame(resolver::LAYER_SITE, $resolved->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $resolved->get_source());
     }
 
     /**
@@ -73,7 +73,7 @@ final class config_test extends \advanced_testcase {
         $this->assertFalse($DB->record_exists(config::TABLE, $this->course_conditions($context)));
         $cleared = $config->get('local_dixeo', 'learning_intent', $context);
         $this->assertSame('', $cleared->get_value());
-        $this->assertSame(resolver::LAYER_SITE, $cleared->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $cleared->get_source());
     }
 
     /**
@@ -253,11 +253,17 @@ final class config_test extends \advanced_testcase {
         $enabled = $this->layer_named($rows, 'enabled');
         $this->assertFalse($enabled['coremissing']);
         $this->assertSame('1', $enabled['value']);
-        $this->assertSame(resolver::LAYER_SITE, $enabled['source']);
+        $this->assertSame(resolver::LAYER_DIXEO, $enabled['source']);
         $this->assertSame(
-            [resolver::LAYER_SITE, resolver::LAYER_DIXEO],
+            [resolver::LAYER_DIXEO],
             array_column($enabled['layers'], 'level')
         );
+        $pill = $this->layer_named($rows, 'filesync_pill');
+        $this->assertSame(
+            [resolver::LAYER_DIXEO],
+            array_column($pill['layers'], 'level')
+        );
+        $this->assertSame(resolver::LAYER_DIXEO, $pill['source']);
         $dixeo = $this->layer_level($enabled, resolver::LAYER_DIXEO);
         $this->assertNull($dixeo['stored']);
         $this->assertFalse($dixeo['customised']);
@@ -323,7 +329,8 @@ final class config_test extends \advanced_testcase {
         $this->assertNull($coursecleared['stored']);
         $this->assertFalse($coursecleared['customised']);
         $this->assertSame('1', $cleared['value']);
-        $this->assertSame(resolver::LAYER_SITE, $cleared['source']);
+        $this->assertSame(resolver::LAYER_DIXEO, $cleared['source']);
+        $this->assertNotContains(resolver::LAYER_SITE, array_column($cleared['layers'], 'level'));
     }
 
     /**
@@ -337,7 +344,7 @@ final class config_test extends \advanced_testcase {
 
         $shipped = $config->get('local_dixeo', 'filesync_pill', $context);
         $this->assertSame('coursetitle', $shipped->get_value());
-        $this->assertSame(resolver::LAYER_SITE, $shipped->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $shipped->get_source());
 
         $config->set('local_dixeo', 'filesync_pill', $context, 'footer');
         $override = $config->get('local_dixeo', 'filesync_pill', $context);
@@ -347,7 +354,7 @@ final class config_test extends \advanced_testcase {
         $config->set('local_dixeo', 'filesync_pill', $context, 'coursetitle');
         $cleared = $config->get('local_dixeo', 'filesync_pill', $context);
         $this->assertSame('coursetitle', $cleared->get_value());
-        $this->assertSame(resolver::LAYER_SITE, $cleared->get_source());
+        $this->assertSame(resolver::LAYER_DIXEO, $cleared->get_source());
 
         $this->expectException(\coding_exception::class);
         $config->set('local_dixeo', 'filesync_pill', $context, 'sidebar');
@@ -363,9 +370,9 @@ final class config_test extends \advanced_testcase {
         $intent = $this->layer_named($rows, 'learning_intent');
 
         $this->assertSame('', $intent['value']);
-        $this->assertSame(resolver::LAYER_SITE, $intent['source']);
+        $this->assertSame(resolver::LAYER_DIXEO, $intent['source']);
         $this->assertSame(
-            [resolver::LAYER_SITE, resolver::LAYER_COURSE],
+            [resolver::LAYER_COURSE],
             array_column($intent['layers'], 'level')
         );
         $course = $this->layer_level($intent, resolver::LAYER_COURSE);

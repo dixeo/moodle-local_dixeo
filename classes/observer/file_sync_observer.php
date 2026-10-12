@@ -44,7 +44,7 @@ class file_sync_observer {
     private const FILE_MODULE_TYPES = ['resource', 'folder', 'scorm'];
 
     /**
-     * Turn file sync on for a new course when the site default says so.
+     * Turn file sync on for a new course when the Dixeo setting says so.
      *
      * @param course_created $event The event.
      * @return void

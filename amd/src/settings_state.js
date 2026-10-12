@@ -143,6 +143,9 @@ define([], function() {
     /**
      * Layer that supplies the value when the current level has no own row.
      *
+     * A stored Dixeo row supplies Dixeo. Otherwise a core site layer supplies the site
+     * value. A Dixeo plugin setting has no site layer, so its catalogue default is Dixeo.
+     *
      * @param {Object} setting Catalogue row from get_settings.
      * @returns {string} dixeo or site.
      */
@@ -151,7 +154,10 @@ define([], function() {
         if (dixeo && (dixeo.customised === true || dixeo.customised === 1)) {
             return 'dixeo';
         }
-        return 'site';
+        if (layerAt(setting, 'site')) {
+            return 'site';
+        }
+        return 'dixeo';
     };
 
     /**

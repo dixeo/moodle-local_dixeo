@@ -20,8 +20,10 @@ namespace local_dixeo\settings;
  * Reads and writes catalogue settings.
  *
  * A setting is stored only at levels it declares. The Dixeo level, when declared, is plugin
- * config. A course value is a row in local_dixeo_setting, written only when it differs from
- * the parent. A course-only setting has no Dixeo parent, so that parent is the shipped default.
+ * config, and the catalogue default is that layer's value when nothing is stored. A site
+ * layer exists only for a core Moodle config the setting overrides. A course value is a row
+ * in local_dixeo_setting, written only when it differs from the parent. A course-only setting
+ * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
  * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
  * Callers do not query the table.
  *
@@ -50,7 +52,8 @@ final class config {
     public function get(string $component, string $name, \context $context): resolved_value {
         $definition = $this->definition($component, $name);
         $level = $this->level_for($definition, $context);
-        $effective = resolver::effective($level, $this->stored_values($definition, $context, $level));
+        $stored = $this->stored_values($definition, $context, $level);
+        $effective = resolver::effective($level, $stored, $definition->get_default());
         return new resolved_value($effective['value'], $effective['source']);
     }
 
@@ -73,7 +76,7 @@ final class config {
         $stored = $this->stored_values($definition, $context, $level);
         $current = $this->own_value($definition, $context, $level);
 
-        if (!resolver::stores_override($level, $value, $stored)) {
+        if (!resolver::stores_override($level, $value, $stored, $definition->get_default())) {
             if ($current === null) {
                 return;
             }
@@ -211,13 +214,14 @@ final class config {
      */
     private function layer_row(definition $definition, \context $context, string $level): array {
         $stored = $this->stored_values($definition, $context, $level);
-        $effective = resolver::effective($level, $stored);
+        $fallback = $definition->get_default();
+        $effective = resolver::effective($level, $stored, $fallback);
         $layers = [];
         foreach ($this->chain_for($definition, $level) as $layer) {
             $own = $layer === resolver::LAYER_SITE ? null : ($stored[$layer] ?? null);
             $layers[] = [
                 'level' => $layer,
-                'value' => $this->value_at($layer, $stored),
+                'value' => $this->value_at($layer, $stored, $fallback),
                 'stored' => $own,
                 'customised' => $own !== null,
             ];
@@ -240,14 +244,17 @@ final class config {
     }
 
     /**
-     * Site, then Dixeo when this setting declares it, then course when that is the opened level.
+     * Core site value when this setting overrides one, then Dixeo when declared, then course.
      *
      * @param definition $definition Catalogue entry.
      * @param string $level Dixeo or course.
      * @return string[]
      */
     private function chain_for(definition $definition, string $level): array {
-        $chain = [resolver::LAYER_SITE];
+        $chain = [];
+        if ($definition->has_core()) {
+            $chain[] = resolver::LAYER_SITE;
+        }
         if (in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
             $chain[] = resolver::LAYER_DIXEO;
         }
@@ -262,13 +269,14 @@ final class config {
      *
      * @param string $layer Site, Dixeo, or course.
      * @param array<string, string|null> $stored Own values. Null means no row.
+     * @param string $fallback Catalogue default for a Dixeo-only setting.
      * @return string
      */
-    private function value_at(string $layer, array $stored): string {
+    private function value_at(string $layer, array $stored, string $fallback): string {
         if ($layer === resolver::LAYER_SITE) {
             return (string) ($stored[resolver::LAYER_SITE] ?? '');
         }
-        return resolver::effective($layer, $stored)['value'];
+        return resolver::effective($layer, $stored, $fallback)['value'];
     }
 
     /**
@@ -304,7 +312,10 @@ final class config {
     }
 
     /**
-     * Own values for the layers this setting declares. The site layer is the shipped default.
+     * Own values for the layers this setting declares.
+     *
+     * The site key is present only for a core Moodle config, and holds that live value.
+     * A Dixeo plugin setting has no site key; its catalogue default is applied by the resolver.
      *
      * @param definition $definition Catalogue entry.
      * @param \context $context Context being read. Course rows are read only for a course context.
@@ -312,9 +323,10 @@ final class config {
      * @return array<string, string|null>
      */
     private function stored_values(definition $definition, \context $context, string $level): array {
-        $stored = [
-            resolver::LAYER_SITE => $definition->get_default(),
-        ];
+        $stored = [];
+        if ($definition->has_core()) {
+            $stored[resolver::LAYER_SITE] = $this->read_core($definition);
+        }
         if (in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
             $stored[resolver::LAYER_DIXEO] = $this->read_dixeo($definition);
         }
@@ -353,6 +365,42 @@ final class config {
                 'name' => $definition->get_key(),
             ],
         ])->trigger();
+    }
+
+    /**
+     * Live value of the core Moodle setting this entry overrides.
+     *
+     * An unset core config uses that admin setting's own default, not the Dixeo catalogue default.
+     *
+     * @param definition $definition Catalogue entry with a core target.
+     * @return string
+     */
+    private function read_core(definition $definition): string {
+        $core = $definition->get_core();
+        if ($core === null) {
+            return '';
+        }
+        if ($core->legacycfg) {
+            global $CFG;
+            $name = $core->name;
+            if (isset($CFG->{$name})) {
+                return (string) $CFG->{$name};
+            }
+        } else {
+            $value = get_config($core->plugin, $core->name);
+            if ($value !== false) {
+                return (string) $value;
+            }
+        }
+        $setting = core_lookup::find($core->admin_setting_name());
+        if ($setting === null) {
+            return '';
+        }
+        $default = $setting->get_defaultsetting();
+        if ($default === null || $default === false || is_array($default)) {
+            return '';
+        }
+        return (string) $default;
     }
 
     /**
