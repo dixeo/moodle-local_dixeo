@@ -399,6 +399,7 @@ $string['settings_modal_save_course'] = 'Enregistrez le cours avant de charger s
 $string['settings_modal_save_error'] = 'Les paramètres Dixeo n\'ont pas pu être enregistrés.';
 $string['settings_modal_search'] = 'Rechercher des paramètres';
 $string['settings_modal_search_placeholder'] = 'Rechercher par nom, clé ou plugin';
+$string['settings_modal_status'] = 'État';
 $string['settings_modal_title'] = 'Paramètres Dixeo';
 $string['settings_modal_unsaved_close'] = 'Fermer sans enregistrer';
 $string['settings_modal_unsaved_confirm'] = 'Fermer sans enregistrer ces modifications ?';

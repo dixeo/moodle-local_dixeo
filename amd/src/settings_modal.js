@@ -28,12 +28,19 @@ define([
     'core/notification',
     'core/str',
     'core/templates',
+    'core/user_date',
     'local_dixeo/settings_state',
-], function(Ajax, Config, Modal, Notification, Str, Templates, State) {
+], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, State) {
     let bound = false;
 
     /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
     const sessions = new WeakMap();
+
+    /** @type {WeakMap} Poll timer for a shell whose Status panel is open. */
+    const statusTimers = new WeakMap();
+
+    /** @type {Object|null} Strings used to paint the file sync status panel. */
+    let statusStrings = null;
 
     /** True while the category controls are being rebuilt, so their change event does not loop. */
     let paintingCategories = false;
@@ -68,6 +75,12 @@ define([
         }
         setGrouping(shell, 'feature');
         setCategory(shell, 'all');
+        leaveStatus(shell);
+        const statusButton = shell.querySelector('[data-action="local-dixeo-settings-status"]');
+        if (statusButton) {
+            statusButton.hidden = !shell.dataset.courseid;
+            setPressed(statusButton, false);
+        }
     };
 
     /**
@@ -132,13 +145,387 @@ define([
     };
 
     /**
+     * Stop the status poll for this shell.
+     *
+     * @param {HTMLElement} shell
+     */
+    const cancelStatusPoll = function(shell) {
+        const timer = statusTimers.get(shell);
+        if (timer) {
+            clearTimeout(timer);
+            statusTimers.delete(shell);
+        }
+    };
+
+    /**
+     * @param {*} value
+     * @returns {boolean}
+     */
+    const isOn = function(value) {
+        return value === true || value === 1 || value === '1';
+    };
+
+    /**
+     * @param {*} value
+     * @returns {boolean}
+     */
+    const hasNumber = function(value) {
+        return value !== null && value !== undefined && !Number.isNaN(Number(value));
+    };
+
+    /**
+     * Strings for the status panel. Loaded once, then reused while the modal stays open.
+     *
+     * @returns {Promise<Object>}
+     */
+    const loadStatusStrings = function() {
+        if (statusStrings) {
+            return Promise.resolve(statusStrings);
+        }
+        const keys = [
+            'filesync_status_none',
+            'filesync_status_syncing',
+            'filesync_status_synchronized',
+            'filesync_status_error',
+            'filesync_status_paused',
+            'filesync_status_pending_deletion',
+            'filesync_status_disabled',
+            'filesync_status_outdated',
+            'filesync_files_count',
+            'filesync_progress',
+            'files',
+            'last_sync',
+        ];
+        const requests = keys.map(function(key) {
+            return {key: key, component: 'local_dixeo'};
+        });
+        requests.push({key: 'strftimedatetimeshort', component: 'core_langconfig'});
+        return Str.get_strings(requests).then(function(loaded) {
+            statusStrings = {};
+            keys.forEach(function(key, index) {
+                statusStrings[key] = loaded[index];
+            });
+            statusStrings.dateformat = loaded[keys.length];
+            return statusStrings;
+        });
+    };
+
+    /**
+     * The same message the file sync dropdown shows.
+     *
+     * @param {Object} status
+     * @param {Object} strings
+     * @returns {string}
+     */
+    const statusMessage = function(status, strings) {
+        if (status.status === 'pending_deletion') {
+            return strings.filesync_status_pending_deletion;
+        }
+        if (!isOn(status.enabled)) {
+            return strings.filesync_status_disabled;
+        }
+        if (status.status === 'synchronized' && hasNumber(status.filestotal)) {
+            return strings.filesync_files_count.replace('{$a}', String(Number(status.filestotal)));
+        }
+        if (status.status === 'syncing') {
+            const percent = hasNumber(status.progresspercent) ? Number(status.progresspercent) : 0;
+            return strings.filesync_progress.replace('{$a}', String(percent));
+        }
+        const key = 'filesync_status_' + status.status;
+        return strings[key] || status.status;
+    };
+
+    /**
+     * Paint the fixed status panel. This does not touch the settings draft.
+     *
+     * @param {HTMLElement} shell
+     * @param {Object} status
+     * @param {Object} strings
+     */
+    const paintStatus = function(shell, status, strings) {
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (!panel) {
+            return;
+        }
+        const enabled = isOn(status.enabled);
+        panel.dataset.enabled = enabled ? '1' : '0';
+        panel.dataset.canmanagesync = shell.dataset.canmanagesync === '1' ? '1' : '0';
+        shell.dataset.syncstatus = status.status || '';
+        const message = panel.querySelector('[data-region="status-message"]');
+        if (message) {
+            message.textContent = statusMessage(status, strings);
+        }
+        const progress = panel.querySelector('[data-region="progress"]');
+        const progressText = panel.querySelector('[data-region="progress-text"]');
+        const syncing = status.status === 'syncing';
+        if (progress) {
+            progress.hidden = !syncing;
+        }
+        if (syncing && hasNumber(status.progresspercent)) {
+            const bar = panel.querySelector('[data-region="progress-bar"]');
+            if (bar) {
+                bar.style.width = Number(status.progresspercent) + '%';
+                bar.setAttribute('aria-valuenow', String(Number(status.progresspercent)));
+            }
+        }
+        if (progressText) {
+            const showCount = syncing && hasNumber(status.filescompleted) && hasNumber(status.filestotal);
+            progressText.hidden = !showCount;
+            if (showCount) {
+                progressText.textContent = Number(status.filescompleted) + ' / ' + Number(status.filestotal) + ' ' + strings.files;
+            }
+        }
+        const error = panel.querySelector('[data-region="error-message"]');
+        if (error) {
+            const showError = status.status === 'error' && !!status.errormessage;
+            error.hidden = !showError;
+            error.textContent = showError ? status.errormessage : '';
+        }
+        const lastSync = panel.querySelector('[data-region="last-sync"]');
+        const completed = hasNumber(status.lastsynccompleted) ? Number(status.lastsynccompleted) : 0;
+        if (lastSync) {
+            if (!completed || (status.status === 'none' && !enabled)) {
+                lastSync.hidden = true;
+            } else {
+                lastSync.hidden = false;
+                UserDate.get([{timestamp: completed, format: strings.dateformat}]).then(function(dates) {
+                    if (shell.isConnected && dates && dates[0]) {
+                        lastSync.textContent = strings.last_sync + ': ' + dates[0];
+                    }
+                    return null;
+                }).catch(function() {
+                    return null;
+                });
+            }
+        }
+    };
+
+    /**
+     * Read the course sync status and paint it.
+     *
+     * @param {HTMLElement} shell
+     * @param {boolean} notify Show a dialogue when the read fails.
+     * @returns {Promise}
+     */
+    const refreshStatus = function(shell, notify) {
+        const courseid = parseInt(shell.dataset.courseid, 10);
+        if (!courseid) {
+            return Promise.resolve();
+        }
+        return loadStatusStrings().then(function(strings) {
+            return Ajax.call([{
+                methodname: 'local_dixeo_get_file_sync_status',
+                args: {courseid: courseid},
+            }])[0].then(function(status) {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                paintStatus(shell, status, strings);
+                return null;
+            });
+        }).catch(function(error) {
+            if (notify) {
+                Notification.exception(error);
+            }
+            return null;
+        });
+    };
+
+    /**
+     * Poll while the Status panel is open and sync is on. A disabled course stays as last painted.
+     *
+     * @param {HTMLElement} shell
+     */
+    const scheduleStatusPoll = function(shell) {
+        cancelStatusPoll(shell);
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (!shell.isConnected || shell.dataset.panel !== 'status' || !panel || panel.dataset.enabled !== '1') {
+            return;
+        }
+        const delay = shell.dataset.syncstatus === 'syncing' ? 5000 : 30000;
+        const timer = setTimeout(function() {
+            statusTimers.delete(shell);
+            refreshStatus(shell, false).then(function() {
+                scheduleStatusPoll(shell);
+                return null;
+            });
+        }, delay);
+        statusTimers.set(shell, timer);
+    };
+
+    /**
+     * Hide the status panel and show the settings list again.
+     *
+     * @param {HTMLElement} shell
+     */
+    const leaveStatus = function(shell) {
+        if (shell.dataset.panel !== 'status') {
+            cancelStatusPoll(shell);
+            return;
+        }
+        delete shell.dataset.panel;
+        cancelStatusPoll(shell);
+        const button = shell.querySelector('[data-action="local-dixeo-settings-status"]');
+        if (button) {
+            setPressed(button, false);
+        }
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (list) {
+            list.hidden = false;
+        }
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (panel) {
+            panel.hidden = true;
+        }
+    };
+
+    /**
+     * Show the fixed status panel. Search, Customised only, and Group by leave it in place.
+     *
+     * @param {HTMLElement} shell
+     */
+    const showStatus = function(shell) {
+        shell.dataset.panel = 'status';
+        const button = shell.querySelector('[data-action="local-dixeo-settings-status"]');
+        if (button) {
+            setPressed(button, true);
+        }
+        shell.querySelectorAll('.local-dixeo-settings-category-list [data-category]').forEach(function(item) {
+            setPressed(item, false);
+        });
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (list) {
+            list.hidden = true;
+        }
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (panel) {
+            panel.hidden = false;
+            panel.dataset.canmanagesync = shell.dataset.canmanagesync === '1' ? '1' : '0';
+        }
+        const select = shell.querySelector('#local-dixeo-settings-category');
+        if (select && [...select.options].some(function(option) {
+            return option.value === 'status';
+        })) {
+            paintingCategories = true;
+            select.value = 'status';
+            paintingCategories = false;
+        }
+        refreshStatus(shell, true).then(function() {
+            scheduleStatusPoll(shell);
+            return null;
+        });
+    };
+
+    /**
+     * Label of the Status button, used as the first option in the small-screen select.
+     *
+     * @param {HTMLElement} shell
+     * @returns {string}
+     */
+    const statusLabel = function(shell) {
+        const button = shell.querySelector('[data-action="local-dixeo-settings-status"]');
+        return button ? button.textContent.trim() : '';
+    };
+
+    /**
+     * Enable, pause, resync, or turn off. The result is applied immediately and the draft stays clean.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} action
+     * @returns {Promise}
+     */
+    const runStatusAction = function(shell, action) {
+        const courseid = parseInt(shell.dataset.courseid, 10);
+        if (!courseid || shell.dataset.canmanagesync !== '1' || shell.dataset.statusbusy === '1') {
+            return Promise.resolve();
+        }
+        shell.dataset.statusbusy = '1';
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (panel) {
+            panel.querySelectorAll('button').forEach(function(button) {
+                button.disabled = true;
+            });
+        }
+        let request;
+        if (action === 'resync') {
+            request = Ajax.call([{
+                methodname: 'local_dixeo_trigger_file_sync',
+                args: {courseid: courseid},
+            }])[0];
+        } else if (action === 'enable') {
+            request = Ajax.call([{
+                methodname: 'local_dixeo_set_file_sync_enabled',
+                args: {courseid: courseid, enabled: true, removefiles: false},
+            }])[0].then(function() {
+                return Ajax.call([{
+                    methodname: 'local_dixeo_trigger_file_sync',
+                    args: {courseid: courseid},
+                }])[0];
+            });
+        } else if (action === 'disable') {
+            request = Ajax.call([{
+                methodname: 'local_dixeo_set_file_sync_enabled',
+                args: {courseid: courseid, enabled: false, removefiles: true},
+            }])[0];
+        } else {
+            request = Ajax.call([{
+                methodname: 'local_dixeo_set_file_sync_enabled',
+                args: {courseid: courseid, enabled: false, removefiles: false},
+            }])[0];
+        }
+        return request.then(function() {
+            return refreshStatus(shell, true);
+        }).catch(function(error) {
+            Notification.exception(error);
+            return refreshStatus(shell, false);
+        }).then(function() {
+            delete shell.dataset.statusbusy;
+            if (panel) {
+                panel.querySelectorAll('button').forEach(function(button) {
+                    button.disabled = false;
+                });
+            }
+            scheduleStatusPoll(shell);
+            return null;
+        });
+    };
+
+    /**
+     * Status is not a category. Its button and its actions stay off the settings draft.
+     *
+     * @param {HTMLElement} shell
+     */
+    const bindStatus = function(shell) {
+        shell.addEventListener('click', function(event) {
+            const status = event.target.closest('[data-action="local-dixeo-settings-status"]');
+            if (status) {
+                event.preventDefault();
+                showStatus(shell);
+                return;
+            }
+            const action = event.target.closest('.local-dixeo-settings-status-panel [data-action]');
+            if (!action) {
+                return;
+            }
+            event.preventDefault();
+            runStatusAction(shell, action.dataset.action);
+        });
+    };
+
+    /**
      * Hide rows that miss the search, the Customised pill, or the category. The count is how many remain.
+     *
+     * While Status is open, the category counts may change and the status panel does not.
      *
      * @param {HTMLElement} shell
      */
     const applyFilter = function(shell) {
         const session = sessions.get(shell);
         if (!session) {
+            return;
+        }
+        if (shell.dataset.panel === 'status') {
+            renderCategories(shell);
             return;
         }
         const search = shell.querySelector('#local-dixeo-settings-search');
@@ -197,6 +584,12 @@ define([
         paintingCategories = true;
         list.replaceChildren();
         select.replaceChildren();
+        if (shell.dataset.courseid) {
+            const statusOption = document.createElement('option');
+            statusOption.value = 'status';
+            statusOption.textContent = statusLabel(shell);
+            select.appendChild(statusOption);
+        }
         items.forEach(function(item) {
             if (item.preferences) {
                 const divider = document.createElement('hr');
@@ -215,7 +608,7 @@ define([
             count.textContent = String(item.count);
             button.appendChild(name);
             button.appendChild(count);
-            setPressed(button, item.value === selectedCategory(shell));
+            setPressed(button, shell.dataset.panel !== 'status' && item.value === selectedCategory(shell));
             list.appendChild(button);
 
             const option = document.createElement('option');
@@ -225,7 +618,12 @@ define([
             option.disabled = !!item.hidden;
             select.appendChild(option);
         });
-        select.value = selectedCategory(shell);
+        const selected = shell.dataset.panel === 'status' ? 'status' : selectedCategory(shell);
+        if ([...select.options].some(function(option) {
+            return option.value === selected;
+        })) {
+            select.value = selected;
+        }
         paintingCategories = false;
     };
 
@@ -250,12 +648,15 @@ define([
             const grouping = event.target.closest('.local-dixeo-settings-grouping [data-grouping]');
             if (grouping) {
                 setGrouping(shell, grouping.dataset.grouping);
-                setCategory(shell, 'all');
+                if (shell.dataset.panel !== 'status') {
+                    setCategory(shell, 'all');
+                }
                 applyFilter(shell);
                 return;
             }
-            const category = event.target.closest('.local-dixeo-settings-categories [data-category]');
+            const category = event.target.closest('.local-dixeo-settings-category-list [data-category]');
             if (category) {
+                leaveStatus(shell);
                 setCategory(shell, category.dataset.category || 'all');
                 applyFilter(shell);
             }
@@ -268,6 +669,11 @@ define([
             if (!select) {
                 return;
             }
+            if (select.value === 'status') {
+                showStatus(shell);
+                return;
+            }
+            leaveStatus(shell);
             setCategory(shell, select.value || 'all');
             applyFilter(shell);
         });
@@ -448,6 +854,7 @@ define([
             return Promise.resolve();
         }
         if (!isDirty(shell)) {
+            cancelStatusPoll(shell);
             modal.destroy();
             return Promise.resolve();
         }
@@ -461,6 +868,7 @@ define([
                 triggerElement: shell,
             });
         }).then(function() {
+            cancelStatusPoll(shell);
             modal.destroy();
             return null;
         }).catch(function() {
@@ -823,11 +1231,16 @@ define([
                 return Promise.resolve(titleReady).then(function() {
                     Templates.runTemplateJS(rendered.js);
                     const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+                    if (button.dataset.courseid) {
+                        shell.dataset.courseid = button.dataset.courseid;
+                        shell.dataset.canmanagesync = button.dataset.canmanagesync === '1' ? '1' : '0';
+                    }
                     bindClose(modal, shell);
                     bindAdvanced(shell);
                     bindDraft(shell);
                     bindSave(modal, shell);
                     bindFilter(shell);
+                    bindStatus(shell);
                     return loadSettings(shell, button.dataset.contextid);
                 });
             });

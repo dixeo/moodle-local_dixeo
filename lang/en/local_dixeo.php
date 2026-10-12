@@ -399,6 +399,7 @@ $string['settings_modal_save_course'] = 'Save the course before loading its Dixe
 $string['settings_modal_save_error'] = 'Dixeo settings could not be saved.';
 $string['settings_modal_search'] = 'Search settings';
 $string['settings_modal_search_placeholder'] = 'Search by name, key or plugin';
+$string['settings_modal_status'] = 'Status';
 $string['settings_modal_title'] = 'Dixeo settings';
 $string['settings_modal_unsaved_close'] = 'Close without saving';
 $string['settings_modal_unsaved_confirm'] = 'Close without saving these changes?';

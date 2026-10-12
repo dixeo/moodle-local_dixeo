@@ -399,6 +399,7 @@ $string['settings_modal_save_course'] = 'Salva il corso prima di caricare le imp
 $string['settings_modal_save_error'] = 'Impossibile salvare le impostazioni Dixeo.';
 $string['settings_modal_search'] = 'Cerca impostazioni';
 $string['settings_modal_search_placeholder'] = 'Cerca per nome, chiave o plugin';
+$string['settings_modal_status'] = 'Stato';
 $string['settings_modal_title'] = 'Impostazioni Dixeo';
 $string['settings_modal_unsaved_close'] = 'Chiudi senza salvare';
 $string['settings_modal_unsaved_confirm'] = 'Chiudere senza salvare queste modifiche?';

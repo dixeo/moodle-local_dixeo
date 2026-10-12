@@ -399,6 +399,7 @@ $string['settings_modal_save_course'] = 'Guarde o curso antes de carregar as def
 $string['settings_modal_save_error'] = 'Não foi possível guardar as definições do Dixeo.';
 $string['settings_modal_search'] = 'Pesquisar definições';
 $string['settings_modal_search_placeholder'] = 'Pesquisar por nome, chave ou plugin';
+$string['settings_modal_status'] = 'Estado';
 $string['settings_modal_title'] = 'Definições Dixeo';
 $string['settings_modal_unsaved_close'] = 'Fechar sem guardar';
 $string['settings_modal_unsaved_confirm'] = 'Fechar sem guardar estas alterações?';

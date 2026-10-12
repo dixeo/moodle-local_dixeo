@@ -34,6 +34,13 @@
                 <option value="all" selected>{{#str}}settings_modal_all_features, local_dixeo{{/str}}</option>
             </select>
             <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
+                <button type="button"
+                        class="btn local-dixeo-settings-status"
+                        data-action="local-dixeo-settings-status"
+                        aria-pressed="false"
+                        hidden>
+                    <span>{{#str}}settings_modal_status, local_dixeo{{/str}}</span>
+                </button>
                 <div class="local-dixeo-settings-category-list" data-region="local-dixeo-settings-category-list"></div>
             </nav>
             <div class="local-dixeo-settings-grouping">
@@ -49,6 +56,50 @@
             </div>
         </div>
         <div class="local-dixeo-settings-list" data-region="local-dixeo-settings-list"></div>
+        <div class="local-dixeo-settings-status-panel"
+             data-region="local-dixeo-settings-status"
+             data-enabled="0"
+             data-canmanagesync="0"
+             hidden>
+            <div class="local-dixeo-settings-status-card">
+                <div class="local-dixeo-settings-status-header">
+                    <i class="fa fa-cloud" aria-hidden="true"></i>
+                    {{#str}}filesync_title, local_dixeo{{/str}}
+                </div>
+                <div class="local-dixeo-settings-status-body">
+                    <p class="local-dixeo-settings-status-text" data-region="status-message"></p>
+                    <p class="local-dixeo-settings-status-meta" data-region="last-sync" hidden></p>
+                    <div class="local-dixeo-settings-status-progress" data-region="progress" hidden>
+                        <div class="local-dixeo-settings-status-progress-bar"
+                             data-region="progress-bar"
+                             role="progressbar"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             aria-valuenow="0"></div>
+                    </div>
+                    <p class="local-dixeo-settings-status-meta" data-region="progress-text" hidden></p>
+                    <div class="local-dixeo-settings-status-error" data-region="error-message" hidden></div>
+                    <div class="local-dixeo-settings-status-actions">
+                        <button type="button" class="btn btn-primary" data-action="resync">
+                            <i class="fa fa-refresh" aria-hidden="true"></i>
+                            {{#str}}filesync_resync, local_dixeo{{/str}}
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-action="pause">
+                            <i class="fa fa-pause" aria-hidden="true"></i>
+                            {{#str}}filesync_pause, local_dixeo{{/str}}
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" data-action="disable">
+                            <i class="fa fa-trash" aria-hidden="true"></i>
+                            {{#str}}filesync_disable_remove, local_dixeo{{/str}}
+                        </button>
+                        <button type="button" class="btn btn-primary" data-action="enable">
+                            <i class="fa fa-play" aria-hidden="true"></i>
+                            {{#str}}filesync_enable, local_dixeo{{/str}}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="local-dixeo-settings-footer">
         <span data-region="local-dixeo-settings-unsaved">

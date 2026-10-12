@@ -84,7 +84,8 @@ class course_edit_form {
     }
 
     /**
-     * Fill learning intent and the course switch. A new course shows the Dixeo value for the switch.
+     * Fill learning intent and the course switch. A saved course also gives the settings
+     * button its course id, so the modal can show that course's file sync status.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
      */
@@ -98,6 +99,10 @@ class course_edit_form {
             ];
             if ($coursecontext !== null) {
                 $attributes['data-contextid'] = (string) $coursecontext->id;
+                $attributes['data-courseid'] = (string) $courseid;
+                if (has_capability('local/dixeo:syncfiles', $coursecontext)) {
+                    $attributes['data-canmanagesync'] = '1';
+                }
             }
             $mform->getElement(self::OPEN_BUTTON)->updateAttributes($attributes);
         }
