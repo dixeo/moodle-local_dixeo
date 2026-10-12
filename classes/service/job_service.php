@@ -85,6 +85,7 @@ class job_service {
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @param job_access_mode $accessmode Persisted access policy for later enforcement.
+     * @param \stored_file[] $files Files sent with the payload as multipart.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
@@ -93,9 +94,10 @@ class job_service {
         array $payload,
         ?string $component = null,
         ?job_binding_metadata $metadata = null,
-        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
+        array $files = []
     ): operation_result {
-        $response = $this->client->post($endpoint, $payload);
+        $response = $this->post($endpoint, $payload, $files);
         $jobid = (string) ($response['id'] ?? '');
         $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
 
@@ -114,6 +116,7 @@ class job_service {
      * @param string|null $component Originating frankenstyle component.
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @param job_access_mode $accessmode Persisted access policy for later enforcement.
+     * @param \stored_file[] $files Files sent with the payload as multipart.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
      */
@@ -123,9 +126,10 @@ class job_service {
         string $jobtype,
         ?string $component = null,
         ?job_binding_metadata $metadata = null,
-        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
+        array $files = []
     ): operation_result {
-        $response = $this->client->post($endpoint, $payload);
+        $response = $this->post($endpoint, $payload, $files);
         $jobid = (string) ($response['id'] ?? '');
         $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
         $config = polling_config::for_job_type($jobtype);
@@ -394,6 +398,22 @@ class job_service {
     }
 
     /**
+     * Post a job request, as multipart when it carries files.
+     *
+     * @param string $endpoint API endpoint.
+     * @param array $payload Request payload.
+     * @param \stored_file[] $files Files to attach.
+     * @return array Decoded response.
+     * @throws api_exception
+     */
+    private function post(string $endpoint, array $payload, array $files): array {
+        if ($files === []) {
+            return $this->client->post($endpoint, $payload);
+        }
+        return $this->client->post_multipart($endpoint, $payload, $files);
+    }
+
+    /**
      * Map an API endpoint to a short operation label.
      *
      * @param string $endpoint API path.
@@ -408,6 +428,11 @@ class job_service {
             '/v1/images/generate' => 'image_generate',
             '/v1/images/edit' => 'image_edit',
             '/v1/courses/structure' => 'course_structure',
+            '/v1/assign/review' => 'assign_review',
+            '/v1/assign/grade' => 'assign_grade',
+            '/v1/assign/authorship/confidence' => 'assign_authorship_confidence',
+            '/v1/assign/authorship/quiz' => 'assign_authorship_quiz',
+            '/v1/assign/authorship/evaluation' => 'assign_authorship_evaluation',
         ];
 
         $normalized = rtrim($endpoint, '/');

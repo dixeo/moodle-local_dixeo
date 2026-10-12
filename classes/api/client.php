@@ -103,6 +103,70 @@ class client {
     }
 
     /**
+     * Send a POST request carrying files: the payload as JSON in the `payload` part, files in `files[]`.
+     *
+     * @param string $endpoint The API endpoint.
+     * @param array $data The request payload.
+     * @param \stored_file[] $files Files to attach.
+     * @param string|null $idempotencykey Optional idempotency key.
+     * @return array The decoded response data.
+     * @throws api_exception If the request fails.
+     */
+    public function post_multipart(string $endpoint, array $data, array $files, ?string $idempotencykey = null): array {
+        global $CFG;
+        require_once($CFG->libdir . '/filelib.php');
+
+        $this->validate_configuration();
+
+        $jsonpayload = json_encode($data);
+        if ($jsonpayload === false) {
+            throw new api_exception(
+                'invalid_payload',
+                'Failed to encode request payload as JSON: ' . json_last_error_msg(),
+                0
+            );
+        }
+
+        $curl = $this->create_curl($this->timeout);
+        $curl->setHeader([
+            'X-API-Key: ' . $this->apikey,
+            'Accept: application/json',
+            'User-Agent: local_dixeo/1.0 (Moodle Plugin)',
+            'X-Idempotency-Key: ' . ($idempotencykey ?? \core\uuid::generate()),
+        ]);
+
+        $postdata = ['payload' => $jsonpayload];
+        $requestdir = make_request_directory();
+        $tempfiles = [];
+        foreach (array_values($files) as $index => $file) {
+            $temppath = $requestdir . '/dixeo_upload_' . uniqid() . '_' . $file->get_filename();
+            $file->copy_content_to($temppath);
+            $tempfiles[] = $temppath;
+            $postdata["files[$index]"] = new \CURLFile($temppath, $file->get_mimetype(), $file->get_filename());
+        }
+
+        try {
+            $response = $curl->post(rtrim($this->baseurl, '/') . '/' . ltrim($endpoint, '/'), $postdata);
+
+            $errno = $curl->get_errno();
+            if ($errno) {
+                throw new api_exception(
+                    'connection_error',
+                    'Failed to connect to Dixeo API: ' . $curl->error,
+                    0,
+                    ['curl_errno' => $errno]
+                );
+            }
+
+            return $this->parse_response($response, $curl->get_info());
+        } finally {
+            foreach ($tempfiles as $temppath) {
+                @unlink($temppath);
+            }
+        }
+    }
+
+    /**
      * Send an HTTP request to the API.
      *
      * @param string $method The HTTP method (GET, POST, etc.).

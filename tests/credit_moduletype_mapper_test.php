@@ -43,6 +43,11 @@ final class credit_moduletype_mapper_test extends \advanced_testcase {
             get_string('credit_moduletype_slideshow', 'local_dixeo'),
             credit_moduletype_mapper::get_label('slideshow')
         );
+        $this->assertSame(
+            get_string('credit_moduletype_assign', 'local_dixeo'),
+            credit_moduletype_mapper::get_label('assign')
+        );
+        $this->assertContains('assign', credit_moduletype_mapper::get_known_moduletypes());
     }
 
     public function test_get_label_falls_back_to_humanized_code(): void {
