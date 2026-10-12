@@ -25,7 +25,11 @@
                 "hasdixeo": true,
                 "dixeovalue": "On",
                 "dixeoclass": "local-dixeo-settings-inherited",
-                "valueclass": "local-dixeo-settings-inherited"
+                "valueclass": "local-dixeo-settings-inherited",
+                "revertlabel": "Revert changes to Enable Dixeo",
+                "resetlabel": "Reset to the parent value",
+                "showreset": false,
+                "showrevert": false
             }
         ]
     }
@@ -60,31 +64,46 @@
         </div>
         <div class="local-dixeo-settings-parent" role="cell" data-layer="site">
             {{#hassite}}
-            {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary {{siteclass}}" disabled>{{sitevalue}}</button>
-            {{/isbool}}
-            {{#istextarea}}
-            <textarea class="form-control {{siteclass}}" rows="3" readonly>{{sitevalue}}</textarea>
-            {{/istextarea}}
+            <button type="button"
+                    class="btn btn-outline-secondary {{siteclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
+                    data-action="local-dixeo-settings-parent"
+                    data-layer="site">{{sitevalue}}</button>
             {{/hassite}}
         </div>
         <div class="local-dixeo-settings-parent" role="cell" data-layer="dixeo">
             {{#hasdixeo}}
-            {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary {{dixeoclass}}" disabled>{{dixeovalue}}</button>
-            {{/isbool}}
-            {{#istextarea}}
-            <textarea class="form-control {{dixeoclass}}" rows="3" readonly>{{dixeovalue}}</textarea>
-            {{/istextarea}}
+            <button type="button"
+                    class="btn btn-outline-secondary {{dixeoclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
+                    data-action="local-dixeo-settings-parent"
+                    data-layer="dixeo">{{dixeovalue}}</button>
             {{/hasdixeo}}
         </div>
         <div class="local-dixeo-settings-row-value" role="cell">
             {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary {{valueclass}}" disabled>{{displayvalue}}</button>
+            <button type="button"
+                    class="btn btn-outline-secondary local-dixeo-settings-control {{valueclass}}"
+                    data-action="local-dixeo-settings-value"
+                    aria-pressed="{{#valueon}}true{{/valueon}}{{^valueon}}false{{/valueon}}">{{displayvalue}}</button>
             {{/isbool}}
             {{#istextarea}}
-            <textarea class="form-control {{valueclass}}" rows="3" readonly>{{displayvalue}}</textarea>
+            <textarea class="form-control local-dixeo-settings-control {{valueclass}}"
+                      rows="3"
+                      data-action="local-dixeo-settings-value">{{displayvalue}}</textarea>
             {{/istextarea}}
+            <button type="button"
+                    class="btn btn-outline-secondary local-dixeo-settings-icon"
+                    data-action="local-dixeo-settings-revert"
+                    title="{{revertlabel}}"
+                    {{^showrevert}}hidden{{/showrevert}}>
+                {{#pix}} e/undo, core, {{revertlabel}} {{/pix}}
+            </button>
+            <button type="button"
+                    class="btn btn-outline-secondary local-dixeo-settings-icon"
+                    data-action="local-dixeo-settings-reset"
+                    title="{{resetlabel}}"
+                    {{^showreset}}hidden{{/showreset}}>
+                {{#pix}} t/reset, core, {{resetlabel}} {{/pix}}
+            </button>
         </div>
     </div>
     {{/rows}}

@@ -32,6 +32,9 @@ define([
 ], function(Ajax, Config, Modal, Notification, Str, Templates, State) {
     let bound = false;
 
+    /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
+    const sessions = new WeakMap();
+
     /**
      * Course name currently typed on the edit form.
      *
@@ -106,7 +109,12 @@ define([
             {key: 'settings_badge_customised', component: 'local_dixeo'},
             {key: 'settings_badge_dixeo', component: 'local_dixeo'},
             {key: 'settings_badge_site', component: 'local_dixeo'},
+            {key: 'settings_revert', component: 'local_dixeo'},
+            {key: 'settings_reset', component: 'local_dixeo'},
+            {key: 'settings_modal_unsaved_count', component: 'local_dixeo'},
+            {key: 'settings_modal_unsaved_none', component: 'local_dixeo'},
         ];
+        const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
             requests.push({key: setting.help, component: setting.component});
@@ -121,10 +129,20 @@ define([
                     dixeo: strings[8],
                     site: strings[9],
                 },
+                revert: strings[10],
+                reset: strings[11],
             };
+            const entries = {};
             const rows = settings.map(function(setting, index) {
-                const labelAt = 10 + (index * 2);
+                const labelAt = fixedCount + (index * 2);
+                entries[setting.component + '/' + setting.name] = State.entryFor(setting);
                 return State.rowView(setting, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
+            });
+            sessions.set(shell, {
+                labels: labels,
+                entries: entries,
+                countLabel: strings[12],
+                noneLabel: strings[13],
             });
             const context = {
                 rows: rows,
@@ -241,6 +259,158 @@ define([
     };
 
     /**
+     * @param {HTMLElement} control
+     * @param {string} className local-dixeo-settings-supplied or local-dixeo-settings-inherited.
+     */
+    const setBorder = function(control, className) {
+        control.classList.toggle('local-dixeo-settings-supplied', className === 'local-dixeo-settings-supplied');
+        control.classList.toggle('local-dixeo-settings-inherited', className === 'local-dixeo-settings-inherited');
+    };
+
+    /**
+     * Show the draft on one row: value, badge, borders, and the revert and reset icons.
+     *
+     * @param {HTMLElement} row
+     * @param {Object} entry
+     * @param {Object} labels
+     */
+    const paintRow = function(row, entry, labels) {
+        const view = State.draftView(entry, labels);
+        const badge = row.querySelector('.local-dixeo-settings-badge');
+        if (badge) {
+            badge.textContent = view.badge;
+        }
+        const control = row.querySelector('[data-action="local-dixeo-settings-value"]');
+        if (control) {
+            if (control.tagName === 'TEXTAREA') {
+                if (control.value !== entry.draft) {
+                    control.value = entry.draft;
+                }
+            } else {
+                control.textContent = view.display;
+                control.setAttribute('aria-pressed', view.pressed ? 'true' : 'false');
+            }
+            setBorder(control, view.valueclass);
+        }
+        row.querySelectorAll('[data-action="local-dixeo-settings-parent"]').forEach(function(cell) {
+            setBorder(cell, cell.dataset.layer === 'dixeo' ? view.dixeoclass : view.siteclass);
+        });
+        const revert = row.querySelector('[data-action="local-dixeo-settings-revert"]');
+        if (revert) {
+            revert.hidden = !view.showrevert;
+        }
+        const reset = row.querySelector('[data-action="local-dixeo-settings-reset"]');
+        if (reset) {
+            reset.hidden = !view.showreset;
+        }
+    };
+
+    /**
+     * Footer count, Save, and data-dirty follow the number of drafts that differ.
+     *
+     * @param {HTMLElement} shell
+     */
+    const publishDirty = function(shell) {
+        const session = sessions.get(shell);
+        if (!session) {
+            return;
+        }
+        const count = State.dirtyCount(session.entries);
+        const save = shell.querySelector('[data-action="local-dixeo-settings-save"]');
+        if (save) {
+            save.disabled = count === 0;
+        }
+        if (count > 0) {
+            shell.dataset.dirty = '1';
+        } else {
+            delete shell.dataset.dirty;
+        }
+        const unsaved = shell.querySelector('[data-region="local-dixeo-settings-unsaved"]');
+        if (unsaved) {
+            unsaved.textContent = count === 0 ? session.noneLabel : session.countLabel.replace('{$a}', String(count));
+        }
+    };
+
+    /**
+     * @param {HTMLElement} shell
+     * @param {HTMLElement} row
+     * @param {Object} entry
+     * @param {string} draft
+     */
+    const commitDraft = function(shell, row, entry, draft) {
+        if (draft === null || draft === entry.draft) {
+            return;
+        }
+        entry.draft = draft;
+        const session = sessions.get(shell);
+        paintRow(row, entry, session.labels);
+        publishDirty(shell);
+    };
+
+    /**
+     * Draft edits. Nothing is written.
+     *
+     * @param {HTMLElement} shell
+     */
+    const bindDraft = function(shell) {
+        shell.addEventListener('click', function(event) {
+            const session = sessions.get(shell);
+            if (!session) {
+                return;
+            }
+            const actionEl = event.target.closest(
+                '[data-action="local-dixeo-settings-revert"],' +
+                '[data-action="local-dixeo-settings-reset"],' +
+                '[data-action="local-dixeo-settings-parent"],' +
+                '[data-action="local-dixeo-settings-value"]'
+            );
+            if (!actionEl || actionEl.tagName === 'TEXTAREA') {
+                return;
+            }
+            const row = actionEl.closest('.local-dixeo-settings-row');
+            if (!row) {
+                return;
+            }
+            const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
+            if (!entry) {
+                return;
+            }
+            const action = actionEl.dataset.action;
+            let next = null;
+            if (action === 'local-dixeo-settings-revert') {
+                next = State.nextDraft(entry, 'revert');
+            } else if (action === 'local-dixeo-settings-reset') {
+                next = State.nextDraft(entry, 'reset');
+            } else if (action === 'local-dixeo-settings-parent') {
+                next = State.nextDraft(entry, 'parent', actionEl.dataset.layer);
+            } else if (entry.setting.type === 'bool') {
+                next = State.nextDraft(entry, 'toggle');
+            }
+            if (next === null) {
+                return;
+            }
+            event.preventDefault();
+            commitDraft(shell, row, entry, next);
+        });
+        shell.addEventListener('input', function(event) {
+            const session = sessions.get(shell);
+            const control = event.target.closest('[data-action="local-dixeo-settings-value"]');
+            if (!session || !control || control.tagName !== 'TEXTAREA') {
+                return;
+            }
+            const row = control.closest('.local-dixeo-settings-row');
+            if (!row) {
+                return;
+            }
+            const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
+            if (!entry) {
+                return;
+            }
+            commitDraft(shell, row, entry, control.value);
+        });
+    };
+
+    /**
      * Advanced reveals the Site default and Dixeo columns. It starts off.
      *
      * @param {HTMLElement} shell
@@ -310,6 +480,7 @@ define([
                 const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
                 bindClose(modal, shell);
                 bindAdvanced(shell);
+                bindDraft(shell);
                 return loadSettings(shell, button.dataset.contextid);
             });
         });
