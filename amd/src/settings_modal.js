@@ -98,34 +98,40 @@ define([
         const requests = [
             {key: 'settings_value_on', component: 'local_dixeo'},
             {key: 'settings_value_off', component: 'local_dixeo'},
+            {key: 'settings_value_empty', component: 'local_dixeo'},
+            {key: 'settings_column_course', component: 'local_dixeo'},
+            {key: 'settings_column_site', component: 'local_dixeo'},
+            {key: 'settings_column_dixeo', component: 'local_dixeo'},
+            {key: 'settings_modal_advanced', component: 'local_dixeo'},
         ];
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
             requests.push({key: setting.help, component: setting.component});
         });
         return Str.get_strings(requests).then(function(strings) {
-            const onLabel = strings[0];
-            const offLabel = strings[1];
+            const labels = {
+                on: strings[0],
+                off: strings[1],
+                empty: strings[2],
+            };
             const rows = settings.map(function(setting, index) {
-                const labelAt = 2 + (index * 2);
-                return {
-                    component: setting.component,
-                    name: setting.name,
-                    label: strings[labelAt],
-                    help: strings[labelAt + 1],
-                    shortname: setting.shortname,
-                    shortnameurl: State.shortnameUrl(setting, Config.wwwroot),
-                    isbool: setting.type === 'bool',
-                    istextarea: setting.type === 'textarea',
-                    displayvalue: State.displayValue(setting, onLabel, offLabel),
-                };
+                const labelAt = 7 + (index * 2);
+                return State.rowView(setting, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
             });
-            return Templates.renderForPromise('local_dixeo/settings_rows', {rows: rows}).then(function(rendered) {
+            const context = {
+                rows: rows,
+                coursecolumn: strings[3],
+                sitecolumn: strings[4],
+                dixeocolumn: strings[5],
+                advanced: strings[6],
+            };
+            return Templates.renderForPromise('local_dixeo/settings_rows', context).then(function(rendered) {
                 if (!shell.isConnected) {
                     return null;
                 }
                 const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
                 if (list) {
+                    list.dataset.advanced = '0';
                     list.innerHTML = rendered.html;
                 }
                 Templates.runTemplateJS(rendered.js);
@@ -227,6 +233,24 @@ define([
     };
 
     /**
+     * Advanced reveals the Site default and Dixeo columns. It starts off.
+     *
+     * @param {HTMLElement} shell
+     */
+    const bindAdvanced = function(shell) {
+        shell.addEventListener('change', function(event) {
+            const input = event.target.closest('[data-action="local-dixeo-settings-advanced"]');
+            if (!input) {
+                return;
+            }
+            const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+            if (list) {
+                list.dataset.advanced = input.checked ? '1' : '0';
+            }
+        });
+    };
+
+    /**
      * Cancel, the header close button, and Escape share one close path.
      *
      * @param {Object} modal
@@ -277,6 +301,7 @@ define([
                 Templates.runTemplateJS(rendered.js);
                 const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
                 bindClose(modal, shell);
+                bindAdvanced(shell);
                 return loadSettings(shell, button.dataset.contextid);
             });
         });

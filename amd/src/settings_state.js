@@ -37,7 +37,7 @@ define([], function() {
     };
 
     /**
-     * Text shown in the current-value control.
+     * Text shown in the current-value control. An empty textarea stays blank here.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @param {string} onLabel
@@ -51,8 +51,77 @@ define([], function() {
         return setting.value || '';
     };
 
+    /**
+     * One layer object from the payload, or null when this setting has no such layer.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @param {string} level site, dixeo, or course.
+     * @returns {Object|null}
+     */
+    const layerAt = function(setting, level) {
+        const layers = Array.isArray(setting.layers) ? setting.layers : [];
+        const found = layers.find(function(layer) {
+            return layer && layer.level === level;
+        });
+        return found || null;
+    };
+
+    /**
+     * Text for a parent cell. Null means the layer is absent and the cell stays blank.
+     * An empty string displays the empty label.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @param {string} level site or dixeo.
+     * @param {{on: string, off: string, empty: string}} labels
+     * @returns {string|null}
+     */
+    const parentText = function(setting, level, labels) {
+        const layer = layerAt(setting, level);
+        if (!layer) {
+            return null;
+        }
+        if (setting.type === 'bool') {
+            return layer.value === '1' ? labels.on : labels.off;
+        }
+        if (!layer.value) {
+            return labels.empty;
+        }
+        return layer.value;
+    };
+
+    /**
+     * Template context for one read-only row, including parent cells.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @param {string} label
+     * @param {string} help
+     * @param {string} wwwroot
+     * @param {{on: string, off: string, empty: string}} labels
+     * @returns {Object}
+     */
+    const rowView = function(setting, label, help, wwwroot, labels) {
+        const site = parentText(setting, 'site', labels);
+        const dixeo = parentText(setting, 'dixeo', labels);
+        return {
+            component: setting.component,
+            name: setting.name,
+            label: label,
+            help: help,
+            shortname: setting.shortname,
+            shortnameurl: shortnameUrl(setting, wwwroot),
+            isbool: setting.type === 'bool',
+            istextarea: setting.type === 'textarea',
+            displayvalue: displayValue(setting, labels.on, labels.off),
+            hassite: site !== null,
+            sitevalue: site || '',
+            hasdixeo: dixeo !== null,
+            dixeovalue: dixeo || '',
+        };
+    };
+
     return {
         shortnameUrl: shortnameUrl,
         displayValue: displayValue,
+        rowView: rowView,
     };
 });

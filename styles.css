@@ -779,7 +779,7 @@ h2:has(.dixeo-sync-indicator),
     height: 1rem;
 }
 
-/* Settings modal shell. The list stays empty until rows are rendered. */
+/* Settings modal shell. */
 .local-dixeo-settings-modal {
     display: flex;
     flex-direction: column;
@@ -827,20 +827,78 @@ label[for="local-dixeo-settings-category"] {
 
 .local-dixeo-settings-list {
     flex: 1 1 auto;
-    overflow-x: auto;
+    overflow: auto;
+    max-height: 28rem;
+}
+
+.local-dixeo-settings-table {
+    width: 100%;
+}
+
+.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-table {
+    min-width: 48rem;
+}
+
+.local-dixeo-settings-head,
+.local-dixeo-settings-row {
+    display: grid;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-head,
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-row {
+    grid-template-columns: minmax(14rem, 1.6fr) minmax(12rem, 1fr);
+}
+
+.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-row {
+    grid-template-columns: minmax(14rem, 1.4fr) minmax(9rem, 1fr) minmax(9rem, 1fr) minmax(12rem, 1fr);
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) [data-layer] {
+    display: none;
+}
+
+.local-dixeo-settings-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e6e7e3;
+}
+
+.local-dixeo-settings-head-current {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 44px;
+}
+
+.local-dixeo-settings-head-title,
+.local-dixeo-settings-head-parent {
+    font-weight: 700;
+}
+
+.local-dixeo-settings-advanced {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    min-height: 44px;
+    cursor: pointer;
 }
 
 .local-dixeo-settings-row {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
     padding: 0.75rem 0;
     border-bottom: 1px solid #e6e7e3;
 }
 
 .local-dixeo-settings-row-name,
-.local-dixeo-settings-row-value {
-    flex: 1 1 50%;
+.local-dixeo-settings-row-value,
+.local-dixeo-settings-parent {
     min-width: 0;
 }
 
@@ -860,7 +918,9 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-row-value .btn,
-.local-dixeo-settings-row-value .form-control {
+.local-dixeo-settings-row-value .form-control,
+.local-dixeo-settings-parent .btn,
+.local-dixeo-settings-parent .form-control {
     width: 100%;
     min-height: 44px;
 }
