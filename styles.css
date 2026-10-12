@@ -812,7 +812,7 @@ label[for="local-dixeo-settings-category"] {
     overflow-y: auto;
 }
 
-.local-dixeo-settings-status,
+.local-dixeo-settings-categories .local-dixeo-settings-status,
 .local-dixeo-settings-category-list .btn {
     display: flex;
     justify-content: space-between;
@@ -852,6 +852,7 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-status[hidden],
+.local-dixeo-settings-status[hidden] + .local-dixeo-settings-category-divider,
 .local-dixeo-settings-category-list .btn[hidden] {
     display: none;
 }

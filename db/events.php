@@ -17,8 +17,9 @@
 /**
  * Event observers for the Dixeo plugin.
  *
- * Defines event handlers for file sync triggers based on course module events.
- * Sync activation itself is a manual action by an admin or teacher.
+ * Defines event handlers for file sync. A new course turns sync on when the
+ * File sync for new courses setting is on. Module changes queue a sync when
+ * that course already has sync on.
  *
  * This plugin also emits custom events (not observed here) for audit logging:
  * file_sync_enabled, file_sync_disabled, file_sync_triggered, job_cancelled,
@@ -34,6 +35,14 @@
 
 defined('MOODLE_INTERNAL') || die();
 $observers = [
+    // Apply the new-course file sync default.
+    [
+        'eventname' => '\core\event\course_created',
+        'callback' => '\local_dixeo\observer\file_sync_observer::course_created',
+        'internal' => false,
+        'priority' => 0,
+    ],
+
     // Trigger sync when a course module is created.
     [
         'eventname' => '\core\event\course_module_created',

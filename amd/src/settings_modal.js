@@ -598,7 +598,7 @@ define([
             }
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'btn';
+            button.className = 'btn btn-outline-secondary';
             button.dataset.category = item.value;
             button.hidden = !!item.hidden;
             const name = document.createElement('span');

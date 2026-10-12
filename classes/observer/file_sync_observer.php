@@ -17,8 +17,10 @@
 /**
  * Event observer for file sync triggers.
  *
- * Listens to course module events to queue file synchronization on courses
- * where sync has been manually enabled.
+ * Listens to course creation and course module events. A new course turns sync
+ * on when the File sync for new courses setting is on. Module changes queue a
+ * sync only when that course already has sync on. The service refuses both
+ * when Dixeo is off for the course.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -28,6 +30,7 @@
 
 namespace local_dixeo\observer;
 
+use core\event\course_created;
 use core\event\course_module_created;
 use core\event\course_module_updated;
 use core\event\course_module_deleted;
@@ -39,6 +42,21 @@ use local_dixeo\external\service_factory;
 class file_sync_observer {
     /** @var array Module types that contain syncable files or SCORM extracts. */
     private const FILE_MODULE_TYPES = ['resource', 'folder', 'scorm'];
+
+    /**
+     * Turn file sync on for a new course when the site default says so.
+     *
+     * @param course_created $event The event.
+     * @return void
+     */
+    public static function course_created(course_created $event): void {
+        $courseid = (int) $event->courseid;
+        if ($courseid <= SITEID) {
+            return;
+        }
+
+        service_factory::get_file_sync_service()->enable_new_course($courseid, (int) $event->userid);
+    }
 
     /**
      * Handle course module created event.
