@@ -126,7 +126,7 @@ define([
      */
     const setGrouping = function(shell, grouping) {
         shell.dataset.grouping = grouping === 'plugin' ? 'plugin' : 'feature';
-        shell.querySelectorAll('[data-grouping]').forEach(function(button) {
+        shell.querySelectorAll('.local-dixeo-settings-grouping [data-grouping]').forEach(function(button) {
             setPressed(button, button.dataset.grouping === shell.dataset.grouping);
         });
     };
@@ -247,7 +247,7 @@ define([
                 applyFilter(shell);
                 return;
             }
-            const grouping = event.target.closest('[data-grouping]');
+            const grouping = event.target.closest('.local-dixeo-settings-grouping [data-grouping]');
             if (grouping) {
                 setGrouping(shell, grouping.dataset.grouping);
                 setCategory(shell, 'all');
@@ -297,7 +297,6 @@ define([
             {key: 'settings_badge_dixeo', component: 'local_dixeo'},
             {key: 'settings_badge_site', component: 'local_dixeo'},
             {key: 'settings_revert', component: 'local_dixeo'},
-            {key: 'settings_reset', component: 'local_dixeo'},
             {key: 'settings_modal_unsaved_count', component: 'local_dixeo'},
             {key: 'settings_modal_unsaved_none', component: 'local_dixeo'},
         ];
@@ -323,7 +322,6 @@ define([
                     site: strings[9],
                 },
                 revert: strings[10],
-                reset: strings[11],
             };
             const entries = {};
             const rows = settings.map(function(setting, index) {
@@ -336,8 +334,8 @@ define([
             sessions.set(shell, {
                 labels: labels,
                 entries: entries,
-                countLabel: strings[12],
-                noneLabel: strings[13],
+                countLabel: strings[11],
+                noneLabel: strings[12],
                 toolbarCount: strings[extraAt],
                 allFeatures: strings[extraAt + 2],
                 allPlugins: strings[extraAt + 3],
@@ -479,6 +477,7 @@ define([
         const badge = row.querySelector('.local-dixeo-settings-badge');
         if (badge) {
             badge.textContent = view.badge;
+            badge.classList.toggle('local-dixeo-settings-badge-own', view.badgeown);
         }
         const control = row.querySelector('[data-action="local-dixeo-settings-value"]');
         if (control) {
@@ -487,7 +486,10 @@ define([
                     control.value = entry.draft;
                 }
             } else {
-                control.textContent = view.display;
+                const valueLabel = control.querySelector('.local-dixeo-settings-control-label');
+                if (valueLabel) {
+                    valueLabel.textContent = view.display;
+                }
                 control.setAttribute('aria-pressed', view.pressed ? 'true' : 'false');
             }
             setBorder(control, view.valueclass);
@@ -498,10 +500,6 @@ define([
         const revert = row.querySelector('[data-action="local-dixeo-settings-revert"]');
         if (revert) {
             revert.hidden = !view.showrevert;
-        }
-        const reset = row.querySelector('[data-action="local-dixeo-settings-reset"]');
-        if (reset) {
-            reset.hidden = !view.showreset;
         }
     };
 
@@ -613,7 +611,6 @@ define([
             }
             const actionEl = event.target.closest(
                 '[data-action="local-dixeo-settings-revert"],' +
-                '[data-action="local-dixeo-settings-reset"],' +
                 '[data-action="local-dixeo-settings-parent"],' +
                 '[data-action="local-dixeo-settings-value"]'
             );
@@ -632,8 +629,6 @@ define([
             let next = null;
             if (action === 'local-dixeo-settings-revert') {
                 next = State.nextDraft(entry, 'revert');
-            } else if (action === 'local-dixeo-settings-reset') {
-                next = State.nextDraft(entry, 'reset');
             } else if (action === 'local-dixeo-settings-parent') {
                 next = State.nextDraft(entry, 'parent', actionEl.dataset.layer);
             } else if (entry.setting.type === 'bool') {
@@ -767,27 +762,45 @@ define([
      * @returns {Promise}
      */
     const open = function(button) {
-        const titleReady = Str.get_string('settings_modal_breadcrumb', 'local_dixeo', courseName(button));
+        const stringsReady = Str.get_strings([
+            {key: 'settings_modal_title', component: 'local_dixeo'},
+            {key: 'settings_modal_breadcrumb', component: 'local_dixeo', param: courseName(button)},
+        ]);
         const bodyReady = Templates.renderForPromise('local_dixeo/settings_modal', {});
-        return Promise.all([titleReady, bodyReady]).then(function(results) {
-            const title = results[0];
+        return Promise.all([stringsReady, bodyReady]).then(function(results) {
+            const strings = results[0];
             const rendered = results[1];
             return Modal.create({
-                title: title,
+                title: strings[0],
                 body: rendered.html,
                 large: true,
                 removeOnClose: true,
                 show: true,
                 returnElement: button,
             }).then(function(modal) {
-                Templates.runTemplateJS(rendered.js);
-                const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
-                bindClose(modal, shell);
-                bindAdvanced(shell);
-                bindDraft(shell);
-                bindSave(modal, shell);
-                bindFilter(shell);
-                return loadSettings(shell, button.dataset.contextid);
+                const paintTitle = function() {
+                    const title = modal.getRoot()[0].querySelector('[data-region="title"]');
+                    if (!title) {
+                        return;
+                    }
+                    const heading = document.createElement('span');
+                    heading.textContent = strings[0];
+                    const crumbs = document.createElement('span');
+                    crumbs.className = 'local-dixeo-settings-crumbs';
+                    crumbs.textContent = strings[1];
+                    title.replaceChildren(heading, crumbs);
+                };
+                const titleReady = modal.titlePromise ? modal.titlePromise.then(paintTitle) : paintTitle();
+                return Promise.resolve(titleReady).then(function() {
+                    Templates.runTemplateJS(rendered.js);
+                    const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+                    bindClose(modal, shell);
+                    bindAdvanced(shell);
+                    bindDraft(shell);
+                    bindSave(modal, shell);
+                    bindFilter(shell);
+                    return loadSettings(shell, button.dataset.contextid);
+                });
             });
         });
     };

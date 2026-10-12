@@ -53,7 +53,7 @@ define([], function() {
 
     /**
      * Text for a parent cell. Null means the layer is absent and the cell stays blank.
-     * An empty string displays the empty label.
+     * An empty value with no own row is absent too. A stored empty string displays the empty label.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @param {string} level site or dixeo.
@@ -68,10 +68,13 @@ define([], function() {
         if (setting.type === 'bool') {
             return layer.value === '1' ? labels.on : labels.off;
         }
-        if (!layer.value) {
-            return labels.empty;
+        if (layer.value) {
+            return layer.value;
         }
-        return layer.value;
+        if (layer.stored === undefined || layer.stored === null) {
+            return null;
+        }
+        return labels.empty;
     };
 
     /**
@@ -194,16 +197,13 @@ define([], function() {
      * Next draft for a row action. Null means the action does not apply.
      *
      * @param {Object} entry Row from {@link entryFor}.
-     * @param {string} action revert, reset, parent, or toggle.
+     * @param {string} action revert, parent, or toggle.
      * @param {string} [layer] site or dixeo, for a parent click.
      * @returns {string|null}
      */
     const nextDraft = function(entry, action, layer) {
         if (action === 'revert') {
             return entry.saved;
-        }
-        if (action === 'reset') {
-            return entry.parent;
         }
         if (action === 'parent' && layer === 'site') {
             return entry.site;
@@ -233,8 +233,8 @@ define([], function() {
             siteclass: borderClass(source, 'site'),
             dixeoclass: borderClass(source, 'dixeo'),
             showrevert: entry.draft !== entry.saved,
-            showreset: entry.draft !== entry.parent,
             pressed: entry.draft === '1',
+            badgeown: source === 'customised',
         };
     };
 
@@ -391,7 +391,7 @@ define([], function() {
      * @param {string} label
      * @param {string} help
      * @param {string} wwwroot
-     * @param {Object} labels on, off, empty, revert, reset, and badges.
+     * @param {Object} labels on, off, empty, revert, and badges.
      * @returns {Object}
      */
     const rowView = function(setting, label, help, wwwroot, labels) {
@@ -405,6 +405,7 @@ define([], function() {
             label: label,
             help: help,
             badge: view.badge,
+            badgeown: view.badgeown,
             shortname: setting.shortname,
             shortnameurl: shortnameUrl(setting, wwwroot),
             isbool: setting.type === 'bool',
@@ -419,9 +420,7 @@ define([], function() {
             dixeoclass: view.dixeoclass,
             valueclass: view.valueclass,
             revertlabel: String(labels.revert || '').replace('{$a}', label),
-            resetlabel: labels.reset || '',
             showrevert: view.showrevert,
-            showreset: view.showreset,
         };
     };
 
