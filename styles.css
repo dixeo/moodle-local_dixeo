@@ -778,3 +778,51 @@ h2:has(.dixeo-sync-indicator),
     width: 1rem;
     height: 1rem;
 }
+
+/* Settings modal shell. The list stays empty until rows are rendered. */
+.local-dixeo-settings-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 24rem;
+}
+
+.local-dixeo-settings-toolbar,
+.local-dixeo-settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.local-dixeo-settings-toolbar .form-control {
+    flex: 1 1 auto;
+}
+
+.local-dixeo-settings-count {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.local-dixeo-settings-modal .form-control,
+.local-dixeo-settings-modal .btn {
+    min-height: 44px;
+}
+
+.local-dixeo-settings-body {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 1rem;
+    min-height: 12rem;
+}
+
+.local-dixeo-settings-categories {
+    flex: 0 0 11rem;
+}
+
+.local-dixeo-settings-list {
+    flex: 1 1 auto;
+}
+
+.local-dixeo-settings-footer [data-region="local-dixeo-settings-unsaved"] {
+    margin-right: auto;
+}

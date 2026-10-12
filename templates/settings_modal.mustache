@@ -1,0 +1,50 @@
+{{!
+    @template local_dixeo/settings_modal
+
+    Shell for the Dixeo settings modal. The list region is empty until rows are added.
+
+    Example context (json):
+    {}
+}}
+<div class="local-dixeo-settings-modal">
+    <div class="local-dixeo-settings-toolbar">
+        <label class="visually-hidden" for="local-dixeo-settings-search">
+            {{#str}}settings_modal_search, local_dixeo{{/str}}
+        </label>
+        <input type="search"
+               class="form-control"
+               id="local-dixeo-settings-search"
+               placeholder="{{#str}}settings_modal_search, local_dixeo{{/str}}">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-action="local-dixeo-settings-customised"
+                aria-pressed="false">
+            {{#str}}settings_modal_customised, local_dixeo{{/str}}
+        </button>
+        <span class="local-dixeo-settings-count" data-region="local-dixeo-settings-count">
+            {{#str}}settings_modal_count, local_dixeo, 0{{/str}}
+        </span>
+    </div>
+    <div class="local-dixeo-settings-body">
+        <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
+            <button type="button"
+                    class="btn btn-primary"
+                    data-category="all"
+                    aria-pressed="true">
+                {{#str}}settings_modal_all, local_dixeo{{/str}}
+            </button>
+        </nav>
+        <div class="local-dixeo-settings-list" data-region="local-dixeo-settings-list"></div>
+    </div>
+    <div class="local-dixeo-settings-footer">
+        <span data-region="local-dixeo-settings-unsaved">
+            {{#str}}settings_modal_unsaved_none, local_dixeo{{/str}}
+        </span>
+        <button type="button" class="btn btn-secondary" data-action="local-dixeo-settings-cancel">
+            {{#str}}cancel, core{{/str}}
+        </button>
+        <button type="button" class="btn btn-primary" data-action="local-dixeo-settings-save" disabled>
+            {{#str}}savechanges, core{{/str}}
+        </button>
+    </div>
+</div>
