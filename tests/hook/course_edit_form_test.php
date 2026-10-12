@@ -80,6 +80,7 @@ final class course_edit_form_test extends \advanced_testcase {
             $button->getAttribute('data-contextid')
         );
         $this->assertSame((string) $course->id, $button->getAttribute('data-courseid'));
+        $this->assertSame('status', $button->getAttribute('data-initial'));
         $this->assertSame('1', $button->getAttribute('data-canmanagesync'));
         $override = new \ReflectionProperty($button, 'customclassoverride');
         $this->assertSame('btn-primary', $override->getValue($button));
@@ -137,6 +138,7 @@ final class course_edit_form_test extends \advanced_testcase {
 
         $this->assertEmpty($button->getAttribute('data-contextid'));
         $this->assertEmpty($button->getAttribute('data-courseid'));
+        $this->assertEmpty($button->getAttribute('data-initial'));
         $this->assertSame(
             '0',
             $this->element_value($form->get_quick_form()->getElement(course_edit_form::FILESYNC)->getValue())

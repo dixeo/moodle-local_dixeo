@@ -1230,7 +1230,7 @@ define([
     };
 
     /**
-     * Open the settings shell. Moodle's modal traps focus.
+     * Open the settings shell. A course opens on Status. Moodle's modal traps focus.
      *
      * @param {HTMLElement} button
      * @returns {Promise}
@@ -1278,7 +1278,8 @@ define([
                     bindSave(modal, shell);
                     bindFilter(shell);
                     bindStatus(shell);
-                    return loadSettings(shell, button.dataset.contextid, button.dataset.initial === 'status');
+                    const openOnStatus = !!button.dataset.courseid || button.dataset.initial === 'status';
+                    return loadSettings(shell, button.dataset.contextid, openOnStatus);
                 });
             });
         });

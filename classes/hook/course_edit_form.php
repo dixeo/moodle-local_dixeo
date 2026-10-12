@@ -106,6 +106,7 @@ class course_edit_form {
             if ($coursecontext !== null) {
                 $attributes['data-contextid'] = (string) $coursecontext->id;
                 $attributes['data-courseid'] = (string) $courseid;
+                $attributes['data-initial'] = 'status';
                 if (has_capability('local/dixeo:syncfiles', $coursecontext)) {
                     $attributes['data-canmanagesync'] = '1';
                 }
