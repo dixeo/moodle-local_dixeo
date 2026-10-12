@@ -411,6 +411,7 @@ $string['settings_modal_customised'] = 'Personnalisés uniquement';
 $string['settings_modal_error'] = 'Les paramètres Dixeo n\'ont pas pu être chargés.';
 $string['settings_modal_loading'] = 'Chargement des paramètres';
 $string['settings_modal_save_course'] = 'Enregistrez le cours avant de charger ses paramètres Dixeo.';
+$string['settings_modal_save_error'] = 'Les paramètres Dixeo n\'ont pas pu être enregistrés.';
 $string['settings_modal_search'] = 'Rechercher des paramètres';
 $string['settings_modal_unsaved_close'] = 'Fermer sans enregistrer';
 $string['settings_modal_unsaved_confirm'] = 'Fermer sans enregistrer ces modifications ?';

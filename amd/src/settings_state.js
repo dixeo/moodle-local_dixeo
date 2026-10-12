@@ -239,6 +239,28 @@ define([], function() {
     };
 
     /**
+     * Settings whose draft differs from the saved value, in the save service shape.
+     *
+     * @param {Object} entries Map of row entries.
+     * @returns {Array<{component: string, name: string, value: string}>}
+     */
+    const changedSettings = function(entries) {
+        const changes = [];
+        Object.keys(entries).forEach(function(key) {
+            const entry = entries[key];
+            if (entry.draft === entry.saved) {
+                return;
+            }
+            changes.push({
+                component: entry.setting.component,
+                name: entry.setting.name,
+                value: entry.draft,
+            });
+        });
+        return changes;
+    };
+
+    /**
      * How many drafts differ from the saved value.
      *
      * @param {Object} entries Map of row entries.
@@ -298,5 +320,6 @@ define([], function() {
         nextDraft: nextDraft,
         draftView: draftView,
         dirtyCount: dirtyCount,
+        changedSettings: changedSettings,
     };
 });

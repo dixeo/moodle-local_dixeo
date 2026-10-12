@@ -92,9 +92,10 @@ define([
      *
      * @param {HTMLElement} shell
      * @param {Array} settings
+     * @param {number} contextid Course context id.
      * @returns {Promise}
      */
-    const renderRows = function(shell, settings) {
+    const renderRows = function(shell, settings, contextid) {
         if (!settings.length) {
             return Promise.resolve();
         }
@@ -143,6 +144,8 @@ define([
                 entries: entries,
                 countLabel: strings[12],
                 noneLabel: strings[13],
+                contextid: contextid,
+                saving: false,
             });
             const context = {
                 rows: rows,
@@ -196,7 +199,7 @@ define([
                 }
                 const settings = result && Array.isArray(result.settings) ? result.settings : [];
                 setList(shell, '');
-                return renderRows(shell, settings).then(function() {
+                return renderRows(shell, settings, id).then(function() {
                     return Str.get_string('settings_modal_count', 'local_dixeo', settings.length);
                 }).then(function(label) {
                     setCount(shell, label);
@@ -318,7 +321,7 @@ define([
         const count = State.dirtyCount(session.entries);
         const save = shell.querySelector('[data-action="local-dixeo-settings-save"]');
         if (save) {
-            save.disabled = count === 0;
+            save.disabled = session.saving || count === 0;
         }
         if (count > 0) {
             shell.dataset.dirty = '1';
@@ -343,19 +346,71 @@ define([
         }
         entry.draft = draft;
         const session = sessions.get(shell);
+        clearSaveError(shell);
         paintRow(row, entry, session.labels);
         publishDirty(shell);
     };
 
     /**
-     * Draft edits. Nothing is written.
+     * Remove a previous save failure from the list.
+     *
+     * @param {HTMLElement} shell
+     */
+    const clearSaveError = function(shell) {
+        const error = shell.querySelector('[data-region="local-dixeo-settings-save-error"]');
+        if (error) {
+            error.remove();
+        }
+    };
+
+    /**
+     * Keep the rows and show the save failure at the top of the list.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} message
+     */
+    const showSaveError = function(shell, message) {
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (!list) {
+            return;
+        }
+        let error = list.querySelector('[data-region="local-dixeo-settings-save-error"]');
+        if (!error) {
+            error = document.createElement('div');
+            error.dataset.region = 'local-dixeo-settings-save-error';
+            error.className = 'alert alert-danger';
+            error.setAttribute('role', 'alert');
+            list.insertBefore(error, list.firstChild);
+        }
+        error.textContent = message;
+    };
+
+    /**
+     * Text from a failed web service call.
+     *
+     * @param {*} error
+     * @param {string} fallback
+     * @returns {string}
+     */
+    const saveErrorText = function(error, fallback) {
+        if (error && typeof error.message === 'string' && error.message) {
+            return error.message;
+        }
+        if (error && typeof error.error === 'string' && error.error) {
+            return error.error;
+        }
+        return fallback;
+    };
+
+    /**
+     * Draft edits stay local until Save.
      *
      * @param {HTMLElement} shell
      */
     const bindDraft = function(shell) {
         shell.addEventListener('click', function(event) {
             const session = sessions.get(shell);
-            if (!session) {
+            if (!session || session.saving) {
                 return;
             }
             const actionEl = event.target.closest(
@@ -395,7 +450,7 @@ define([
         shell.addEventListener('input', function(event) {
             const session = sessions.get(shell);
             const control = event.target.closest('[data-action="local-dixeo-settings-value"]');
-            if (!session || !control || control.tagName !== 'TEXTAREA') {
+            if (!session || session.saving || !control || control.tagName !== 'TEXTAREA') {
                 return;
             }
             const row = control.closest('.local-dixeo-settings-row');
@@ -407,6 +462,57 @@ define([
                 return;
             }
             commitDraft(shell, row, entry, control.value);
+        });
+    };
+
+    /**
+     * Save the rows whose draft differs. Success clears the draft and closes.
+     * Failure leaves the modal and the draft in place.
+     *
+     * @param {Object} modal
+     * @param {HTMLElement} shell
+     */
+    const bindSave = function(modal, shell) {
+        shell.addEventListener('click', function(event) {
+            const button = event.target.closest('[data-action="local-dixeo-settings-save"]');
+            const session = sessions.get(shell);
+            if (!button || !session || session.saving || button.disabled) {
+                return;
+            }
+            const settings = State.changedSettings(session.entries);
+            if (!settings.length) {
+                return;
+            }
+            event.preventDefault();
+            session.saving = true;
+            button.disabled = true;
+            clearSaveError(shell);
+            const fallbackReady = Str.get_string('settings_modal_save_error', 'local_dixeo');
+            Ajax.call([{
+                methodname: 'local_dixeo_save_settings',
+                args: {
+                    contextid: session.contextid,
+                    settings: settings,
+                },
+            }])[0].then(function() {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                sessions.delete(shell);
+                delete shell.dataset.dirty;
+                modal.destroy();
+                return null;
+            }).catch(function(error) {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                session.saving = false;
+                publishDirty(shell);
+                return fallbackReady.then(function(fallback) {
+                    showSaveError(shell, saveErrorText(error, fallback));
+                    return null;
+                });
+            });
         });
     };
 
@@ -481,6 +587,7 @@ define([
                 bindClose(modal, shell);
                 bindAdvanced(shell);
                 bindDraft(shell);
+                bindSave(modal, shell);
                 return loadSettings(shell, button.dataset.contextid);
             });
         });

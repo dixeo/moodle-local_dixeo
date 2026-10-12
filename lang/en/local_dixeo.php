@@ -411,6 +411,7 @@ $string['settings_modal_customised'] = 'Customised only';
 $string['settings_modal_error'] = 'Dixeo settings could not be loaded.';
 $string['settings_modal_loading'] = 'Loading settings';
 $string['settings_modal_save_course'] = 'Save the course before loading its Dixeo settings.';
+$string['settings_modal_save_error'] = 'Dixeo settings could not be saved.';
 $string['settings_modal_search'] = 'Search settings';
 $string['settings_modal_unsaved_close'] = 'Close without saving';
 $string['settings_modal_unsaved_confirm'] = 'Close without saving these changes?';

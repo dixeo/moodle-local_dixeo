@@ -411,6 +411,7 @@ $string['settings_modal_customised'] = 'Solo personalizados';
 $string['settings_modal_error'] = 'No se han podido cargar los ajustes de Dixeo.';
 $string['settings_modal_loading'] = 'Cargando ajustes';
 $string['settings_modal_save_course'] = 'Guarde el curso antes de cargar sus ajustes de Dixeo.';
+$string['settings_modal_save_error'] = 'No se han podido guardar los ajustes de Dixeo.';
 $string['settings_modal_search'] = 'Buscar ajustes';
 $string['settings_modal_unsaved_close'] = 'Cerrar sin guardar';
 $string['settings_modal_unsaved_confirm'] = '¿Cerrar sin guardar estos cambios?';

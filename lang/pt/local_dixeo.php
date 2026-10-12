@@ -411,6 +411,7 @@ $string['settings_modal_customised'] = 'Apenas personalizadas';
 $string['settings_modal_error'] = 'Não foi possível carregar as definições do Dixeo.';
 $string['settings_modal_loading'] = 'A carregar definições';
 $string['settings_modal_save_course'] = 'Guarde o curso antes de carregar as definições do Dixeo.';
+$string['settings_modal_save_error'] = 'Não foi possível guardar as definições do Dixeo.';
 $string['settings_modal_search'] = 'Pesquisar definições';
 $string['settings_modal_unsaved_close'] = 'Fechar sem guardar';
 $string['settings_modal_unsaved_confirm'] = 'Fechar sem guardar estas alterações?';

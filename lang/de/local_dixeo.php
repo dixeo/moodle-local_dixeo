@@ -411,6 +411,7 @@ $string['settings_modal_customised'] = 'Nur angepasst';
 $string['settings_modal_error'] = 'Die Dixeo-Einstellungen konnten nicht geladen werden.';
 $string['settings_modal_loading'] = 'Einstellungen werden geladen';
 $string['settings_modal_save_course'] = 'Speichern Sie den Kurs, bevor seine Dixeo-Einstellungen geladen werden können.';
+$string['settings_modal_save_error'] = 'Die Dixeo-Einstellungen konnten nicht gespeichert werden.';
 $string['settings_modal_search'] = 'Einstellungen suchen';
 $string['settings_modal_unsaved_close'] = 'Schließen ohne zu speichern';
 $string['settings_modal_unsaved_confirm'] = 'Diese Änderungen ohne Speichern schließen?';
