@@ -21,7 +21,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['core/modal', 'core/str', 'core/templates'], function(Modal, Str, Templates) {
+define(['core/ajax', 'core/modal', 'core/str', 'core/templates'], function(Ajax, Modal, Str, Templates) {
     let bound = false;
 
     /**
@@ -36,6 +36,91 @@ define(['core/modal', 'core/str', 'core/templates'], function(Modal, Str, Templa
             return nameInput.value;
         }
         return button.dataset.courseName || '';
+    };
+
+    /**
+     * Clear the search box and the Customised pill. Neither filters the list.
+     *
+     * @param {HTMLElement} shell
+     */
+    const resetControls = function(shell) {
+        const search = shell.querySelector('#local-dixeo-settings-search');
+        if (search) {
+            search.value = '';
+        }
+        const pill = shell.querySelector('[data-action="local-dixeo-settings-customised"]');
+        if (pill) {
+            pill.setAttribute('aria-pressed', 'false');
+        }
+    };
+
+    /**
+     * @param {HTMLElement} shell
+     * @param {string} text
+     */
+    const setList = function(shell, text) {
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (list) {
+            list.textContent = text;
+        }
+    };
+
+    /**
+     * @param {HTMLElement} shell
+     * @param {string} text
+     */
+    const setCount = function(shell, text) {
+        const count = shell.querySelector('[data-region="local-dixeo-settings-count"]');
+        if (count) {
+            count.textContent = text;
+        }
+    };
+
+    /**
+     * Load the course settings, or explain that a new course must be saved first.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} contextid Course context id, empty when the course is new.
+     * @returns {Promise}
+     */
+    const loadSettings = function(shell, contextid) {
+        resetControls(shell);
+        const id = parseInt(contextid, 10);
+        if (!id) {
+            return Str.get_string('settings_modal_save_course', 'local_dixeo').then(function(message) {
+                setList(shell, message);
+            });
+        }
+
+        return Str.get_strings([
+            {key: 'settings_modal_loading', component: 'local_dixeo'},
+            {key: 'settings_modal_error', component: 'local_dixeo'},
+        ]).then(function(strings) {
+            setList(shell, strings[0]);
+            return Ajax.call([{
+                methodname: 'local_dixeo_get_settings',
+                args: {contextid: id},
+            }])[0].then(function(result) {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                const settings = result && Array.isArray(result.settings) ? result.settings : [];
+                setList(shell, '');
+                return Str.get_string('settings_modal_count', 'local_dixeo', settings.length).then(function(label) {
+                    setCount(shell, label);
+                    return null;
+                });
+            }).catch(function() {
+                if (!shell.isConnected) {
+                    return null;
+                }
+                setList(shell, strings[1]);
+                return Str.get_string('settings_modal_count', 'local_dixeo', 0).then(function(label) {
+                    setCount(shell, label);
+                    return null;
+                });
+            });
+        });
     };
 
     /**
@@ -59,7 +144,8 @@ define(['core/modal', 'core/str', 'core/templates'], function(Modal, Str, Templa
                 returnElement: button,
             }).then(function(modal) {
                 Templates.runTemplateJS(rendered.js);
-                return modal;
+                const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+                return loadSettings(shell, button.dataset.contextid);
             });
         });
     };

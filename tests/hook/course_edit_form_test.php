@@ -74,6 +74,10 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertSame('local-dixeo-settings-open', $button->getAttribute('data-action'));
         $this->assertSame('local-dixeo-settings-open', $button->getAttribute('parentclass'));
         $this->assertSame($course->fullname, $button->getAttribute('data-course-name'));
+        $this->assertSame(
+            (string) \context_course::instance($course->id)->id,
+            $button->getAttribute('data-contextid')
+        );
         $override = new \ReflectionProperty($button, 'customclassoverride');
         $this->assertSame('btn-primary', $override->getValue($button));
 
@@ -90,6 +94,36 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
         $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
         $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::ENABLED]);
+    }
+
+    /**
+     * A course that has not been saved yet has no context for the settings modal.
+     */
+    public function test_new_course_button_has_no_context(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $category = $this->getDataGenerator()->create_category();
+        $course = (object) [
+            'id' => 0,
+            'category' => $category->id,
+            'fullname' => 'New course',
+            'shortname' => '',
+        ];
+        $form = new \testable_course_edit_form(null, [
+            'course' => $course,
+            'category' => $DB->get_record('course_categories', ['id' => $category->id]),
+            'editoroptions' => [
+                'context' => \context_coursecat::instance($category->id),
+                'subdirs' => 0,
+            ],
+            'returnto' => new \moodle_url('/'),
+            'returnurl' => new \moodle_url('/'),
+        ]);
+        $form->definition_after_data();
+        $button = $form->get_quick_form()->getElement(course_edit_form::OPEN_BUTTON);
+
+        $this->assertEmpty($button->getAttribute('data-contextid'));
     }
 
     /**

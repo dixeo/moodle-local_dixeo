@@ -90,18 +90,22 @@ class course_edit_form {
      */
     public static function definition_after_data(\core_course\hook\after_form_definition_after_data $hook): void {
         $mform = $hook->mform;
+        $courseid = $mform->elementExists('id') ? self::course_id($mform->getElementValue('id')) : 0;
+        $coursecontext = $courseid > 0 ? \context_course::instance($courseid) : null;
         if ($mform->elementExists(self::OPEN_BUTTON)) {
-            $mform->getElement(self::OPEN_BUTTON)->updateAttributes([
+            $attributes = [
                 'data-course-name' => self::element_text($mform->getElementValue('fullname')),
-            ]);
+            ];
+            if ($coursecontext !== null) {
+                $attributes['data-contextid'] = (string) $coursecontext->id;
+            }
+            $mform->getElement(self::OPEN_BUTTON)->updateAttributes($attributes);
         }
         if (!$mform->elementExists(self::FIELD) && !$mform->elementExists(self::ENABLED)) {
             return;
         }
 
-        $courseid = self::course_id($mform->getElementValue('id'));
         $config = service_factory::get_settings_config();
-        $coursecontext = $courseid > 0 ? \context_course::instance($courseid) : null;
         if ($mform->elementExists(self::FIELD)) {
             $intent = '';
             if ($coursecontext !== null) {
