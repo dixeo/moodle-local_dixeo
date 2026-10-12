@@ -16,12 +16,16 @@
                 "shortname": "enabled",
                 "shortnameurl": "http://dixeo.local/admin/settings.php?section=local_dixeo#id_s_local_dixeo_enabled",
                 "help": "Enable or disable Dixeo features globally.",
+                "badge": "Site default",
                 "isbool": true,
                 "displayvalue": "On",
                 "hassite": true,
                 "sitevalue": "On",
+                "siteclass": "local-dixeo-settings-supplied",
                 "hasdixeo": true,
-                "dixeovalue": "On"
+                "dixeovalue": "On",
+                "dixeoclass": "local-dixeo-settings-inherited",
+                "valueclass": "local-dixeo-settings-inherited"
             }
         ]
     }
@@ -42,7 +46,10 @@
     {{#rows}}
     <div class="local-dixeo-settings-row" role="row" data-component="{{component}}" data-name="{{name}}">
         <div class="local-dixeo-settings-row-name" role="cell">
-            <div class="local-dixeo-settings-row-label">{{label}}</div>
+            <div class="local-dixeo-settings-row-heading">
+                <div class="local-dixeo-settings-row-label">{{label}}</div>
+                <span class="local-dixeo-settings-badge">{{badge}}</span>
+            </div>
             {{#shortnameurl}}
             <a class="local-dixeo-settings-row-shortname" href="{{shortnameurl}}">{{shortname}}</a>
             {{/shortnameurl}}
@@ -54,29 +61,29 @@
         <div class="local-dixeo-settings-parent" role="cell" data-layer="site">
             {{#hassite}}
             {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary" disabled>{{sitevalue}}</button>
+            <button type="button" class="btn btn-outline-secondary {{siteclass}}" disabled>{{sitevalue}}</button>
             {{/isbool}}
             {{#istextarea}}
-            <textarea class="form-control" rows="3" readonly>{{sitevalue}}</textarea>
+            <textarea class="form-control {{siteclass}}" rows="3" readonly>{{sitevalue}}</textarea>
             {{/istextarea}}
             {{/hassite}}
         </div>
         <div class="local-dixeo-settings-parent" role="cell" data-layer="dixeo">
             {{#hasdixeo}}
             {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary" disabled>{{dixeovalue}}</button>
+            <button type="button" class="btn btn-outline-secondary {{dixeoclass}}" disabled>{{dixeovalue}}</button>
             {{/isbool}}
             {{#istextarea}}
-            <textarea class="form-control" rows="3" readonly>{{dixeovalue}}</textarea>
+            <textarea class="form-control {{dixeoclass}}" rows="3" readonly>{{dixeovalue}}</textarea>
             {{/istextarea}}
             {{/hasdixeo}}
         </div>
         <div class="local-dixeo-settings-row-value" role="cell">
             {{#isbool}}
-            <button type="button" class="btn btn-outline-secondary" disabled>{{displayvalue}}</button>
+            <button type="button" class="btn btn-outline-secondary {{valueclass}}" disabled>{{displayvalue}}</button>
             {{/isbool}}
             {{#istextarea}}
-            <textarea class="form-control" rows="3" readonly>{{displayvalue}}</textarea>
+            <textarea class="form-control {{valueclass}}" rows="3" readonly>{{displayvalue}}</textarea>
             {{/istextarea}}
         </div>
     </div>

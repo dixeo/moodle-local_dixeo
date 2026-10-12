@@ -90,23 +90,67 @@ define([], function() {
     };
 
     /**
-     * Template context for one read-only row, including parent cells.
+     * The opened level is the last layer in the payload.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @returns {Object|null}
+     */
+    const currentLayer = function(setting) {
+        const layers = Array.isArray(setting.layers) ? setting.layers : [];
+        return layers.length ? layers[layers.length - 1] : null;
+    };
+
+    /**
+     * Where the effective value comes from: an own stored row, the Dixeo layer, or the shipped default.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @returns {string} customised, dixeo, or site.
+     */
+    const origin = function(setting) {
+        const current = currentLayer(setting);
+        if (current && (current.customised === true || current.customised === 1)) {
+            return 'customised';
+        }
+        if (setting.source === 'dixeo') {
+            return 'dixeo';
+        }
+        return 'site';
+    };
+
+    /**
+     * Accent on the cell that supplied the value. Every other control stays grey.
+     *
+     * @param {string} source customised, dixeo, or site.
+     * @param {string} cell customised, dixeo, or site.
+     * @returns {string}
+     */
+    const borderClass = function(source, cell) {
+        if (source === cell) {
+            return 'local-dixeo-settings-supplied';
+        }
+        return 'local-dixeo-settings-inherited';
+    };
+
+    /**
+     * Template context for one read-only row, including parent cells and the source badge.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @param {string} label
      * @param {string} help
      * @param {string} wwwroot
-     * @param {{on: string, off: string, empty: string}} labels
+     * @param {{on: string, off: string, empty: string, badges: {customised: string, dixeo: string, site: string}}} labels
      * @returns {Object}
      */
     const rowView = function(setting, label, help, wwwroot, labels) {
         const site = parentText(setting, 'site', labels);
         const dixeo = parentText(setting, 'dixeo', labels);
+        const source = origin(setting);
         return {
             component: setting.component,
             name: setting.name,
             label: label,
             help: help,
+            badge: labels.badges[source],
             shortname: setting.shortname,
             shortnameurl: shortnameUrl(setting, wwwroot),
             isbool: setting.type === 'bool',
@@ -114,8 +158,11 @@ define([], function() {
             displayvalue: displayValue(setting, labels.on, labels.off),
             hassite: site !== null,
             sitevalue: site || '',
+            siteclass: borderClass(source, 'site'),
             hasdixeo: dixeo !== null,
             dixeovalue: dixeo || '',
+            dixeoclass: borderClass(source, 'dixeo'),
+            valueclass: borderClass(source, 'customised'),
         };
     };
 

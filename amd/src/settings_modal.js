@@ -103,6 +103,9 @@ define([
             {key: 'settings_column_site', component: 'local_dixeo'},
             {key: 'settings_column_dixeo', component: 'local_dixeo'},
             {key: 'settings_modal_advanced', component: 'local_dixeo'},
+            {key: 'settings_badge_customised', component: 'local_dixeo'},
+            {key: 'settings_badge_dixeo', component: 'local_dixeo'},
+            {key: 'settings_badge_site', component: 'local_dixeo'},
         ];
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -113,9 +116,14 @@ define([
                 on: strings[0],
                 off: strings[1],
                 empty: strings[2],
+                badges: {
+                    customised: strings[7],
+                    dixeo: strings[8],
+                    site: strings[9],
+                },
             };
             const rows = settings.map(function(setting, index) {
-                const labelAt = 7 + (index * 2);
+                const labelAt = 10 + (index * 2);
                 return State.rowView(setting, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
             });
             const context = {

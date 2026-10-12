@@ -902,8 +902,26 @@ label[for="local-dixeo-settings-category"] {
     min-width: 0;
 }
 
+.local-dixeo-settings-row-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .local-dixeo-settings-row-label {
     font-weight: 700;
+}
+
+.local-dixeo-settings-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: #eef1f4;
+    color: #1d1d1b;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
 .local-dixeo-settings-row-shortname {
@@ -923,6 +941,25 @@ label[for="local-dixeo-settings-category"] {
 .local-dixeo-settings-parent .form-control {
     width: 100%;
     min-height: 44px;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-supplied:disabled,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-supplied[readonly],
+.local-dixeo-settings-modal .btn.local-dixeo-settings-inherited:disabled,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-inherited[readonly] {
+    opacity: 1;
+    color: #1d1d1b;
+    background-color: #fff;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-supplied:disabled,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-supplied[readonly] {
+    border-color: #0676cc;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-inherited:disabled,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-inherited[readonly] {
+    border-color: #c5c7c1;
 }
 
 @media (max-width: 767.98px) {
