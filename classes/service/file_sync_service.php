@@ -103,6 +103,9 @@ class file_sync_service {
     /** @var scorm_vector_extract_service SCORM package text extraction for sync. */
     private scorm_vector_extract_service $scormextract;
 
+    /** @var bool True while a status or new-course write records its own pause event. */
+    private static bool $deferfilesyncevent = false;
+
     /**
      * Constructor.
      *
@@ -140,15 +143,17 @@ class file_sync_service {
             return;
         }
 
-        $this->store_enabled($courseid, $userid);
+        $this->write_filesync_setting($courseid, '1');
+        $this->apply_course_filesync($courseid, $userid, true);
     }
 
     /**
-     * Turn file sync on for a course that has just been created.
+     * Turn file sync on or leave it paused for a course that has just been created.
      *
-     * Runs only when the Dixeo default for new courses is on, and when Dixeo
-     * itself is on for that course. The site setting authorises the change, so
-     * the course creator does not need local/dixeo:syncfiles.
+     * Always stores the course setting from the Dixeo default for new courses, including Off.
+     * The operational row is created only when that value is On. The site setting authorises
+     * the change, so the course creator does not need local/dixeo:syncfiles or moodle/course:update.
+     * Does nothing when Dixeo is off for the course.
      *
      * @param int $courseid The new course ID.
      * @param int $userid The user who created the course.
@@ -164,19 +169,9 @@ class file_sync_service {
             'filesync_enabled_default',
             \context_system::instance()
         )->get_value();
-        if ($default !== '1') {
-            return;
-        }
-
-        if ($userid <= 0) {
-            $admin = get_admin();
-            $userid = $admin ? (int) $admin->id : 0;
-        }
-        if ($userid <= 0) {
-            return;
-        }
-
-        $this->store_enabled($courseid, $userid);
+        $enabled = $default === '1';
+        $this->write_filesync_setting($courseid, $enabled ? '1' : '0');
+        $this->apply_course_filesync($courseid, $userid, $enabled);
     }
 
     /**
@@ -396,38 +391,48 @@ class file_sync_service {
         $record = $this->repository->get_by_courseid($courseid);
         $objectid = $record !== null ? (int) $record->id : 0;
 
-        if ($removefiles) {
-            $this->repository->set_enabled($courseid, false, $userid);
-            $this->repository->mark_pending_deletion($courseid);
+        $this->write_filesync_setting($courseid, '0');
 
-            $remotedeletestatus = 'pending';
-            try {
-                $this->client->delete_files((string) $courseid);
-                $this->repository->reset_sync_state($courseid);
-                $remotedeletestatus = 'completed';
-            } catch (api_exception $e) {
-                $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
-                $this->queue_remote_deletion_retry($courseid);
-            }
-
+        if (!$removefiles) {
             $record = $this->repository->get_by_courseid($courseid);
-            $objectid = $record !== null ? (int) $record->id : $objectid;
+            if ($record !== null && (bool) $record->enabled) {
+                $this->repository->set_enabled($courseid, false, $userid);
+            }
             if ($wasenabled && $objectid > 0) {
                 file_sync_disabled::create_for_course(
                     $courseid,
                     $userid,
                     $objectid,
-                    true,
-                    $remotedeletestatus
+                    false,
+                    'not_requested'
                 )->trigger();
             }
             return;
         }
 
         $this->repository->set_enabled($courseid, false, $userid);
+        $this->repository->mark_pending_deletion($courseid);
 
+        $remotedeletestatus = 'pending';
+        try {
+            $this->client->delete_files((string) $courseid);
+            $this->repository->reset_sync_state($courseid);
+            $remotedeletestatus = 'completed';
+        } catch (api_exception $e) {
+            $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
+            $this->queue_remote_deletion_retry($courseid);
+        }
+
+        $record = $this->repository->get_by_courseid($courseid);
+        $objectid = $record !== null ? (int) $record->id : $objectid;
         if ($wasenabled && $objectid > 0) {
-            file_sync_disabled::create_for_course($courseid, $userid, $objectid, false, 'not_requested')->trigger();
+            file_sync_disabled::create_for_course(
+                $courseid,
+                $userid,
+                $objectid,
+                true,
+                $remotedeletestatus
+            )->trigger();
         }
     }
 
@@ -1062,6 +1067,79 @@ class file_sync_service {
             return $this->client->get_files_status((string) $courseid);
         } catch (api_exception $e) {
             return null;
+        }
+    }
+
+    /**
+     * Match the operational enabled flag to the stored course setting.
+     *
+     * On creates the operational row. Off updates an existing row and does not create one,
+     * and does not delete files. A plain pause event is recorded when this call is not
+     * inside {@see self::write_filesync_setting()}, which records its own event.
+     *
+     * @param int $courseid The course ID.
+     * @param int $userid The user recorded on the operational row.
+     * @param bool $enabled Whether file sync is on.
+     * @return void
+     */
+    public function apply_course_filesync(int $courseid, int $userid, bool $enabled): void {
+        if ($courseid <= SITEID) {
+            return;
+        }
+        if ($enabled) {
+            if ($userid <= 0) {
+                $admin = get_admin();
+                $userid = $admin ? (int) $admin->id : 0;
+            }
+            if ($userid <= 0) {
+                return;
+            }
+            $this->store_enabled($courseid, $userid);
+            return;
+        }
+
+        $record = $this->repository->get_by_courseid($courseid);
+        if ($record === null) {
+            return;
+        }
+        $wasenabled = (bool) $record->enabled;
+        $this->repository->set_enabled($courseid, false, $userid > 0 ? $userid : 0);
+        if ($wasenabled && !self::$deferfilesyncevent) {
+            file_sync_disabled::create_for_course(
+                $courseid,
+                $userid,
+                (int) $record->id,
+                false,
+                'not_requested'
+            )->trigger();
+        }
+    }
+
+    /**
+     * Store the course file sync setting without the course-update capability check.
+     *
+     * The setting observer applies the operational flag. While this write is in progress
+     * that observer does not also record a pause event.
+     *
+     * @param int $courseid The course ID.
+     * @param string $value Stored bool, "1" or "0".
+     * @return void
+     */
+    private function write_filesync_setting(int $courseid, string $value): void {
+        if ($courseid <= SITEID) {
+            return;
+        }
+        self::$deferfilesyncevent = true;
+        try {
+            (new config())->set(
+                'local_dixeo',
+                'filesync_enabled',
+                \context_course::instance($courseid),
+                $value === '1' ? '1' : '0',
+                false
+            );
+        } finally {
+            self::$deferfilesyncevent = false;
         }
     }
 

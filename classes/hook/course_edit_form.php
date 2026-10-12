@@ -22,7 +22,7 @@ use local_dixeo\external\service_factory;
  * Dixeo course settings on the course edit form.
  *
  * The section is omitted when the Dixeo layer is off. The settings button is the first control.
- * The course switch and learning intent follow it. A save that omits a field leaves that stored value unchanged.
+ * The course switch, file sync, and learning intent follow it. A save that omits a field leaves that stored value unchanged.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -41,8 +41,11 @@ class course_edit_form {
     /** @var string Course edit form element for the course on/off switch. */
     public const ENABLED = 'local_dixeo_enabled';
 
+    /** @var string Course edit form element for file sync on or paused. */
+    public const FILESYNC = 'local_dixeo_filesync_enabled';
+
     /**
-     * Add the Dixeo header, the settings button, the course switch, then learning intent.
+     * Add the Dixeo header, the settings button, the course switch, file sync, then learning intent.
      *
      * The button is the first control in the section. Nothing is added when the Dixeo layer is off.
      *
@@ -72,6 +75,9 @@ class course_edit_form {
         $mform->addElement('selectyesno', self::ENABLED, get_string('enabled', 'local_dixeo'));
         $mform->setType(self::ENABLED, PARAM_INT);
         $mform->addHelpButton(self::ENABLED, 'enabled_course', 'local_dixeo');
+        $mform->addElement('selectyesno', self::FILESYNC, get_string('filesync_enabled', 'local_dixeo'));
+        $mform->setType(self::FILESYNC, PARAM_INT);
+        $mform->addHelpButton(self::FILESYNC, 'filesync_enabled', 'local_dixeo');
         $mform->addElement(
             'textarea',
             self::FIELD,
@@ -84,7 +90,7 @@ class course_edit_form {
     }
 
     /**
-     * Fill learning intent and the course switch. A saved course also gives the settings
+     * Fill learning intent, the course switch, and file sync. A saved course also gives the settings
      * button its course id, so the modal can show that course's file sync status.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
@@ -106,7 +112,11 @@ class course_edit_form {
             }
             $mform->getElement(self::OPEN_BUTTON)->updateAttributes($attributes);
         }
-        if (!$mform->elementExists(self::FIELD) && !$mform->elementExists(self::ENABLED)) {
+        if (
+            !$mform->elementExists(self::FIELD)
+            && !$mform->elementExists(self::ENABLED)
+            && !$mform->elementExists(self::FILESYNC)
+        ) {
             return;
         }
 
@@ -124,10 +134,22 @@ class course_edit_form {
                 $config->get('local_dixeo', 'enabled', $enabledcontext)->get_value()
             );
         }
+        if ($mform->elementExists(self::FILESYNC)) {
+            if ($coursecontext !== null) {
+                $filesync = $config->get('local_dixeo', 'filesync_enabled', $coursecontext)->get_value();
+            } else {
+                $filesync = $config->get(
+                    'local_dixeo',
+                    'filesync_enabled_default',
+                    \context_system::instance()
+                )->get_value();
+            }
+            $mform->getElement(self::FILESYNC)->setValue($filesync);
+        }
     }
 
     /**
-     * Store the submitted textarea through the config helper.
+     * Store the submitted fields through the config helper.
      *
      * @param \core_course\hook\after_form_submission $hook Course form submission hook.
      */
@@ -135,6 +157,7 @@ class course_edit_form {
         $data = $hook->get_data();
         $intent = null;
         $enabled = null;
+        $filesync = null;
         if (property_exists($data, self::FIELD)) {
             $intent = (string) $data->{self::FIELD};
             unset($data->{self::FIELD});
@@ -143,7 +166,11 @@ class course_edit_form {
             $enabled = (string) $data->{self::ENABLED};
             unset($data->{self::ENABLED});
         }
-        if ($intent === null && $enabled === null) {
+        if (property_exists($data, self::FILESYNC)) {
+            $filesync = (string) $data->{self::FILESYNC};
+            unset($data->{self::FILESYNC});
+        }
+        if ($intent === null && $enabled === null && $filesync === null) {
             return;
         }
 
@@ -159,6 +186,9 @@ class course_edit_form {
         }
         if ($enabled !== null) {
             $config->set('local_dixeo', 'enabled', $context, $enabled);
+        }
+        if ($filesync !== null) {
+            $config->set('local_dixeo', 'filesync_enabled', $context, $filesync);
         }
     }
 

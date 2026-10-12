@@ -105,6 +105,28 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * File sync on a course is a retained bool. Off stays stored.
+     */
+    public function test_load_returns_filesync_enabled_retained_on_the_course(): void {
+        $settings = catalogue::load();
+
+        $this->assertArrayHasKey('filesync_enabled', $settings);
+        $setting = $settings['filesync_enabled'];
+        $this->assertSame('bool', $setting->get_type());
+        $this->assertSame('0', $setting->get_default());
+        $this->assertSame(['course'], $setting->get_levels());
+        $this->assertSame('filesync', $setting->get_feature());
+        $this->assertSame('dixeo_core', $setting->get_plugingroup());
+        $this->assertSame('filesync_enabled_help', $setting->get_help());
+        $this->assertTrue($setting->retains_value());
+        $this->assertFalse($setting->is_sensitive());
+        $this->assertFalse($setting->has_core());
+        $this->assertSame([], $setting->get_options());
+        $this->assertTrue(get_string_manager()->string_exists('filesync_enabled', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('filesync_enabled_help', 'local_dixeo'));
+    }
+
+    /**
      * The status pill location is a select at the Dixeo and course levels.
      */
     public function test_load_returns_filesync_pill_with_options(): void {

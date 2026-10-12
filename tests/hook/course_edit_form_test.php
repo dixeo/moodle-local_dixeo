@@ -26,6 +26,7 @@
 namespace local_dixeo\hook;
 
 use local_dixeo\external\service_factory;
+use local_dixeo\service\file_sync_service;
 use local_dixeo\settings\resolver;
 
 /**
@@ -95,7 +96,16 @@ final class course_edit_form_test extends \advanced_testcase {
         $positions = $index->getValue($mform);
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
         $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
-        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::ENABLED]);
+        $this->assertLessThan($positions[course_edit_form::FILESYNC], $positions[course_edit_form::ENABLED]);
+        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::FILESYNC]);
+        $this->assertSame(
+            service_factory::get_settings_config()->get(
+                'local_dixeo',
+                'filesync_enabled',
+                \context_course::instance($course->id)
+            )->get_value(),
+            $this->element_value($mform->getElement(course_edit_form::FILESYNC)->getValue())
+        );
     }
 
     /**
@@ -127,6 +137,10 @@ final class course_edit_form_test extends \advanced_testcase {
 
         $this->assertEmpty($button->getAttribute('data-contextid'));
         $this->assertEmpty($button->getAttribute('data-courseid'));
+        $this->assertSame(
+            '0',
+            $this->element_value($form->get_quick_form()->getElement(course_edit_form::FILESYNC)->getValue())
+        );
     }
 
     /**
@@ -175,6 +189,7 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertFalse($mform->elementExists(course_edit_form::HEADER));
         $this->assertFalse($mform->elementExists(course_edit_form::OPEN_BUTTON));
         $this->assertFalse($mform->elementExists(course_edit_form::ENABLED));
+        $this->assertFalse($mform->elementExists(course_edit_form::FILESYNC));
         $this->assertFalse($mform->elementExists(course_edit_form::FIELD));
     }
 
@@ -230,6 +245,36 @@ final class course_edit_form_test extends \advanced_testcase {
         update_course($restored);
         $this->assertTrue($config->enabled_for($context));
         $this->assertSame(resolver::LAYER_DIXEO, $config->get('local_dixeo', 'enabled', $context)->get_source());
+    }
+
+    /**
+     * Saving the course form stores file sync On and Off, and Off keeps the row.
+     */
+    public function test_course_save_stores_file_sync_on_and_off(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $config = service_factory::get_settings_config();
+        $conditions = [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ];
+
+        $on = get_course($course->id);
+        $on->{course_edit_form::FILESYNC} = '1';
+        update_course($on);
+        $this->assertSame('1', $config->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+        $this->assertTrue((new file_sync_service())->is_enabled($course->id));
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+
+        $off = get_course($course->id);
+        $off->{course_edit_form::FILESYNC} = '0';
+        update_course($off);
+        $this->assertSame('0', $config->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+        $this->assertFalse((new file_sync_service())->is_enabled($course->id));
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
     }
 
     /**

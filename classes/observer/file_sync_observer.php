@@ -17,10 +17,11 @@
 /**
  * Event observer for file sync triggers.
  *
- * Listens to course creation and course module events. A new course turns sync
- * on when the File sync for new courses setting is on. Module changes queue a
- * sync only when that course already has sync on. The service refuses both
- * when Dixeo is off for the course.
+ * Listens to course creation, course module events, and the course file sync setting.
+ * A new course stores that setting from the Dixeo default for new courses. Module changes
+ * queue a sync only when that course already has sync on. Saving the course file sync
+ * setting updates the operational flag and does not delete files. The service refuses
+ * sync when Dixeo is off for the course.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -34,6 +35,7 @@ use core\event\course_created;
 use core\event\course_module_created;
 use core\event\course_module_updated;
 use core\event\course_module_deleted;
+use local_dixeo\event\setting_updated;
 use local_dixeo\external\service_factory;
 
 /**
@@ -56,6 +58,40 @@ class file_sync_observer {
         }
 
         service_factory::get_file_sync_service()->enable_new_course($courseid, (int) $event->userid);
+    }
+
+    /**
+     * Keep the operational file sync flag aligned with the stored course setting.
+     *
+     * Does not write the setting again. Off does not delete remote files.
+     *
+     * @param setting_updated $event The event.
+     * @return void
+     */
+    public static function setting_updated(setting_updated $event): void {
+        $component = $event->other['component'] ?? '';
+        $name = $event->other['name'] ?? '';
+        if ($component !== 'local_dixeo' || $name !== 'filesync_enabled') {
+            return;
+        }
+        if ($event->contextlevel != CONTEXT_COURSE) {
+            return;
+        }
+        $courseid = (int) $event->courseid;
+        if ($courseid <= SITEID) {
+            return;
+        }
+
+        $value = service_factory::get_settings_config()->get(
+            'local_dixeo',
+            'filesync_enabled',
+            $event->get_context()
+        )->get_value();
+        service_factory::get_file_sync_service()->apply_course_filesync(
+            $courseid,
+            (int) $event->userid,
+            $value === '1'
+        );
     }
 
     /**

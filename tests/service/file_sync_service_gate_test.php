@@ -25,6 +25,7 @@
 
 namespace local_dixeo;
 
+use local_dixeo\api\client;
 use local_dixeo\external\service_factory;
 use local_dixeo\repository\course_ai_repository;
 use local_dixeo\service\file_sync_service;
@@ -135,11 +136,21 @@ final class file_sync_service_gate_test extends \advanced_testcase {
     }
 
     public function test_new_course_stays_off_when_the_default_is_off(): void {
+        global $DB;
+
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
 
         $this->assertFalse((new file_sync_service())->is_enabled($course->id));
+        $this->assertNull((new course_ai_repository())->get_by_courseid($course->id));
+        $this->assertSame('0', (new config())->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]));
     }
 
     public function test_new_course_turns_sync_on_when_the_default_is_on(): void {
@@ -154,9 +165,15 @@ final class file_sync_service_gate_test extends \advanced_testcase {
         $this->assertNotNull($record);
         $this->assertSame(1, (int) $record->enabled);
         $this->assertSame((int) $creator->id, (int) $record->enabledby);
+        $this->assertSame(
+            '1',
+            (new config())->get('local_dixeo', 'filesync_enabled', \context_course::instance($course->id))->get_value()
+        );
     }
 
     public function test_new_course_stays_off_when_dixeo_is_off(): void {
+        global $DB;
+
         $this->resetAfterTest();
         $this->set_new_course_default_on();
         $this->turn_dixeo_off();
@@ -164,6 +181,93 @@ final class file_sync_service_gate_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
 
         $this->assertFalse((new file_sync_service())->is_enabled($course->id));
+        $context = \context_course::instance($course->id);
+        $this->assertFalse($DB->record_exists('local_dixeo_setting', [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]));
+    }
+
+    /**
+     * Pause stores Off and leaves remote files in place.
+     */
+    public function test_pause_stores_off_and_does_not_delete_files(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('delete_files');
+
+        $service = new file_sync_service(new course_ai_repository(), $client);
+        $service->enable_sync((int) $course->id, (int) $USER->id);
+        $service->disable_sync((int) $course->id, (int) $USER->id, false);
+
+        $record = (new course_ai_repository())->get_by_courseid($course->id);
+        $this->assertNotNull($record);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertNotSame('pending_deletion', $record->syncstatus);
+        $context = \context_course::instance($course->id);
+        $this->assertSame('0', (new config())->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]));
+    }
+
+    /**
+     * Upgrade copies each operational flag, including Off, and leaves a course with no row unread.
+     */
+    public function test_upgrade_copies_enabled_including_off(): void {
+        global $CFG, $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        require_once($CFG->libdir . '/upgradelib.php');
+        require_once($CFG->dirroot . '/local/dixeo/db/upgrade.php');
+
+        $on = $this->getDataGenerator()->create_course();
+        $off = $this->getDataGenerator()->create_course();
+        $missing = $this->getDataGenerator()->create_course();
+        foreach ([$on, $off, $missing] as $course) {
+            $DB->delete_records('local_dixeo_course_ai', ['courseid' => $course->id]);
+            $DB->delete_records('local_dixeo_setting', [
+                'contextid' => \context_course::instance($course->id)->id,
+                'component' => 'local_dixeo',
+                'name' => 'filesync_enabled',
+            ]);
+        }
+        $repository = new course_ai_repository();
+        $repository->set_enabled((int) $on->id, true, (int) $USER->id);
+        $repository->set_enabled((int) $off->id, false, (int) $USER->id);
+
+        set_config('version', '2026101204', 'local_dixeo');
+        $this->assertTrue(xmldb_local_dixeo_upgrade(2026101204));
+
+        $config = new config();
+        $this->assertSame(
+            '1',
+            $config->get('local_dixeo', 'filesync_enabled', \context_course::instance($on->id))->get_value()
+        );
+        $this->assertSame(
+            '0',
+            $config->get('local_dixeo', 'filesync_enabled', \context_course::instance($off->id))->get_value()
+        );
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', [
+            'contextid' => \context_course::instance($off->id)->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]));
+        $missingcontext = \context_course::instance($missing->id);
+        $this->assertFalse($DB->record_exists('local_dixeo_setting', [
+            'contextid' => $missingcontext->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]));
+        $this->assertSame('0', $config->get('local_dixeo', 'filesync_enabled', $missingcontext)->get_value());
     }
 
     /**

@@ -244,6 +244,7 @@ final class config_test extends \advanced_testcase {
         $this->assertContains('filesync_enabled_default', $names);
         $this->assertContains('filesync_pill', $names);
         $this->assertNotContains('learning_intent', $names);
+        $this->assertNotContains('filesync_enabled', $names);
         $this->assertSame([], $this->layer_named($rows, 'filesync_enabled_default')['options']);
         $this->assertSame(
             ['hidden', 'coursetitle', 'footer'],
@@ -294,6 +295,7 @@ final class config_test extends \advanced_testcase {
         $this->assertContains('enabled', $names);
         $this->assertContains('learning_intent', $names);
         $this->assertContains('filesync_pill', $names);
+        $this->assertContains('filesync_enabled', $names);
         $this->assertNotContains('filesync_enabled_default', $names);
 
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
@@ -331,6 +333,61 @@ final class config_test extends \advanced_testcase {
         $this->assertSame('1', $cleared['value']);
         $this->assertSame(resolver::LAYER_DIXEO, $cleared['source']);
         $this->assertNotContains(resolver::LAYER_SITE, array_column($cleared['layers'], 'level'));
+    }
+
+    /**
+     * File sync on a course stays stored when it is Off or equal to the new-course default.
+     */
+    public function test_course_file_sync_stays_stored_when_off_or_equal_to_the_default(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $conditions = $this->filesync_conditions($context);
+
+        $config->set('local_dixeo', 'filesync_enabled', $context, '0');
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+        $stored = $config->get('local_dixeo', 'filesync_enabled', $context);
+        $this->assertSame('0', $stored->get_value());
+        $this->assertSame(resolver::LAYER_DIXEO, $stored->get_source());
+
+        $config->set('local_dixeo', 'filesync_enabled', $context, '0');
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+
+        $DB->delete_records('local_dixeo_setting', $conditions);
+        $missing = $config->get('local_dixeo', 'filesync_enabled', $context);
+        $this->assertSame('0', $missing->get_value());
+        $this->assertSame(resolver::LAYER_DIXEO, $missing->get_source());
+
+        $config->set('local_dixeo', 'filesync_enabled_default', \context_system::instance(), '1');
+        $unchanged = $config->get('local_dixeo', 'filesync_enabled', $context);
+        $this->assertSame('0', $unchanged->get_value());
+        $this->assertSame(resolver::LAYER_COURSE, $unchanged->get_source());
+        $this->assertFalse($DB->record_exists('local_dixeo_setting', $conditions));
+
+        $row = $this->layer_named($config->get_layers($context), 'filesync_enabled');
+        $this->assertSame('0', $row['value']);
+        $this->assertSame(resolver::LAYER_COURSE, $row['source']);
+        $this->assertNotContains(resolver::LAYER_SITE, array_column($row['layers'], 'level'));
+        $parent = $this->layer_level($row, resolver::LAYER_DIXEO);
+        $this->assertSame('1', $parent['value']);
+        $this->assertNull($parent['stored']);
+        $this->assertFalse($parent['customised']);
+        $courseoff = $this->layer_level($row, resolver::LAYER_COURSE);
+        $this->assertSame('0', $courseoff['value']);
+        $this->assertNull($courseoff['stored']);
+        $this->assertFalse($courseoff['customised']);
+
+        $config->set('local_dixeo', 'filesync_enabled', $context, '1');
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+        $matched = $config->get('local_dixeo', 'filesync_enabled', $context);
+        $this->assertSame('1', $matched->get_value());
+        $this->assertSame(resolver::LAYER_DIXEO, $matched->get_source());
+        $kept = $this->layer_named($config->get_layers($context), 'filesync_enabled');
+        $this->assertSame('1', $this->layer_level($kept, resolver::LAYER_COURSE)['stored']);
+        $this->assertFalse($this->layer_level($kept, resolver::LAYER_COURSE)['customised']);
     }
 
     /**
@@ -474,6 +531,18 @@ final class config_test extends \advanced_testcase {
             'contextid' => $context->id,
             'component' => 'local_dixeo',
             'name' => 'learning_intent',
+        ];
+    }
+
+    /**
+     * @param \context_course $context Course context.
+     * @return array<string, int|string>
+     */
+    private function filesync_conditions(\context_course $context): array {
+        return [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
         ];
     }
 }

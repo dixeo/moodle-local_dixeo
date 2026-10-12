@@ -474,6 +474,9 @@ define([
             }])[0];
         }
         return request.then(function() {
+            if (action === 'enable' || action === 'pause' || action === 'disable') {
+                syncFilesyncDraft(shell, action === 'enable');
+            }
             return refreshStatus(shell, true);
         }).catch(function(error) {
             Notification.exception(error);
@@ -488,6 +491,32 @@ define([
             scheduleStatusPoll(shell);
             return null;
         });
+    };
+
+    /**
+     * Status actions write file sync immediately. Keep the catalogue draft on that saved value.
+     *
+     * @param {HTMLElement} shell
+     * @param {boolean} enabled True when the action turned sync on.
+     */
+    const syncFilesyncDraft = function(shell, enabled) {
+        const session = sessions.get(shell);
+        if (!session) {
+            return;
+        }
+        const entry = session.entries['local_dixeo/filesync_enabled'];
+        if (!entry) {
+            return;
+        }
+        const value = enabled ? '1' : '0';
+        entry.saved = value;
+        entry.draft = value;
+        const row = shell.querySelector('.local-dixeo-settings-row[data-name="filesync_enabled"]');
+        if (row) {
+            paintRow(row, entry, session.labels);
+        }
+        publishDirty(shell);
+        applyFilter(shell);
     };
 
     /**

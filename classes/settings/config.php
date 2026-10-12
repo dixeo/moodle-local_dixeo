@@ -22,8 +22,9 @@ namespace local_dixeo\settings;
  * A setting is stored only at levels it declares. The Dixeo level, when declared, is plugin
  * config, and the catalogue default is that layer's value when nothing is stored. A site
  * layer exists only for a core Moodle config the setting overrides. A course value is a row
- * in local_dixeo_setting, written only when it differs from the parent. A course-only setting
- * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
+ * in local_dixeo_setting. A course value that matches its parent is removed, except a retained
+ * setting, which stays stored including Off. A course-only setting has no stored Dixeo parent;
+ * its unset value is still the Dixeo catalogue default.
  * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
  * Callers do not query the table.
  *
@@ -52,6 +53,13 @@ final class config {
     public function get(string $component, string $name, \context $context): resolved_value {
         $definition = $this->definition($component, $name);
         $level = $this->level_for($definition, $context);
+        if ($definition->retains_value()) {
+            $own = $this->own_value($definition, $context, $level);
+            $value = $own ?? $definition->get_default();
+            $parent = $this->retained_parent_value($definition);
+            $source = $value === $parent ? resolver::LAYER_DIXEO : resolver::LAYER_COURSE;
+            return new resolved_value($value, $source);
+        }
         $stored = $this->stored_values($definition, $context, $level);
         $effective = resolver::effective($level, $stored, $definition->get_default());
         return new resolved_value($effective['value'], $effective['source']);
@@ -60,21 +68,44 @@ final class config {
     /**
      * Store $value at $context, or delete the override when it matches the parent.
      *
+     * A retained setting is always written, including Off and a value equal to its parent.
+     *
      * @param string $component Frankenstyle component.
      * @param string $name Catalogue key.
      * @param \context $context System context for the Dixeo layer, or a course context.
      * @param string $value New text.
+     * @param bool $checkcapability False when a trusted caller has already authorised the write.
      */
-    public function set(string $component, string $name, \context $context, string $value): void {
+    public function set(
+        string $component,
+        string $name,
+        \context $context,
+        string $value,
+        bool $checkcapability = true
+    ): void {
         $definition = $this->definition($component, $name);
         $level = $this->level_for($definition, $context);
-        $this->require_edit($level, $context);
+        if ($checkcapability) {
+            $this->require_edit($level, $context);
+        }
         $value = clean_param($value, PARAM_TEXT);
         if ($definition->get_type() === 'select' && !in_array($value, $definition->get_options(), true)) {
             throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
         }
+        if ($definition->retains_value() && $definition->get_type() === 'bool' && $value !== '0' && $value !== '1') {
+            throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
+        }
         $stored = $this->stored_values($definition, $context, $level);
         $current = $this->own_value($definition, $context, $level);
+
+        if ($definition->retains_value()) {
+            if ($current === $value) {
+                return;
+            }
+            $this->write_stored($definition, $context, $level, $value);
+            $this->notify_updated($definition, $context);
+            return;
+        }
 
         if (!resolver::stores_override($level, $value, $stored, $definition->get_default())) {
             if ($current === null) {
@@ -213,6 +244,9 @@ final class config {
      * @return array
      */
     private function layer_row(definition $definition, \context $context, string $level): array {
+        if ($definition->retains_value()) {
+            return $this->retained_layer_row($definition, $context);
+        }
         $stored = $this->stored_values($definition, $context, $level);
         $fallback = $definition->get_default();
         $effective = resolver::effective($level, $stored, $fallback);
@@ -241,6 +275,66 @@ final class config {
             'source' => $effective['source'],
             'layers' => $layers,
         ];
+    }
+
+    /**
+     * Course value that is always stored, with a read-only Dixeo cell for the comparison parent.
+     *
+     * The course value does not follow later changes to that parent. A missing row reads as the
+     * catalogue default. The badge source is Dixeo when the course value still matches the parent.
+     *
+     * @param definition $definition Catalogue entry with {@see definition::retains_value()}.
+     * @param \context $context Course context.
+     * @return array
+     */
+    private function retained_layer_row(definition $definition, \context $context): array {
+        $own = $this->read_course($definition, $context);
+        $value = $own ?? $definition->get_default();
+        $parent = $this->retained_parent_value($definition);
+        $matches = $value === $parent;
+
+        return [
+            'component' => $definition->get_component(),
+            'name' => $definition->get_key(),
+            'shortname' => $definition->get_shortname(),
+            'type' => $definition->get_type(),
+            'feature' => $definition->get_feature(),
+            'plugingroup' => $definition->get_plugingroup(),
+            'help' => $definition->get_help(),
+            'options' => $definition->get_options(),
+            'coremissing' => false,
+            'value' => $value,
+            'source' => $matches ? resolver::LAYER_DIXEO : resolver::LAYER_COURSE,
+            'layers' => [
+                [
+                    'level' => resolver::LAYER_DIXEO,
+                    'value' => $parent,
+                    'stored' => null,
+                    'customised' => false,
+                ],
+                [
+                    'level' => resolver::LAYER_COURSE,
+                    'value' => $value,
+                    'stored' => $own,
+                    'customised' => $own !== null && !$matches,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Value a retained course setting is compared with for the Dixeo badge.
+     *
+     * File sync on this course is compared with the current new-course default.
+     *
+     * @param definition $definition Retained catalogue entry.
+     * @return string
+     */
+    private function retained_parent_value(definition $definition): string {
+        if ($definition->get_component() === self::COMPONENT && $definition->get_key() === 'filesync_enabled') {
+            return $this->get(self::COMPONENT, 'filesync_enabled_default', \context_system::instance())->get_value();
+        }
+        return $definition->get_default();
     }
 
     /**

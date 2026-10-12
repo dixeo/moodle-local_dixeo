@@ -566,5 +566,34 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100900, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026101205) {
+        $records = $DB->get_records('local_dixeo_course_ai', null, '', 'id, courseid, enabled');
+        foreach ($records as $record) {
+            $context = \context_course::instance((int) $record->courseid, IGNORE_MISSING);
+            if (!$context) {
+                continue;
+            }
+            $existing = $DB->get_record('local_dixeo_setting', [
+                'contextid' => $context->id,
+                'component' => 'local_dixeo',
+                'name' => 'filesync_enabled',
+            ]);
+            $value = ((int) $record->enabled) === 1 ? '1' : '0';
+            if ($existing) {
+                $existing->value = $value;
+                $DB->update_record('local_dixeo_setting', $existing);
+                continue;
+            }
+            $DB->insert_record('local_dixeo_setting', (object) [
+                'contextid' => $context->id,
+                'component' => 'local_dixeo',
+                'name' => 'filesync_enabled',
+                'value' => $value,
+            ]);
+        }
+
+        upgrade_plugin_savepoint(true, 2026101205, 'local', 'dixeo');
+    }
+
     return true;
 }

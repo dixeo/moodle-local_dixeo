@@ -45,6 +45,7 @@ final class definition {
      * @param bool $sensitive True when the value must be hidden from users who cannot edit the Dixeo layer.
      * @param string[] $options Allowed values for a select. Empty for every other type.
      * @param core_target|null $core Moodle admin setting this entry overrides, or null when Dixeo-only.
+     * @param bool $retain True when a course value is always stored, including Off and a value equal to its parent.
      */
     public function __construct(
         private string $key,
@@ -59,6 +60,7 @@ final class definition {
         private bool $sensitive,
         private array $options,
         private ?core_target $core,
+        private bool $retain = false,
     ) {
     }
 
@@ -103,6 +105,13 @@ final class definition {
 
         $default = (string) $raw['default'];
         $options = $type === 'select' ? self::require_options($key, $raw['options'] ?? null, $default) : [];
+        $retain = false;
+        if (array_key_exists('retain', $raw)) {
+            if (!is_bool($raw['retain'])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare retain as a boolean.");
+            }
+            $retain = $raw['retain'];
+        }
 
         return new self(
             $key,
@@ -117,6 +126,7 @@ final class definition {
             $raw['sensitive'],
             $options,
             $core,
+            $retain,
         );
     }
 
@@ -255,5 +265,14 @@ final class definition {
      */
     public function get_core(): ?core_target {
         return $this->core;
+    }
+
+    /**
+     * True when the stored course value is kept even if it is Off or equal to its parent.
+     *
+     * @return bool
+     */
+    public function retains_value(): bool {
+        return $this->retain;
     }
 }
