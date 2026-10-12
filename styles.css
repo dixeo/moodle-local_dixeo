@@ -63,8 +63,15 @@ body:has(.block_dixeo_tutor) .dixeo-sync-title-wrapper,
 body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--visible,
 body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--visible,
 body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--inline,
-body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--inline {
+body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--inline,
+body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--footer,
+body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--footer {
     display: inline-flex !important;
+}
+
+.dixeo-sync-indicator.dixeo-sync-indicator--footer {
+    position: static;
+    margin: 0.75rem 0;
 }
 
 /* Keep the pill visible when a theme clips the course title. */

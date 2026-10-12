@@ -54,14 +54,17 @@ const toNumber = (value, fallback = 0) => hasNumber(value) ? Number(value) : fal
  * @param {boolean} enabled Whether sync is enabled.
  * @param {number} filesTotal Total number of files.
  * @param {number} filesCompleted Files synced so far.
+ * @param {string} [placement] coursetitle moves the pill to the heading. footer leaves it in place.
  */
-const init = (courseid, status, enabled, filesTotal, filesCompleted) => {
+const init = (courseid, status, enabled, filesTotal, filesCompleted, placement) => {
     courseId = courseid;
     currentStatus = status;
     isEnabled = enabled;
 
-    // Relocate before async ops to avoid race conditions with other modules.
-    relocateToTitle();
+    // A footer pill stays where the page put it. The title placement moves it next to the heading.
+    if (placement !== 'footer') {
+        relocateToTitle();
+    }
 
     updateBadgeCount(filesCompleted, filesTotal);
 

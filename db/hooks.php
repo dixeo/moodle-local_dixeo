@@ -34,6 +34,11 @@ $callbacks = [
         'priority' => 500,
     ],
     [
+        'hook' => \core\hook\output\before_footer_html_generation::class,
+        'callback' => [\local_dixeo\hook\output\sync_indicator_injector::class, 'footer'],
+        'priority' => 500,
+    ],
+    [
         'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
         'callback' => [\local_dixeo\hook\output\content_image_pending_injector::class, 'callback'],
         'priority' => 400,

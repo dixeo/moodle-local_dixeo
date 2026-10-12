@@ -28,22 +28,46 @@
 
 namespace local_dixeo\hook\output;
 
+use core\hook\output\before_footer_html_generation;
 use core\hook\output\before_standard_top_of_body_html_generation;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\file_sync_policy;
-use local_dixeo\service\file_sync_service;
 
 /**
  * Callback class for injecting sync indicator.
  */
 class sync_indicator_injector {
     /**
-     * Inject the sync indicator into the page output.
+     * Inject the pill beside the course title when that is where this course shows it.
      *
      * @param before_standard_top_of_body_html_generation $hook The hook instance.
      * @return void
      */
     public static function callback(before_standard_top_of_body_html_generation $hook): void {
+        self::inject($hook, 'coursetitle');
+    }
+
+    /**
+     * Inject the pill in the page footer when that is where this course shows it.
+     *
+     * @param before_footer_html_generation $hook The hook instance.
+     * @return void
+     */
+    public static function footer(before_footer_html_generation $hook): void {
+        self::inject($hook, 'footer');
+    }
+
+    /**
+     * Inject the pill for one placement. Hidden courses get no pill. The other placement is skipped.
+     *
+     * @param before_standard_top_of_body_html_generation|before_footer_html_generation $hook The hook instance.
+     * @param string $placement coursetitle or footer.
+     * @return void
+     */
+    private static function inject(
+        before_standard_top_of_body_html_generation|before_footer_html_generation $hook,
+        string $placement
+    ): void {
         global $COURSE, $PAGE, $OUTPUT;
 
         // Skip iframe/popup layouts (e.g. H5P embed) — would duplicate the indicator inside the frame.
@@ -56,12 +80,18 @@ class sync_indicator_injector {
             return;
         }
 
-        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($COURSE->id))) {
+        $context = \context_course::instance($COURSE->id);
+        $config = service_factory::get_settings_config();
+        if (!$config->enabled_for($context)) {
+            return;
+        }
+
+        $configured = $config->get('local_dixeo', 'filesync_pill', $context)->get_value();
+        if ($configured === 'hidden' || $configured !== $placement) {
             return;
         }
 
         // Check capability (view indicator with generate; manage actions need syncfiles).
-        $context = \context_course::instance($COURSE->id);
         if (!has_capability('local/dixeo:generate', $context) && !has_capability('local/dixeo:syncfiles', $context)) {
             return;
         }
@@ -80,6 +110,7 @@ class sync_indicator_injector {
         $templatecontext = self::prepare_template_context($COURSE->id, $status, $canmanagesync);
         $templatecontext['contextid'] = $context->id;
         $templatecontext['coursename'] = $COURSE->fullname;
+        $templatecontext['footer'] = $placement === 'footer';
 
         // Render the indicator.
         $html = $OUTPUT->render_from_template('local_dixeo/sync_indicator', $templatecontext);
@@ -95,6 +126,7 @@ class sync_indicator_injector {
             $status->enabled,
             $status->filestotal,
             $status->filescompleted,
+            $placement,
         ]);
     }
 
