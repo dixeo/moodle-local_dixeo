@@ -59,8 +59,6 @@ class trigger_file_sync extends external_api {
      * @return array The result with sync status.
      */
     public static function execute(int $courseid): array {
-        global $USER;
-
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
         ]);
@@ -70,7 +68,6 @@ class trigger_file_sync extends external_api {
         $service = service_factory::get_file_sync_service();
 
         try {
-            $service->enable_sync($params['courseid'], (int) $USER->id);
             $service->trigger_sync($params['courseid']);
 
             $status = $service->get_status($params['courseid']);

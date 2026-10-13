@@ -134,13 +134,13 @@ final class file_sync_capability_test extends \advanced_testcase {
 
         $this->assertTrue($result['success']);
         $record = $repository->get_by_courseid($course->id);
-        $this->assertSame(1, (int) $record->enabled);
+        $this->assertSame(0, (int) $record->enabled);
     }
 
     /**
-     * Post-module-creation sync is skipped when the actor lacks syncfiles.
+     * Creating a module does not turn file sync on.
      */
-    public function test_enable_and_queue_sync_after_module_creation_skipped_without_syncfiles(): void {
+    public function test_enable_and_queue_sync_after_module_creation_does_not_enable(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
@@ -157,27 +157,34 @@ final class file_sync_capability_test extends \advanced_testcase {
     }
 
     /**
-     * Post-module-creation sync runs when the actor has syncfiles.
+     * An already-on course is queued for refresh without local/dixeo:syncfiles.
      */
-    public function test_enable_and_queue_sync_after_module_creation_allowed_with_syncfiles(): void {
-        global $DB;
-
+    public function test_enable_and_queue_sync_after_module_creation_queues_when_already_on(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $context = \context_course::instance($course->id);
-        $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
-        assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);
-        accesslib_clear_all_caches_for_unit_testing();
+        $this->deny_syncfiles_for_editingteacher($context);
         $this->setUser($teacher);
 
         $repository = new course_ai_repository();
+        $repository->create($course->id, $teacher->id);
+        $repository->set_enabled($course->id, true, $teacher->id);
+
         $service = new file_sync_service($repository);
         $service->enable_and_queue_sync_after_module_creation($course->id);
 
-        $record = $repository->get_by_courseid($course->id);
-        $this->assertNotNull($record);
-        $this->assertSame(1, (int) $record->enabled);
+        $tasks = \core\task\manager::get_adhoc_tasks('\\local_dixeo\\task\\process_file_sync');
+        $found = false;
+        foreach ($tasks as $task) {
+            $data = $task->get_custom_data();
+            if (isset($data->courseid) && (int) $data->courseid === (int) $course->id) {
+                $found = true;
+                break;
+            }
+        }
+        $this->assertTrue($found);
+        $this->assertSame(1, (int) $repository->get_by_courseid($course->id)->enabled);
     }
 }

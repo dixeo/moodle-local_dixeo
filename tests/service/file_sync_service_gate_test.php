@@ -72,20 +72,6 @@ final class file_sync_service_gate_test extends \advanced_testcase {
         $this->assertNull($repository->get_by_courseid($course->id));
     }
 
-    public function test_opt_in_does_nothing_when_dixeo_is_off(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $user = $this->teacher_with_syncfiles($course);
-        $this->turn_dixeo_off();
-
-        $repository = new course_ai_repository();
-        (new file_sync_service($repository))->opt_in_on_block_added($course->id, $user->id);
-
-        $this->assertNull($repository->get_by_courseid($course->id));
-        $this->assertFalse($this->sync_task_queued($course->id));
-    }
-
     public function test_queue_and_module_change_do_nothing_when_dixeo_is_off(): void {
         $this->resetAfterTest();
 
