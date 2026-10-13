@@ -90,6 +90,24 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
+     * The admin page button opens the Dixeo-layer modal, not a course.
+     */
+    public function test_admin_page_button_opens_the_dixeo_layer_modal(): void {
+        $page = $this->settings_page();
+        $this->assertTrue(isset($page->settings->local_dixeosettings_modal_open));
+
+        $html = $page->settings->local_dixeosettings_modal_open->output_html('');
+        $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html);
+        $this->assertStringContainsString(
+            'data-contextid="' . \context_system::instance()->id . '"',
+            $html
+        );
+        $this->assertStringContainsString(get_string('settings_button', 'local_dixeo'), $html);
+        $this->assertStringContainsString('type="button"', $html);
+        $this->assertStringNotContainsString('data-courseid', $html);
+    }
+
+    /**
      * A null write, used when no value was posted, does not turn Dixeo off.
      */
     public function test_null_write_leaves_the_stored_value_unchanged(): void {

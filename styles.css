@@ -618,6 +618,10 @@ h2:has(.dixeo-sync-indicator),
     justify-content: flex-end;
 }
 
+#page-admin-setting-local_dixeo .local-dixeo-settings-open {
+    text-align: right;
+}
+
 .local-dixeo-settings-open .btn {
     display: inline-flex;
     align-items: center;
@@ -1141,12 +1145,25 @@ label[for="local-dixeo-settings-category"] {
     grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
 }
 
-.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-head,
-.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-row {
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="1"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="1"] .local-dixeo-settings-row {
     grid-template-columns: minmax(210px, 1.5fr) minmax(104px, 0.8fr) minmax(104px, 0.8fr) minmax(200px, 1.4fr);
 }
 
-.local-dixeo-settings-list:not([data-advanced="1"]) [data-layer] {
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="0"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="0"] .local-dixeo-settings-row,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="0"][data-show-dixeo="1"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="0"][data-show-dixeo="1"] .local-dixeo-settings-row {
+    grid-template-columns: minmax(210px, 1.5fr) minmax(104px, 0.8fr) minmax(220px, 1.4fr);
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) [data-layer],
+.local-dixeo-settings-list[data-show-site="0"] [data-layer="site"],
+.local-dixeo-settings-list[data-show-dixeo="0"] [data-layer="dixeo"] {
+    display: none;
+}
+
+.local-dixeo-settings-advanced[hidden] {
     display: none;
 }
 

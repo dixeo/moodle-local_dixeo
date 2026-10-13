@@ -718,6 +718,44 @@ define([
             setCount(shell, session.toolbarCount.replace('{$a}', String(shown)));
         }
         renderCategories(shell);
+        syncParentColumns(shell);
+    };
+
+    /**
+     * Site default is shown only when a visible row has one.
+     * At the Dixeo level the Dixeo parent column is the value column, so it stays hidden.
+     * Advanced is hidden there when Site default is hidden too.
+     *
+     * @param {HTMLElement} shell
+     */
+    const syncParentColumns = function(shell) {
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (!list) {
+            return;
+        }
+        const atDixeo = !shell.dataset.courseid;
+        const visible = Array.from(shell.querySelectorAll('.local-dixeo-settings-row')).filter(function(row) {
+            return !row.hidden;
+        });
+        const showSite = visible.some(function(row) {
+            return !!row.querySelector('[data-layer="site"] [data-action="local-dixeo-settings-parent"]');
+        });
+        list.dataset.showSite = showSite ? '1' : '0';
+        list.dataset.showDixeo = atDixeo ? '0' : '1';
+        const advanced = list.querySelector('.local-dixeo-settings-advanced');
+        if (!advanced) {
+            return;
+        }
+        const hideAdvanced = atDixeo && !showSite;
+        advanced.hidden = hideAdvanced;
+        if (!hideAdvanced) {
+            return;
+        }
+        const input = advanced.querySelector('[data-action="local-dixeo-settings-advanced"]');
+        if (input) {
+            input.checked = false;
+        }
+        list.dataset.advanced = '0';
     };
 
     /**
@@ -940,7 +978,7 @@ define([
             const context = {
                 rows: rows,
                 emptytext: strings[extraAt + 1],
-                coursecolumn: strings[3],
+                coursecolumn: shell.dataset.courseid ? strings[3] : '',
                 sitecolumn: strings[4],
                 dixeocolumn: strings[5],
                 advanced: strings[6],
@@ -1462,10 +1500,12 @@ define([
      * @returns {Promise}
      */
     const open = function(button) {
-        const stringsReady = Str.get_strings([
-            {key: 'settings_modal_title', component: 'local_dixeo'},
-            {key: 'settings_modal_breadcrumb', component: 'local_dixeo', param: courseName(button)},
-        ]);
+        const name = courseName(button);
+        const requests = [{key: 'settings_modal_title', component: 'local_dixeo'}];
+        if (name !== '') {
+            requests.push({key: 'settings_modal_breadcrumb', component: 'local_dixeo', param: name});
+        }
+        const stringsReady = Str.get_strings(requests);
         const bodyReady = Templates.renderForPromise('local_dixeo/settings_modal', {});
         return Promise.all([stringsReady, bodyReady]).then(function(results) {
             const strings = results[0];
@@ -1485,10 +1525,13 @@ define([
                     }
                     const heading = document.createElement('span');
                     heading.textContent = strings[0];
-                    const crumbs = document.createElement('span');
-                    crumbs.className = 'local-dixeo-settings-crumbs';
-                    crumbs.textContent = strings[1];
-                    title.replaceChildren(heading, crumbs);
+                    title.replaceChildren(heading);
+                    if (strings[1]) {
+                        const crumbs = document.createElement('span');
+                        crumbs.className = 'local-dixeo-settings-crumbs';
+                        crumbs.textContent = strings[1];
+                        title.appendChild(crumbs);
+                    }
                 };
                 const titleReady = modal.titlePromise ? modal.titlePromise.then(paintTitle) : paintTitle();
                 return Promise.resolve(titleReady).then(function() {

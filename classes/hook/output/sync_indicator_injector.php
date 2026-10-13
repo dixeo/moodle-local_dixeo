@@ -54,7 +54,22 @@ class sync_indicator_injector {
      * @return void
      */
     public static function footer(before_footer_html_generation $hook): void {
+        self::prepare_admin_settings_modal();
         self::inject($hook, 'footer');
+    }
+
+    /**
+     * Load the settings modal on the Dixeo plugin admin page.
+     *
+     * @return void
+     */
+    private static function prepare_admin_settings_modal(): void {
+        global $PAGE;
+
+        if ($PAGE->pagetype !== 'admin-setting-local_dixeo') {
+            return;
+        }
+        $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
     }
 
     /**

@@ -29,6 +29,29 @@ if ($hassiteconfig) {
     // Create settings page.
     $settings = new admin_settingpage('local_dixeo', get_string('pluginname', 'local_dixeo'));
 
+    // Opens the Dixeo-layer settings modal. This page keeps its own stored admin controls.
+    global $OUTPUT;
+    $settingslogo = html_writer::img($OUTPUT->image_url('dixeo-white', 'local_dixeo'), '', [
+        'class' => 'local-dixeo-settings-logo',
+        'alt' => '',
+        'aria-hidden' => 'true',
+        'width' => 16,
+        'height' => 16,
+    ]);
+    $settings->add(new admin_setting_description(
+        'local_dixeo/settings_modal_open',
+        '',
+        html_writer::div(
+            html_writer::tag('button', $settingslogo . get_string('settings_button', 'local_dixeo'), [
+                'type' => 'button',
+                'class' => 'btn btn-primary',
+                'data-action' => 'local-dixeo-settings-open',
+                'data-contextid' => (string) \context_system::instance()->id,
+            ]),
+            'local-dixeo-settings-open mb-3'
+        )
+    ));
+
     // Master switch. This page stays available so the site can be turned back on.
     $settings->add(new \local_dixeo\admin_setting_enabled());
 
