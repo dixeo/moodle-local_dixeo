@@ -54,15 +54,17 @@ const toNumber = (value, fallback = 0) => hasNumber(value) ? Number(value) : fal
  * @param {boolean} enabled Whether sync is enabled.
  * @param {number} filesTotal Total number of files.
  * @param {number} filesCompleted Files synced so far.
- * @param {string} [placement] coursetitle moves the pill to the heading. footer leaves it in place.
+ * @param {string} [placement] coursetitle moves the pill to the heading. footer moves it into the page footer.
  */
 const init = (courseid, status, enabled, filesTotal, filesCompleted, placement) => {
     courseId = courseid;
     currentStatus = status;
     isEnabled = enabled;
 
-    // A footer pill stays where the page put it. The title placement moves it next to the heading.
-    if (placement !== 'footer') {
+    // Title sits beside the heading. Footer is moved into the dark footer bar.
+    if (placement === 'footer') {
+        relocateToFooter();
+    } else {
         relocateToTitle();
     }
 
@@ -72,6 +74,26 @@ const init = (courseid, status, enabled, filesTotal, filesCompleted, placement) 
 
     // Begin adaptive poll loop (fast during sync, slow background otherwise).
     schedulePoll();
+};
+
+/**
+ * Move a footer pill into the dark footer bar.
+ *
+ * The footer hook prints the pill inside the main region. The visible place is
+ * .footer-dark-inner in #page-footer.
+ */
+const relocateToFooter = () => {
+    const indicator = document.getElementById('dixeo-sync-indicator');
+    if (!indicator) {
+        return;
+    }
+    const slot = document.querySelector('#page-footer .footer-dark-inner');
+    if (!slot) {
+        indicator.classList.add('dixeo-sync-indicator--visible');
+        return;
+    }
+    slot.appendChild(indicator);
+    indicator.classList.add('dixeo-sync-indicator--placed');
 };
 
 /**

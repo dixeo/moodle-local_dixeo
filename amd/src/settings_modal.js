@@ -96,6 +96,133 @@ define([
     };
 
     /**
+     * Cover the settings panel with a centred label. Loading also shows a spinner.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} text
+     * @param {string} mode loading or saving.
+     */
+    const showPanelOverlay = function(shell, text, mode) {
+        const overlay = shell.querySelector('[data-region="local-dixeo-settings-overlay"]');
+        if (!overlay) {
+            return;
+        }
+        overlay.dataset.mode = mode === 'saving' ? 'saving' : 'loading';
+        const label = overlay.querySelector('[data-region="overlay-label"]');
+        if (label) {
+            label.textContent = text;
+        }
+        overlay.hidden = false;
+    };
+
+    /**
+     * Remove the panel cover.
+     *
+     * @param {HTMLElement} shell
+     */
+    const hidePanelOverlay = function(shell) {
+        const overlay = shell.querySelector('[data-region="local-dixeo-settings-overlay"]');
+        if (overlay) {
+            overlay.hidden = true;
+        }
+    };
+
+    /**
+     * Stop edits, filters, and close while a save is in flight.
+     *
+     * @param {HTMLElement} shell
+     * @param {boolean} locked
+     */
+    const setUiLocked = function(shell, locked) {
+        const modal = shell.closest('.modal');
+        shell.classList.toggle('local-dixeo-settings-locked', locked);
+        if (modal) {
+            modal.classList.toggle('local-dixeo-settings-locked', locked);
+        }
+        if (locked) {
+            shell.setAttribute('aria-busy', 'true');
+        } else {
+            shell.removeAttribute('aria-busy');
+        }
+        const controls = [...shell.querySelectorAll('button, input, select, textarea')];
+        if (modal) {
+            modal.querySelectorAll('.modal-header button').forEach(function(button) {
+                controls.push(button);
+            });
+        }
+        controls.forEach(function(control) {
+            if (locked) {
+                if (!control.disabled) {
+                    control.dataset.locked = '1';
+                    control.disabled = true;
+                }
+                return;
+            }
+            if (control.dataset.locked === '1') {
+                control.disabled = false;
+                delete control.dataset.locked;
+            }
+        });
+    };
+
+    /**
+     * Whether Dixeo features run for this shell.
+     *
+     * Null means the catalogue has not said. Off at the Dixeo layer is off for the course
+     * even when the course value is On.
+     *
+     * @param {HTMLElement} shell
+     * @returns {boolean|null}
+     */
+    const featuresEnabled = function(shell) {
+        const session = sessions.get(shell);
+        if (!session) {
+            return null;
+        }
+        const entry = session.entries['local_dixeo/enabled'];
+        if (!entry) {
+            return null;
+        }
+        if (entry.dixeo !== null && entry.dixeo !== '1') {
+            return false;
+        }
+        if (shell.dataset.courseid && entry.saved !== '1') {
+            return false;
+        }
+        return true;
+    };
+
+    /**
+     * Status cannot read file sync while Dixeo is off. Say so instead of raising the gate error.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise}
+     */
+    const paintDixeoOff = function(shell) {
+        cancelStatusPoll(shell);
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (!panel) {
+            return Promise.resolve();
+        }
+        panel.dataset.enabled = '0';
+        panel.dataset.canmanagesync = '0';
+        delete shell.dataset.syncstatus;
+        ['last-sync', 'progress', 'progress-text', 'error-message'].forEach(function(region) {
+            const node = panel.querySelector('[data-region="' + region + '"]');
+            if (node) {
+                node.hidden = true;
+            }
+        });
+        return Str.get_string('error:dixeo_disabled', 'local_dixeo').then(function(text) {
+            const message = panel.querySelector('[data-region="status-message"]');
+            if (message && shell.isConnected) {
+                message.textContent = text;
+            }
+            return null;
+        });
+    };
+
+    /**
      * @param {HTMLElement} shell
      * @param {string} text
      */
@@ -313,6 +440,9 @@ define([
         if (!courseid) {
             return Promise.resolve();
         }
+        if (featuresEnabled(shell) === false) {
+            return paintDixeoOff(shell);
+        }
         return loadStatusStrings().then(function(strings) {
             return Ajax.call([{
                 methodname: 'local_dixeo_get_file_sync_status',
@@ -325,6 +455,9 @@ define([
                 return null;
             });
         }).catch(function(error) {
+            if (error && error.errorcode === 'error:dixeo_disabled') {
+                return paintDixeoOff(shell);
+            }
             if (notify) {
                 Notification.exception(error);
             }
@@ -609,6 +742,7 @@ define([
             allFeatures: session.allFeatures,
             allPlugins: session.allPlugins,
             preferences: session.preferences,
+            names: session.categoryNames || {},
         });
         paintingCategories = true;
         list.replaceChildren();
@@ -741,6 +875,9 @@ define([
         requests.push({key: 'settings_modal_all_features', component: 'local_dixeo'});
         requests.push({key: 'settings_modal_all_plugins', component: 'local_dixeo'});
         requests.push({key: 'settings_modal_preferences', component: 'local_dixeo'});
+        requests.push({key: 'settings_modal_saving', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_filesync', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_dixeo_core', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -788,6 +925,11 @@ define([
                 allFeatures: strings[extraAt + 2],
                 allPlugins: strings[extraAt + 3],
                 preferences: strings[extraAt + 4],
+                savingLabel: strings[extraAt + 5],
+                categoryNames: {
+                    filesync: strings[extraAt + 6],
+                    dixeo_core: strings[extraAt + 7],
+                },
                 contextid: contextid,
                 saving: false,
             });
@@ -835,7 +977,7 @@ define([
             {key: 'settings_modal_loading', component: 'local_dixeo'},
             {key: 'settings_modal_error', component: 'local_dixeo'},
         ]).then(function(strings) {
-            setList(shell, strings[0]);
+            showPanelOverlay(shell, strings[0], 'loading');
             return Ajax.call([{
                 methodname: 'local_dixeo_get_settings',
                 args: {contextid: id},
@@ -844,6 +986,7 @@ define([
                     return null;
                 }
                 const settings = result && Array.isArray(result.settings) ? result.settings : [];
+                hidePanelOverlay(shell);
                 setList(shell, '');
                 return renderRows(shell, settings, id).then(function() {
                     applyFilter(shell);
@@ -856,6 +999,7 @@ define([
                 if (!shell.isConnected) {
                     return null;
                 }
+                hidePanelOverlay(shell);
                 setList(shell, strings[1]);
                 if (openStatus) {
                     showStatus(shell);
@@ -887,7 +1031,8 @@ define([
      * @returns {Promise}
      */
     const requestClose = function(modal, shell) {
-        if (shell.dataset.closing === '1') {
+        const session = sessions.get(shell);
+        if ((session && session.saving) || shell.dataset.closing === '1') {
             return Promise.resolve();
         }
         if (!isDirty(shell)) {
@@ -1151,8 +1296,9 @@ define([
             }
             event.preventDefault();
             session.saving = true;
-            button.disabled = true;
             clearSaveError(shell);
+            setUiLocked(shell, true);
+            showPanelOverlay(shell, session.savingLabel, 'saving');
             const fallbackReady = Str.get_string('settings_modal_save_error', 'local_dixeo');
             Ajax.call([{
                 methodname: 'local_dixeo_save_settings',
@@ -1173,6 +1319,8 @@ define([
                     return null;
                 }
                 session.saving = false;
+                hidePanelOverlay(shell);
+                setUiLocked(shell, false);
                 publishDirty(shell);
                 return fallbackReady.then(function(fallback) {
                     showSaveError(shell, saveErrorText(error, fallback));

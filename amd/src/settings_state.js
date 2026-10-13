@@ -347,7 +347,7 @@ define([], function() {
      * @param {Object} entries Map of row entries.
      * @param {string} grouping feature or plugin.
      * @param {{query: string, customisedOnly: boolean, category: string}} filter
-     * @param {{allFeatures: string, allPlugins: string, preferences: string}} labels
+     * @param {{allFeatures: string, allPlugins: string, preferences: string, names: Object}} labels
      * @returns {Array}
      */
     const categoryItems = function(entries, grouping, filter, labels) {
@@ -376,11 +376,12 @@ define([], function() {
                 seen[id] = true;
             }
         });
+        const names = labels.names || {};
         Object.keys(seen).sort().forEach(function(id) {
             const value = mode + ':' + id;
             items.push({
                 value: value,
-                label: id,
+                label: names[id] || id,
                 count: countFor(value),
                 preferences: false,
             });
