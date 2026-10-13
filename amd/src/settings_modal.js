@@ -918,6 +918,7 @@ define([
         requests.push({key: 'settings_category_dixeo_core', component: 'local_dixeo'});
         requests.push({key: 'settings_category_tutor', component: 'local_dixeo'});
         requests.push({key: 'settings_category_dixeo_tutor', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_imagegeneration', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -971,6 +972,7 @@ define([
                     dixeo_core: strings[extraAt + 7],
                     tutor: strings[extraAt + 8],
                     dixeo_tutor: strings[extraAt + 9],
+                    imagegeneration: strings[extraAt + 10],
                 },
                 contextid: contextid,
                 saving: false,

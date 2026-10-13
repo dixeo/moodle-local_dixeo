@@ -117,7 +117,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_COURSE,
-            policy::ACTION_GENERATE
+            policy::ACTION_GENERATE,
+            \context_course::instance($courseid)
         );
 
         $resolvedtitle = $title !== null ? $title : $course->fullname;
@@ -165,7 +166,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_SECTION,
-            policy::ACTION_GENERATE
+            policy::ACTION_GENERATE,
+            \context_course::instance((int) $section->course)
         );
 
         $title = $this->resolve_section_title($section);
@@ -217,7 +219,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_COURSE,
-            policy::ACTION_EDIT
+            policy::ACTION_EDIT,
+            \context_course::instance($courseid)
         );
 
         $payload = $this->build_edit_payload(
@@ -266,7 +269,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_SECTION,
-            policy::ACTION_EDIT
+            policy::ACTION_EDIT,
+            \context_course::instance((int) $section->course)
         );
 
         $payload = $this->build_edit_payload(
@@ -310,7 +314,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_CONTENT,
-            policy::ACTION_GENERATE
+            policy::ACTION_GENERATE,
+            \context_course::instance($courseid)
         );
 
         $payload = $this->build_payload(
@@ -359,7 +364,8 @@ class image_generation_service {
 
         policy::assert_enabled(
             policy::ENTITY_CONTENT,
-            policy::ACTION_EDIT
+            policy::ACTION_EDIT,
+            \context_course::instance($courseid)
         );
 
         global $DB;

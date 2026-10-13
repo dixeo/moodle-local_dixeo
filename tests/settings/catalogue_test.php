@@ -152,6 +152,40 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * Image generation modes and the enabled switch can be overridden per course.
+     */
+    public function test_load_returns_image_generation_course_overrides(): void {
+        $settings = catalogue::load();
+        $keys = [
+            'image_generation_enabled',
+            'image_generation_course_mode',
+            'image_generation_section_mode',
+            'image_generation_content_mode',
+        ];
+        foreach ($keys as $key) {
+            $this->assertArrayHasKey($key, $settings);
+            $setting = $settings[$key];
+            $this->assertSame(['dixeo', 'course'], $setting->get_levels());
+            $this->assertSame('imagegeneration', $setting->get_feature());
+            $this->assertSame('dixeo_core', $setting->get_plugingroup());
+            $this->assertFalse($setting->has_core());
+            $this->assertTrue(get_string_manager()->string_exists($key, 'local_dixeo'));
+            $this->assertTrue(get_string_manager()->string_exists($setting->get_help(), 'local_dixeo'));
+        }
+
+        $this->assertSame('bool', $settings['image_generation_enabled']->get_type());
+        foreach (['image_generation_course_mode', 'image_generation_section_mode', 'image_generation_content_mode'] as $key) {
+            $setting = $settings[$key];
+            $this->assertSame('select', $setting->get_type());
+            $this->assertSame(['disabled', 'generate', 'generate_edit'], $setting->get_options());
+            foreach ($setting->get_options() as $option) {
+                $this->assertTrue(get_string_manager()->string_exists($key . '_' . $option, 'local_dixeo'));
+            }
+        }
+        $this->assertTrue(get_string_manager()->string_exists('settings_category_imagegeneration', 'local_dixeo'));
+    }
+
+    /**
      * A core target that exists in the admin tree is kept.
      */
     public function test_existing_core_target_is_accepted(): void {
