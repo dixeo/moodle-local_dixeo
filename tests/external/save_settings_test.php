@@ -87,6 +87,26 @@ final class save_settings_test extends \advanced_testcase {
     }
 
     /**
+     * Saving a course setting clears that course cache so the next page load shows it.
+     */
+    public function test_save_clears_the_course_cache(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $before = (int) $DB->get_field('course', 'cacherev', ['id' => $course->id]);
+
+        save_settings::execute(\context_course::instance($course->id)->id, [[
+            'component' => 'local_dixeo',
+            'name' => 'learning_intent',
+            'value' => 'Course intent',
+        ]]);
+
+        $this->assertGreaterThan($before, (int) $DB->get_field('course', 'cacherev', ['id' => $course->id]));
+    }
+
+    /**
      * A student cannot save course settings.
      */
     public function test_student_cannot_save(): void {

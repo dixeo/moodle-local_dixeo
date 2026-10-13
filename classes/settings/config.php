@@ -154,6 +154,22 @@ final class config {
     }
 
     /**
+     * Drop cached course output so the next page load shows the stored setting.
+     *
+     * A course write clears that course. A Dixeo-layer write can change every course page,
+     * so those caches are cleared too.
+     *
+     * @param \context $context System or course context that was written.
+     */
+    public function clear_applied_cache(\context $context): void {
+        if ($context->contextlevel == CONTEXT_COURSE) {
+            rebuild_course_cache((int) $context->instanceid, true);
+            return;
+        }
+        rebuild_course_cache(0, true);
+    }
+
+    /**
      * Whether Dixeo features run in $context.
      *
      * The Dixeo layer is absolute. Off is off everywhere, including a course whose own

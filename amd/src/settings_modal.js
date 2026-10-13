@@ -29,8 +29,9 @@ define([
     'core/str',
     'core/templates',
     'core/user_date',
+    'core_form/changechecker',
     'local_dixeo/settings_state',
-], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, State) {
+], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, ChangeChecker, State) {
     let bound = false;
 
     /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
@@ -428,7 +429,17 @@ define([
     };
 
     /**
-     * Enable, pause, resync, or turn off. The result is applied immediately and the draft stays clean.
+     * Reload the current page after a stored setting changes.
+     *
+     * The course form is not submitted. Its unsaved-change warning is cleared so the reload is not blocked.
+     */
+    const reloadAppliedPage = function() {
+        ChangeChecker.resetAllFormDirtyStates();
+        window.location.reload();
+    };
+
+    /**
+     * Enable, pause, resync, or turn off. A change to the stored setting reloads the page.
      *
      * @param {HTMLElement} shell
      * @param {string} action
@@ -456,11 +467,19 @@ define([
             request = Ajax.call([{
                 methodname: 'local_dixeo_set_file_sync_enabled',
                 args: {courseid: courseid, enabled: true, removefiles: false},
-            }])[0].then(function() {
+            }])[0].then(function(result) {
+                if (!result || result.success === false) {
+                    return result;
+                }
                 return Ajax.call([{
                     methodname: 'local_dixeo_trigger_file_sync',
                     args: {courseid: courseid},
-                }])[0];
+                }])[0].then(function() {
+                    return result;
+                }).catch(function(error) {
+                    Notification.exception(error);
+                    return result;
+                });
             });
         } else if (action === 'disable') {
             request = Ajax.call([{
@@ -473,9 +492,16 @@ define([
                 args: {courseid: courseid, enabled: false, removefiles: false},
             }])[0];
         }
-        return request.then(function() {
+        return request.then(function(result) {
+            if (result && result.success === false) {
+                if (result.error) {
+                    Notification.addNotification({message: result.error, type: 'error'});
+                }
+                return refreshStatus(shell, false);
+            }
             if (action === 'enable' || action === 'pause' || action === 'disable') {
-                syncFilesyncDraft(shell, action === 'enable');
+                reloadAppliedPage();
+                return null;
             }
             return refreshStatus(shell, true);
         }).catch(function(error) {
@@ -491,32 +517,6 @@ define([
             scheduleStatusPoll(shell);
             return null;
         });
-    };
-
-    /**
-     * Status actions write file sync immediately. Keep the catalogue draft on that saved value.
-     *
-     * @param {HTMLElement} shell
-     * @param {boolean} enabled True when the action turned sync on.
-     */
-    const syncFilesyncDraft = function(shell, enabled) {
-        const session = sessions.get(shell);
-        if (!session) {
-            return;
-        }
-        const entry = session.entries['local_dixeo/filesync_enabled'];
-        if (!entry) {
-            return;
-        }
-        const value = enabled ? '1' : '0';
-        entry.saved = value;
-        entry.draft = value;
-        const row = shell.querySelector('.local-dixeo-settings-row[data-name="filesync_enabled"]');
-        if (row) {
-            paintRow(row, entry, session.labels);
-        }
-        publishDirty(shell);
-        applyFilter(shell);
     };
 
     /**
@@ -1133,13 +1133,12 @@ define([
     };
 
     /**
-     * Save the rows whose draft differs. Success clears the draft and closes.
+     * Save the rows whose draft differs. Success clears the course cache and reloads the page.
      * Failure leaves the modal and the draft in place.
      *
-     * @param {Object} modal
      * @param {HTMLElement} shell
      */
-    const bindSave = function(modal, shell) {
+    const bindSave = function(shell) {
         shell.addEventListener('click', function(event) {
             const button = event.target.closest('[data-action="local-dixeo-settings-save"]');
             const session = sessions.get(shell);
@@ -1167,7 +1166,7 @@ define([
                 }
                 sessions.delete(shell);
                 delete shell.dataset.dirty;
-                modal.destroy();
+                reloadAppliedPage();
                 return null;
             }).catch(function(error) {
                 if (!shell.isConnected) {
@@ -1275,7 +1274,7 @@ define([
                     bindClose(modal, shell);
                     bindAdvanced(shell);
                     bindDraft(shell);
-                    bindSave(modal, shell);
+                    bindSave(shell);
                     bindFilter(shell);
                     bindStatus(shell);
                     const openOnStatus = !!button.dataset.courseid || button.dataset.initial === 'status';

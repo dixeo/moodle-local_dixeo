@@ -79,6 +79,8 @@ class save_settings extends external_api {
             }
         }
 
+        $config->clear_applied_cache($context);
+
         return null;
     }
 
