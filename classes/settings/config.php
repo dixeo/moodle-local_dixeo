@@ -89,6 +89,9 @@ final class config {
             $this->require_edit($level, $context);
         }
         $value = clean_param($value, PARAM_TEXT);
+        if ($definition->get_type() === 'multiselect') {
+            $value = $this->normalise_multiselect($definition, $value);
+        }
         if ($definition->get_type() === 'select' && !in_array($value, $definition->get_options(), true)) {
             throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
         }
@@ -341,16 +344,46 @@ final class config {
     /**
      * Value a retained course setting is compared with for the Dixeo badge.
      *
-     * File sync on this course is compared with the current new-course default.
+     * A retainparent key is read at the Dixeo layer. Otherwise the shipped default is the parent.
      *
      * @param definition $definition Retained catalogue entry.
      * @return string
      */
     private function retained_parent_value(definition $definition): string {
-        if ($definition->get_component() === self::COMPONENT && $definition->get_key() === 'filesync_enabled') {
-            return $this->get(self::COMPONENT, 'filesync_enabled_default', \context_system::instance())->get_value();
+        $parentkey = $definition->get_retain_parent();
+        if ($parentkey !== null) {
+            return $this->get($definition->get_component(), $parentkey, \context_system::instance())->get_value();
         }
         return $definition->get_default();
+    }
+
+    /**
+     * Store a multiselect as a comma-separated list in option order.
+     *
+     * @param definition $definition Multiselect catalogue entry.
+     * @param string $value Submitted list.
+     * @return string
+     */
+    private function normalise_multiselect(definition $definition, string $value): string {
+        $allowed = array_flip($definition->get_options());
+        $picked = [];
+        foreach (explode(',', $value) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            if (!isset($allowed[$part])) {
+                throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$part}\".");
+            }
+            $picked[$part] = true;
+        }
+        $ordered = [];
+        foreach ($definition->get_options() as $option) {
+            if (isset($picked[$option])) {
+                $ordered[] = $option;
+            }
+        }
+        return implode(',', $ordered);
     }
 
     /**

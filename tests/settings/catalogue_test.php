@@ -119,6 +119,7 @@ final class catalogue_test extends \advanced_testcase {
         $this->assertSame('dixeo_core', $setting->get_plugingroup());
         $this->assertSame('filesync_enabled_help', $setting->get_help());
         $this->assertTrue($setting->retains_value());
+        $this->assertSame('filesync_enabled_default', $setting->get_retain_parent());
         $this->assertFalse($setting->is_sensitive());
         $this->assertFalse($setting->has_core());
         $this->assertSame([], $setting->get_options());

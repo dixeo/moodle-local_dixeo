@@ -112,6 +112,18 @@
                 {{/options}}
             </select>
             {{/isselect}}
+            {{#ismultiselect}}
+            <div class="form-select">
+                <select class="form-control local-dixeo-settings-control {{valueclass}}"
+                        size="{{optioncount}}"
+                        data-action="local-dixeo-settings-value"
+                        multiple>
+                    {{#options}}
+                    <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                    {{/options}}
+                </select>
+            </div>
+            {{/ismultiselect}}
         </div>
     </div>
     {{/rows}}

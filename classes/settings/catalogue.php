@@ -28,14 +28,32 @@ namespace local_dixeo\settings;
  */
 final class catalogue {
     /**
-     * Definitions declared by local_dixeo_dixeo_settings(), keyed by setting key.
+     * Definitions declared by every installed `*_dixeo_settings()` callback, keyed by setting key.
+     *
+     * Keys are unique across components.
      *
      * @return definition[]
      */
     public static function load(): array {
-        $rows = component_callback('local_dixeo', 'dixeo_settings', [], null);
-        if (!is_array($rows)) {
-            return [];
+        $rows = [];
+        // Plugin callbacks are unavailable through get_plugins_with_function while an upgrade is running.
+        // The catalogue is read during upgrade, so the lib.php files are included directly.
+        foreach (\core_component::get_plugin_types() as $plugintype => $unused) {
+            foreach (\core_component::get_plugin_list($plugintype) as $plugin => $dir) {
+                $file = $dir . '/lib.php';
+                if (!is_readable($file)) {
+                    continue;
+                }
+                include_once($file);
+                $function = $plugintype . '_' . $plugin . '_dixeo_settings';
+                if (!function_exists($function)) {
+                    continue;
+                }
+                $pluginrows = $function();
+                if (is_array($pluginrows)) {
+                    array_push($rows, ...$pluginrows);
+                }
+            }
         }
         return self::from_definitions($rows);
     }

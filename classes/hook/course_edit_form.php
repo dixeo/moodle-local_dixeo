@@ -22,7 +22,8 @@ use local_dixeo\external\service_factory;
  * Dixeo course settings on the course edit form.
  *
  * The section is omitted when the Dixeo layer is off. The settings button is the first control.
- * The course switch, file sync, and learning intent follow it. A save that omits a field leaves that stored value unchanged.
+ * The course switch, file sync, the tutor switch, and learning intent follow it.
+ * A save that omits a field leaves that stored value unchanged.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -44,8 +45,11 @@ class course_edit_form {
     /** @var string Course edit form element for file sync on or paused. */
     public const FILESYNC = 'local_dixeo_filesync_enabled';
 
+    /** @var string Course edit form element for the tutor on/off switch. */
+    public const TUTOR = 'local_dixeo_tutor_enabled';
+
     /**
-     * Add the Dixeo header, the settings button, the course switch, file sync, then learning intent.
+     * Add the Dixeo header, the settings button, the course switch, file sync, the tutor switch, then learning intent.
      *
      * The button is the first control in the section. Nothing is added when the Dixeo layer is off.
      *
@@ -78,6 +82,11 @@ class course_edit_form {
         $mform->addElement('selectyesno', self::FILESYNC, get_string('filesync_enabled', 'local_dixeo'));
         $mform->setType(self::FILESYNC, PARAM_INT);
         $mform->addHelpButton(self::FILESYNC, 'filesync_enabled', 'local_dixeo');
+        if (self::tutor_available()) {
+            $mform->addElement('selectyesno', self::TUTOR, get_string('tutor_enabled', 'block_dixeo_tutor'));
+            $mform->setType(self::TUTOR, PARAM_INT);
+            $mform->addHelpButton(self::TUTOR, 'tutor_enabled', 'block_dixeo_tutor');
+        }
         $mform->addElement(
             'textarea',
             self::FIELD,
@@ -90,7 +99,7 @@ class course_edit_form {
     }
 
     /**
-     * Fill learning intent, the course switch, and file sync. A saved course also gives the settings
+     * Fill learning intent, the course switch, file sync, and the tutor switch. A saved course also gives the settings
      * button its course id, so the modal can show that course's file sync status.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
@@ -117,6 +126,7 @@ class course_edit_form {
             !$mform->elementExists(self::FIELD)
             && !$mform->elementExists(self::ENABLED)
             && !$mform->elementExists(self::FILESYNC)
+            && !$mform->elementExists(self::TUTOR)
         ) {
             return;
         }
@@ -147,6 +157,18 @@ class course_edit_form {
             }
             $mform->getElement(self::FILESYNC)->setValue($filesync);
         }
+        if ($mform->elementExists(self::TUTOR)) {
+            if ($coursecontext !== null) {
+                $tutor = $config->get('block_dixeo_tutor', 'tutor_enabled', $coursecontext)->get_value();
+            } else {
+                $tutor = $config->get(
+                    'block_dixeo_tutor',
+                    'tutor_enabled_default',
+                    \context_system::instance()
+                )->get_value();
+            }
+            $mform->getElement(self::TUTOR)->setValue($tutor);
+        }
     }
 
     /**
@@ -159,6 +181,7 @@ class course_edit_form {
         $intent = null;
         $enabled = null;
         $filesync = null;
+        $tutor = null;
         if (property_exists($data, self::FIELD)) {
             $intent = (string) $data->{self::FIELD};
             unset($data->{self::FIELD});
@@ -171,7 +194,11 @@ class course_edit_form {
             $filesync = (string) $data->{self::FILESYNC};
             unset($data->{self::FILESYNC});
         }
-        if ($intent === null && $enabled === null && $filesync === null) {
+        if (property_exists($data, self::TUTOR)) {
+            $tutor = (string) $data->{self::TUTOR};
+            unset($data->{self::TUTOR});
+        }
+        if ($intent === null && $enabled === null && $filesync === null && $tutor === null) {
             return;
         }
 
@@ -191,6 +218,18 @@ class course_edit_form {
         if ($filesync !== null) {
             $config->set('local_dixeo', 'filesync_enabled', $context, $filesync);
         }
+        if ($tutor !== null) {
+            $config->set('block_dixeo_tutor', 'tutor_enabled', $context, $tutor);
+        }
+    }
+
+    /**
+     * The tutor switch is shown when the Student Tutor block is installed.
+     *
+     * @return bool
+     */
+    private static function tutor_available(): bool {
+        return array_key_exists('dixeo_tutor', \core_component::get_plugin_list('block'));
     }
 
     /**

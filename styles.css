@@ -968,6 +968,20 @@ label[for="local-dixeo-settings-category"] {
     color: #1d2125;
 }
 
+.local-dixeo-settings-modal select.local-dixeo-settings-control[multiple] {
+    height: auto;
+    white-space: normal;
+}
+
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-toolbar,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-grouping,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-status,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-category-divider,
+.local-dixeo-settings-modal[data-preferencesonly="1"] [data-region="local-dixeo-settings-unsaved"],
+.local-dixeo-settings-modal[data-preferencesonly="1"] [data-action="local-dixeo-settings-save"] {
+    display: none;
+}
+
 .local-dixeo-settings-panel-overlay[data-mode="saving"] [data-region="overlay-icon"] {
     display: none;
 }

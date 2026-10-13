@@ -172,6 +172,7 @@ function local_dixeo_dixeo_settings(): array {
             'help' => 'filesync_enabled_help',
             'sensitive' => false,
             'retain' => true,
+            'retainparent' => 'filesync_enabled_default',
         ],
         [
             'key' => 'filesync_pill',

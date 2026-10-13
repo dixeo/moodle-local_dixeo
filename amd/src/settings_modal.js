@@ -878,6 +878,8 @@ define([
         requests.push({key: 'settings_modal_saving', component: 'local_dixeo'});
         requests.push({key: 'settings_category_filesync', component: 'local_dixeo'});
         requests.push({key: 'settings_category_dixeo_core', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_tutor', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_dixeo_tutor', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -929,6 +931,8 @@ define([
                 categoryNames: {
                     filesync: strings[extraAt + 6],
                     dixeo_core: strings[extraAt + 7],
+                    tutor: strings[extraAt + 8],
+                    dixeo_tutor: strings[extraAt + 9],
                 },
                 contextid: contextid,
                 saving: false,
@@ -962,9 +966,10 @@ define([
      * @param {HTMLElement} shell
      * @param {string} contextid Course context id, empty when the course is new.
      * @param {boolean} openStatus Open the Status panel once the rows are ready.
+     * @param {string} [openCategory] Category to select instead of All, such as feature:tutor.
      * @returns {Promise}
      */
-    const loadSettings = function(shell, contextid, openStatus) {
+    const loadSettings = function(shell, contextid, openStatus, openCategory) {
         resetControls(shell);
         const id = parseInt(contextid, 10);
         if (!id) {
@@ -989,6 +994,9 @@ define([
                 hidePanelOverlay(shell);
                 setList(shell, '');
                 return renderRows(shell, settings, id).then(function() {
+                    if (openCategory) {
+                        setCategory(shell, openCategory);
+                    }
                     applyFilter(shell);
                     if (openStatus) {
                         showStatus(shell);
@@ -1084,7 +1092,12 @@ define([
         }
         const control = row.querySelector('[data-action="local-dixeo-settings-value"]');
         if (control) {
-            if (control.tagName === 'TEXTAREA' || control.tagName === 'SELECT') {
+            if (control.tagName === 'SELECT' && control.multiple) {
+                const selected = String(entry.draft || '').split(',').filter(Boolean);
+                Array.prototype.forEach.call(control.options, function(option) {
+                    option.selected = selected.indexOf(option.value) !== -1;
+                });
+            } else if (control.tagName === 'TEXTAREA' || control.tagName === 'SELECT') {
                 if (control.value !== entry.draft) {
                     control.value = entry.draft;
                 }
@@ -1273,8 +1286,29 @@ define([
             if (!entry) {
                 return;
             }
-            commitDraft(shell, row, entry, control.value);
+            commitDraft(shell, row, entry, selectValue(control, entry));
         });
+    };
+
+    /**
+     * Value of a select. A multiselect is the selected options in catalogue order.
+     *
+     * @param {HTMLSelectElement} control
+     * @param {Object} entry
+     * @returns {string}
+     */
+    const selectValue = function(control, entry) {
+        if (!control.multiple) {
+            return control.value;
+        }
+        const order = Array.isArray(entry.setting.options) ? entry.setting.options : [];
+        const chosen = {};
+        Array.prototype.forEach.call(control.selectedOptions, function(option) {
+            chosen[option.value] = true;
+        });
+        return order.filter(function(option) {
+            return chosen[option];
+        }).join(',');
     };
 
     /**
@@ -1377,7 +1411,52 @@ define([
     };
 
     /**
-     * Open the settings shell. A course opens on Status. Moodle's modal traps focus.
+     * Preferences only. Other categories, grouping, and the settings list stay hidden.
+     * This path does not call get_settings.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise}
+     */
+    const showPreferencesOnly = function(shell) {
+        resetControls(shell);
+        shell.dataset.preferencesonly = '1';
+        setCategory(shell, 'preferences');
+        leaveStatus(shell);
+        return Str.get_strings([
+            {key: 'settings_modal_preferences', component: 'local_dixeo'},
+            {key: 'settings_modal_count', component: 'local_dixeo', param: 0},
+        ]).then(function(strings) {
+            const list = shell.querySelector('[data-region="local-dixeo-settings-category-list"]');
+            const select = shell.querySelector('#local-dixeo-settings-category');
+            if (list) {
+                list.replaceChildren();
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-outline-secondary';
+                button.dataset.category = 'preferences';
+                const name = document.createElement('span');
+                name.textContent = strings[0];
+                button.appendChild(name);
+                setPressed(button, true);
+                list.appendChild(button);
+            }
+            if (select) {
+                select.replaceChildren();
+                const option = document.createElement('option');
+                option.value = 'preferences';
+                option.textContent = strings[0];
+                select.appendChild(option);
+                select.value = 'preferences';
+            }
+            setList(shell, '');
+            setCount(shell, strings[1]);
+            return null;
+        });
+    };
+
+    /**
+     * Open the settings shell. An explicit data-initial wins. A course with no initial opens on Status.
+     * Moodle's modal traps focus.
      *
      * @param {HTMLElement} button
      * @returns {Promise}
@@ -1425,8 +1504,13 @@ define([
                     bindSave(shell);
                     bindFilter(shell);
                     bindStatus(shell);
-                    const openOnStatus = !!button.dataset.courseid || button.dataset.initial === 'status';
-                    return loadSettings(shell, button.dataset.contextid, openOnStatus);
+                    if (button.dataset.preferencesonly === '1') {
+                        return showPreferencesOnly(shell);
+                    }
+                    const initial = button.dataset.initial || '';
+                    const openOnStatus = initial === 'status' || (!!button.dataset.courseid && initial === '');
+                    const openCategory = !openOnStatus && initial && initial !== 'status' ? initial : '';
+                    return loadSettings(shell, button.dataset.contextid, openOnStatus, openCategory);
                 });
             });
         });

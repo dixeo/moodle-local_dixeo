@@ -30,7 +30,7 @@ final class definition {
     public const LEVELS = ['dixeo', 'course', 'activity', 'user'];
 
     /** @var string[] Control types the catalogue accepts. */
-    public const TYPES = ['bool', 'select', 'text', 'number', 'textarea'];
+    public const TYPES = ['bool', 'select', 'multiselect', 'text', 'number', 'textarea'];
 
     /**
      * @param string $key Storage key, unique within the component.
@@ -43,9 +43,10 @@ final class definition {
      * @param string $plugingroup Plugin-group id.
      * @param string $help Language-string key for the help text, in $component.
      * @param bool $sensitive True when the value must be hidden from users who cannot edit the Dixeo layer.
-     * @param string[] $options Allowed values for a select. Empty for every other type.
+     * @param string[] $options Allowed values for a select or multiselect. Empty for every other type.
      * @param core_target|null $core Moodle admin setting this entry overrides, or null when Dixeo-only.
      * @param bool $retain True when a course value is always stored, including Off and a value equal to its parent.
+     * @param string|null $retainparent Catalogue key, in this component, whose Dixeo value the retained badge compares with.
      */
     public function __construct(
         private string $key,
@@ -61,6 +62,7 @@ final class definition {
         private array $options,
         private ?core_target $core,
         private bool $retain = false,
+        private ?string $retainparent = null,
     ) {
     }
 
@@ -104,13 +106,30 @@ final class definition {
         }
 
         $default = (string) $raw['default'];
-        $options = $type === 'select' ? self::require_options($key, $raw['options'] ?? null, $default) : [];
+        if ($type === 'select') {
+            $options = self::require_options($key, $raw['options'] ?? null, $default);
+        } else if ($type === 'multiselect') {
+            $options = self::require_choice_list($key, $raw['options'] ?? null);
+            $default = self::normalise_multiselect_default($key, $options, $default);
+        } else {
+            $options = [];
+        }
         $retain = false;
         if (array_key_exists('retain', $raw)) {
             if (!is_bool($raw['retain'])) {
                 throw new \coding_exception("Dixeo setting \"{$key}\" must declare retain as a boolean.");
             }
             $retain = $raw['retain'];
+        }
+        $retainparent = null;
+        if (array_key_exists('retainparent', $raw)) {
+            if (!is_string($raw['retainparent']) || $raw['retainparent'] === '') {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare retainparent as a non-empty string.");
+            }
+            if (!$retain) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" declares retainparent without retain.");
+            }
+            $retainparent = $raw['retainparent'];
         }
 
         return new self(
@@ -127,6 +146,7 @@ final class definition {
             $options,
             $core,
             $retain,
+            $retainparent,
         );
     }
 
@@ -139,8 +159,23 @@ final class definition {
      * @return string[]
      */
     private static function require_options(string $key, mixed $options, string $default): array {
+        $clean = self::require_choice_list($key, $options);
+        if (!in_array($default, $clean, true)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" default is not one of its options.");
+        }
+        return $clean;
+    }
+
+    /**
+     * Select and multiselect options are a non-empty list of unique ids.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param mixed $options Raw options list.
+     * @return string[]
+     */
+    private static function require_choice_list(string $key, mixed $options): array {
         if (!is_array($options) || $options === [] || !array_is_list($options)) {
-            throw new \coding_exception("Dixeo setting \"{$key}\" is a select and must declare options.");
+            throw new \coding_exception("Dixeo setting \"{$key}\" must declare options.");
         }
 
         $clean = [];
@@ -153,10 +188,37 @@ final class definition {
             }
             $clean[] = $option;
         }
-        if (!in_array($default, $clean, true)) {
-            throw new \coding_exception("Dixeo setting \"{$key}\" default is not one of its options.");
-        }
         return $clean;
+    }
+
+    /**
+     * A multiselect default is a comma-separated subset of its options, stored in option order.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param string[] $options Allowed ids, in display order.
+     * @param string $default Shipped default.
+     * @return string
+     */
+    private static function normalise_multiselect_default(string $key, array $options, string $default): string {
+        if ($default === '') {
+            return '';
+        }
+        $allowed = array_flip($options);
+        $picked = [];
+        foreach (explode(',', $default) as $part) {
+            $part = trim($part);
+            if ($part === '' || !isset($allowed[$part])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" default is not one of its options.");
+            }
+            $picked[$part] = true;
+        }
+        $ordered = [];
+        foreach ($options as $option) {
+            if (isset($picked[$option])) {
+                $ordered[] = $option;
+            }
+        }
+        return implode(',', $ordered);
     }
 
     /**
@@ -243,7 +305,7 @@ final class definition {
     }
 
     /**
-     * Allowed values for a select. Empty for every other type.
+     * Allowed values for a select or multiselect. Empty for every other type.
      *
      * @return string[]
      */
@@ -274,5 +336,16 @@ final class definition {
      */
     public function retains_value(): bool {
         return $this->retain;
+    }
+
+    /**
+     * Catalogue key whose Dixeo value a retained course setting is compared with.
+     *
+     * Null uses this setting's own shipped default.
+     *
+     * @return string|null
+     */
+    public function get_retain_parent(): ?string {
+        return $this->retainparent;
     }
 }

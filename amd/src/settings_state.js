@@ -81,8 +81,8 @@ define([], function() {
         if (setting.type === 'bool') {
             return layer.value === '1' ? labels.on : labels.off;
         }
-        if (setting.type === 'select') {
-            return optionLabel(setting, layer.value);
+        if (setting.type === 'select' || setting.type === 'multiselect') {
+            return multiselectText(setting, layer.value);
         }
         if (layer.value) {
             return layer.value;
@@ -194,10 +194,26 @@ define([], function() {
         if (setting.type === 'bool') {
             return value === '1' ? labels.on : labels.off;
         }
-        if (setting.type === 'select') {
-            return optionLabel(setting, value);
+        if (setting.type === 'select' || setting.type === 'multiselect') {
+            return multiselectText(setting, value);
         }
         return value || '';
+    };
+
+    /**
+     * Labels for a select value or a comma-separated multiselect value.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @param {string} value
+     * @returns {string}
+     */
+    const multiselectText = function(setting, value) {
+        if (setting.type !== 'multiselect') {
+            return optionLabel(setting, value);
+        }
+        return String(value || '').split(',').filter(Boolean).map(function(part) {
+            return optionLabel(setting, part);
+        }).join(', ');
     };
 
     /**
@@ -425,6 +441,9 @@ define([], function() {
         const dixeo = parentText(setting, 'dixeo', labels);
         const entry = entryFor(setting);
         const view = draftView(entry, labels);
+        const tokens = setting.type === 'multiselect'
+            ? String(entry.draft || '').split(',').filter(Boolean)
+            : null;
         return {
             component: setting.component,
             name: setting.name,
@@ -437,11 +456,13 @@ define([], function() {
             isbool: setting.type === 'bool',
             istextarea: setting.type === 'textarea',
             isselect: setting.type === 'select',
+            ismultiselect: setting.type === 'multiselect',
+            optioncount: Array.isArray(setting.options) ? Math.min(10, setting.options.length) : 0,
             options: (Array.isArray(setting.options) ? setting.options : []).map(function(value) {
                 return {
                     value: value,
                     label: optionLabel(setting, value),
-                    selected: value === entry.draft,
+                    selected: tokens ? tokens.indexOf(value) !== -1 : value === entry.draft,
                 };
             }),
             displayvalue: view.display,

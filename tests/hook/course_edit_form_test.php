@@ -98,7 +98,15 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
         $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
         $this->assertLessThan($positions[course_edit_form::FILESYNC], $positions[course_edit_form::ENABLED]);
-        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::FILESYNC]);
+        $this->assertLessThan($positions[course_edit_form::TUTOR], $positions[course_edit_form::FILESYNC]);
+        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::TUTOR]);
+        $tutor = $mform->getElement(course_edit_form::TUTOR);
+        $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::TUTOR));
+        $this->assertSame('1', $this->element_value($tutor->getValue()));
+        $this->assertStringContainsString(
+            get_string('tutor_enabled_help', 'block_dixeo_tutor'),
+            $tutor->_helpbutton
+        );
         $this->assertSame(
             service_factory::get_settings_config()->get(
                 'local_dixeo',
@@ -142,6 +150,10 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertSame(
             '0',
             $this->element_value($form->get_quick_form()->getElement(course_edit_form::FILESYNC)->getValue())
+        );
+        $this->assertSame(
+            '1',
+            $this->element_value($form->get_quick_form()->getElement(course_edit_form::TUTOR)->getValue())
         );
     }
 
@@ -192,6 +204,7 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertFalse($mform->elementExists(course_edit_form::OPEN_BUTTON));
         $this->assertFalse($mform->elementExists(course_edit_form::ENABLED));
         $this->assertFalse($mform->elementExists(course_edit_form::FILESYNC));
+        $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
         $this->assertFalse($mform->elementExists(course_edit_form::FIELD));
     }
 
@@ -276,6 +289,35 @@ final class course_edit_form_test extends \advanced_testcase {
         update_course($off);
         $this->assertSame('0', $config->get('local_dixeo', 'filesync_enabled', $context)->get_value());
         $this->assertFalse((new file_sync_service())->is_enabled($course->id));
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+    }
+
+    /**
+     * Saving the course form stores the tutor switch On and Off, and Off keeps the row.
+     */
+    public function test_course_save_stores_tutor_on_and_off(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $config = service_factory::get_settings_config();
+        $conditions = [
+            'contextid' => $context->id,
+            'component' => 'block_dixeo_tutor',
+            'name' => 'tutor_enabled',
+        ];
+
+        $off = get_course($course->id);
+        $off->{course_edit_form::TUTOR} = '0';
+        update_course($off);
+        $this->assertSame('0', $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_value());
+        $this->assertSame(resolver::LAYER_COURSE, $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_source());
+        $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
+
+        $on = get_course($course->id);
+        $on->{course_edit_form::TUTOR} = '1';
+        update_course($on);
+        $this->assertSame('1', $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_value());
         $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
     }
 
