@@ -175,6 +175,29 @@ class file_sync_service {
     }
 
     /**
+     * Apply the new-course file sync default after generation has indexed the source files.
+     *
+     * The Course Designer turns sync on while it generates. On leaves that sync running.
+     * Off pauses it and keeps the files already indexed.
+     *
+     * @param int $courseid The generated course ID.
+     * @param int $userid The user recorded on the pause.
+     * @return void
+     */
+    public function apply_new_course_default(int $courseid, int $userid): void {
+        $default = (new config())->get(
+            'local_dixeo',
+            'filesync_enabled_default',
+            \context_system::instance()
+        )->get_value();
+        if ($default === '1') {
+            return;
+        }
+
+        $this->disable_sync($courseid, $userid, false);
+    }
+
+    /**
      * Wait until course files are indexed when file sync is already on.
      *
      * Does not turn sync on. When sync is off, the caller continues without an index.

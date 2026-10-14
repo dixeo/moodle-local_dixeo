@@ -176,6 +176,58 @@ final class file_sync_service_gate_test extends \advanced_testcase {
     }
 
     /**
+     * After generation, an Off default pauses sync and leaves indexed files in place.
+     */
+    public function test_generation_pauses_sync_when_the_new_course_default_is_off(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('delete_files');
+
+        $service = new file_sync_service(new course_ai_repository(), $client);
+        $service->enable_sync((int) $course->id, (int) $USER->id);
+        $service->apply_new_course_default((int) $course->id, (int) $USER->id);
+
+        $record = (new course_ai_repository())->get_by_courseid($course->id);
+        $this->assertNotNull($record);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertNotSame('pending_deletion', $record->syncstatus);
+        $this->assertSame(
+            '0',
+            (new config())->get('local_dixeo', 'filesync_enabled', \context_course::instance($course->id))->get_value()
+        );
+    }
+
+    /**
+     * After generation, an On default leaves the sync the designer started running.
+     */
+    public function test_generation_leaves_sync_on_when_the_new_course_default_is_on(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->set_new_course_default_on();
+        $course = $this->getDataGenerator()->create_course();
+        $client = $this->createMock(client::class);
+        $client->expects($this->never())->method('delete_files');
+
+        $service = new file_sync_service(new course_ai_repository(), $client);
+        $service->enable_sync((int) $course->id, (int) $USER->id);
+        $service->apply_new_course_default((int) $course->id, (int) $USER->id);
+
+        $record = (new course_ai_repository())->get_by_courseid($course->id);
+        $this->assertNotNull($record);
+        $this->assertSame(1, (int) $record->enabled);
+        $this->assertSame(
+            '1',
+            (new config())->get('local_dixeo', 'filesync_enabled', \context_course::instance($course->id))->get_value()
+        );
+    }
+
+    /**
      * Pause stores Off and leaves remote files in place.
      */
     public function test_pause_stores_off_and_does_not_delete_files(): void {
