@@ -243,7 +243,7 @@ final class catalogue_test extends \advanced_testcase {
             }
         }
 
-        foreach ([
+        $designerkeys = [
             'categoryname',
             'coursetemplate',
             'self_enrol_configure',
@@ -292,6 +292,8 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * Catalogue row that overrides the given core target.
+     *
      * @param array $core Core target to attach.
      * @return array
      */

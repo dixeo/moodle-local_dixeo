@@ -25,16 +25,22 @@ namespace local_dixeo\settings;
  */
 final class resolved_value {
     /**
+     * Record the effective value and the layer that supplied it.
+     *
      * @param string $value Effective text.
      * @param string $source Layer id from {@see resolver}.
      */
     public function __construct(
+        /** @var string Effective text. */
         private string $value,
+        /** @var string Layer id from {@see resolver}. */
         private string $source,
     ) {
     }
 
     /**
+     * Effective text.
+     *
      * @return string
      */
     public function get_value(): string {
@@ -42,6 +48,8 @@ final class resolved_value {
     }
 
     /**
+     * Layer that supplied the effective value.
+     *
      * @return string
      */
     public function get_source(): string {

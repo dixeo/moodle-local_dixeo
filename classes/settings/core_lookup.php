@@ -45,6 +45,8 @@ final class core_lookup {
     }
 
     /**
+     * Admin setting with this full name, or null when the tree has no such setting.
+     *
      * @param string $settingname Admin setting name, such as `assign/duedate` or `glossary_entbypage`.
      * @return \admin_setting|null
      */
@@ -54,6 +56,8 @@ final class core_lookup {
     }
 
     /**
+     * Admin settings indexed by plugin/name for this request.
+     *
      * @return array<string, \admin_setting>
      */
     private static function index(): array {
@@ -97,8 +101,10 @@ final class core_lookup {
     }
 
     /**
+     * Add stored settings under this admin-tree node to the index.
+     *
      * @param object $node Admin-tree node.
-     * @param array<string, \admin_setting> $index Collected settings, keyed by plugin/name.
+     * @param array $index Collected settings, keyed by plugin/name.
      */
     private static function collect(object $node, array &$index): void {
         if ($node instanceof \admin_settingpage && is_object($node->settings)) {

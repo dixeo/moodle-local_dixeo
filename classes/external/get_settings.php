@@ -34,8 +34,9 @@ use core_external\external_value;
  * Returns the catalogue rows from the settings helper for a system or course context.
  */
 class get_settings extends external_api {
-
     /**
+     * Parameters for the settings read.
+     *
      * @return external_function_parameters
      */
     public static function execute_parameters(): external_function_parameters {
@@ -67,6 +68,8 @@ class get_settings extends external_api {
     }
 
     /**
+     * Return structure for the settings read.
+     *
      * @return external_single_structure
      */
     public static function execute_returns(): external_single_structure {
@@ -102,7 +105,8 @@ class get_settings extends external_api {
                     'coremissing' => new external_value(PARAM_BOOL, 'True when a declared core target cannot be resolved'),
                     'defaultvalue' => new external_value(
                         PARAM_RAW,
-                        'Catalogue default. At the Dixeo level a value that differs from the linked site setting, or from this default when there is no Moodle parent, is customised.'
+                        'Catalogue default. At the Dixeo level a value that differs from the linked site ' .
+                            'setting, or from this default when there is no Moodle parent, is customised.'
                     ),
                     'value' => new external_value(PARAM_RAW, 'Effective value'),
                     'source' => new external_value(PARAM_ALPHA, 'Layer that supplied the effective value'),

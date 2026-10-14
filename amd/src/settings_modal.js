@@ -364,6 +364,67 @@ define([
     };
 
     /**
+     * Progress bar and file count while a sync is running.
+     *
+     * @param {HTMLElement} panel
+     * @param {Object} status
+     * @param {Object} strings
+     */
+    const paintStatusProgress = function(panel, status, strings) {
+        const progress = panel.querySelector('[data-region="progress"]');
+        const progressText = panel.querySelector('[data-region="progress-text"]');
+        const syncing = status.status === 'syncing';
+        if (progress) {
+            progress.hidden = !syncing;
+        }
+        if (syncing && hasNumber(status.progresspercent)) {
+            const bar = panel.querySelector('[data-region="progress-bar"]');
+            if (bar) {
+                bar.style.width = Number(status.progresspercent) + '%';
+                bar.setAttribute('aria-valuenow', String(Number(status.progresspercent)));
+            }
+        }
+        if (!progressText) {
+            return;
+        }
+        const showCount = syncing && hasNumber(status.filescompleted) && hasNumber(status.filestotal);
+        progressText.hidden = !showCount;
+        if (showCount) {
+            progressText.textContent = Number(status.filescompleted) + ' / ' + Number(status.filestotal) + ' ' + strings.files;
+        }
+    };
+
+    /**
+     * Last-sync time, hidden when sync has never completed or the course is off with no status.
+     *
+     * @param {HTMLElement} shell
+     * @param {HTMLElement} panel
+     * @param {Object} status
+     * @param {Object} strings
+     * @param {boolean} enabled
+     */
+    const paintStatusLastSync = function(shell, panel, status, strings, enabled) {
+        const lastSync = panel.querySelector('[data-region="last-sync"]');
+        const completed = hasNumber(status.lastsynccompleted) ? Number(status.lastsynccompleted) : 0;
+        if (!lastSync) {
+            return;
+        }
+        if (!completed || (status.status === 'none' && !enabled)) {
+            lastSync.hidden = true;
+            return;
+        }
+        lastSync.hidden = false;
+        UserDate.get([{timestamp: completed, format: strings.dateformat}]).then(function(dates) {
+            if (shell.isConnected && dates && dates[0]) {
+                lastSync.textContent = strings.last_sync + ': ' + dates[0];
+            }
+            return null;
+        }).catch(function() {
+            return null;
+        });
+    };
+
+    /**
      * Paint the fixed status panel. This does not touch the settings draft.
      *
      * @param {HTMLElement} shell
@@ -383,49 +444,14 @@ define([
         if (message) {
             message.textContent = statusMessage(status, strings);
         }
-        const progress = panel.querySelector('[data-region="progress"]');
-        const progressText = panel.querySelector('[data-region="progress-text"]');
-        const syncing = status.status === 'syncing';
-        if (progress) {
-            progress.hidden = !syncing;
-        }
-        if (syncing && hasNumber(status.progresspercent)) {
-            const bar = panel.querySelector('[data-region="progress-bar"]');
-            if (bar) {
-                bar.style.width = Number(status.progresspercent) + '%';
-                bar.setAttribute('aria-valuenow', String(Number(status.progresspercent)));
-            }
-        }
-        if (progressText) {
-            const showCount = syncing && hasNumber(status.filescompleted) && hasNumber(status.filestotal);
-            progressText.hidden = !showCount;
-            if (showCount) {
-                progressText.textContent = Number(status.filescompleted) + ' / ' + Number(status.filestotal) + ' ' + strings.files;
-            }
-        }
+        paintStatusProgress(panel, status, strings);
         const error = panel.querySelector('[data-region="error-message"]');
         if (error) {
             const showError = status.status === 'error' && !!status.errormessage;
             error.hidden = !showError;
             error.textContent = showError ? status.errormessage : '';
         }
-        const lastSync = panel.querySelector('[data-region="last-sync"]');
-        const completed = hasNumber(status.lastsynccompleted) ? Number(status.lastsynccompleted) : 0;
-        if (lastSync) {
-            if (!completed || (status.status === 'none' && !enabled)) {
-                lastSync.hidden = true;
-            } else {
-                lastSync.hidden = false;
-                UserDate.get([{timestamp: completed, format: strings.dateformat}]).then(function(dates) {
-                    if (shell.isConnected && dates && dates[0]) {
-                        lastSync.textContent = strings.last_sync + ': ' + dates[0];
-                    }
-                    return null;
-                }).catch(function() {
-                    return null;
-                });
-            }
-        }
+        paintStatusLastSync(shell, panel, status, strings, enabled);
     };
 
     /**
@@ -443,17 +469,19 @@ define([
         if (featuresEnabled(shell) === false) {
             return paintDixeoOff(shell);
         }
+        let statusStrings = null;
         return loadStatusStrings().then(function(strings) {
+            statusStrings = strings;
             return Ajax.call([{
                 methodname: 'local_dixeo_get_file_sync_status',
                 args: {courseid: courseid},
-            }])[0].then(function(status) {
-                if (!shell.isConnected) {
-                    return null;
-                }
-                paintStatus(shell, status, strings);
+            }])[0];
+        }).then(function(status) {
+            if (!shell.isConnected) {
                 return null;
-            });
+            }
+            paintStatus(shell, status, statusStrings);
+            return null;
         }).catch(function(error) {
             if (error && error.errorcode === 'error:dixeo_disabled') {
                 return paintDixeoOff(shell);
@@ -481,6 +509,8 @@ define([
             statusTimers.delete(shell);
             refreshStatus(shell, false).then(function() {
                 scheduleStatusPoll(shell);
+                return null;
+            }).catch(function() {
                 return null;
             });
         }, delay);
@@ -547,6 +577,8 @@ define([
         refreshStatus(shell, true).then(function() {
             scheduleStatusPoll(shell);
             return null;
+        }).catch(function() {
+            return null;
         });
     };
 
@@ -597,22 +629,27 @@ define([
                 args: {courseid: courseid},
             }])[0];
         } else if (action === 'enable') {
+            let enabledResult = null;
             request = Ajax.call([{
                 methodname: 'local_dixeo_set_file_sync_enabled',
                 args: {courseid: courseid, enabled: true, removefiles: false},
             }])[0].then(function(result) {
+                enabledResult = result;
                 if (!result || result.success === false) {
-                    return result;
+                    return null;
                 }
                 return Ajax.call([{
                     methodname: 'local_dixeo_trigger_file_sync',
                     args: {courseid: courseid},
-                }])[0].then(function() {
-                    return result;
-                }).catch(function(error) {
+                }])[0];
+            }).then(function() {
+                return enabledResult;
+            }).catch(function(error) {
+                if (enabledResult && enabledResult.success !== false) {
                     Notification.exception(error);
-                    return result;
-                });
+                    return enabledResult;
+                }
+                throw error;
             });
         } else if (action === 'disable') {
             request = Ajax.call([{
@@ -1133,12 +1170,12 @@ define([
                 savingLabel: strings[extraAt + 5],
                 categoryNames: {
                     filesync: strings[extraAt + 6],
-                    dixeo_core: strings[extraAt + 7],
+                    'dixeo_core': strings[extraAt + 7],
                     tutor: strings[extraAt + 8],
-                    dixeo_tutor: strings[extraAt + 9],
+                    'dixeo_tutor': strings[extraAt + 9],
                     imagegeneration: strings[extraAt + 10],
                     designer: strings[extraAt + 11],
-                    dixeo_designer: strings[extraAt + 12],
+                    'dixeo_designer': strings[extraAt + 12],
                 },
                 contextid: contextid,
                 saving: false,
@@ -1151,21 +1188,21 @@ define([
                 dixeocolumn: strings[5],
                 advanced: strings[6],
             };
-            return Templates.renderForPromise('local_dixeo/settings_rows', context).then(function(rendered) {
-                if (!shell.isConnected) {
-                    return null;
-                }
-                const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
-                if (list) {
-                    list.dataset.advanced = '0';
-                    list.innerHTML = rendered.html;
-                    list.querySelectorAll('.local-dixeo-settings-row').forEach(function(row, index) {
-                        row.dataset.order = String(index);
-                    });
-                }
-                Templates.runTemplateJS(rendered.js);
+            return Templates.renderForPromise('local_dixeo/settings_rows', context);
+        }).then(function(rendered) {
+            if (!shell.isConnected) {
                 return null;
-            });
+            }
+            const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+            if (list) {
+                list.dataset.advanced = '0';
+                list.innerHTML = rendered.html;
+                list.querySelectorAll('.local-dixeo-settings-row').forEach(function(row, index) {
+                    row.dataset.order = String(index);
+                });
+            }
+            Templates.runTemplateJS(rendered.js);
+            return null;
         });
     };
 
@@ -1184,49 +1221,65 @@ define([
         if (!id) {
             return Str.get_string('settings_modal_save_course', 'local_dixeo').then(function(message) {
                 setList(shell, message);
+                return null;
             });
         }
 
+        let loadingStrings = null;
+        let phase = 'strings';
         return Str.get_strings([
             {key: 'settings_modal_loading', component: 'local_dixeo'},
             {key: 'settings_modal_error', component: 'local_dixeo'},
         ]).then(function(strings) {
+            loadingStrings = strings;
+            phase = 'ajax';
             showPanelOverlay(shell, strings[0], 'loading');
             return Ajax.call([{
                 methodname: 'local_dixeo_get_settings',
                 args: {contextid: id},
-            }])[0].then(function(result) {
-                if (!shell.isConnected) {
-                    return null;
-                }
-                const settings = result && Array.isArray(result.settings) ? result.settings : [];
-                hidePanelOverlay(shell);
-                setList(shell, '');
-                return renderRows(shell, settings, id).then(function() {
-                    if (openCategory) {
-                        setCategory(shell, openCategory);
-                    }
-                    applyFilter(shell);
-                    if (openStatus) {
-                        showStatus(shell);
-                    }
-                    return null;
-                });
-            }).catch(function() {
-                if (!shell.isConnected) {
-                    return null;
-                }
-                hidePanelOverlay(shell);
-                setList(shell, strings[1]);
-                if (openStatus) {
-                    showStatus(shell);
-                    return null;
-                }
-                return Str.get_string('settings_modal_count', 'local_dixeo', 0).then(function(label) {
-                    setCount(shell, label);
-                    return null;
-                });
-            });
+            }])[0];
+        }).then(function(result) {
+            phase = 'render';
+            if (!shell.isConnected) {
+                phase = 'done';
+                return null;
+            }
+            const settings = result && Array.isArray(result.settings) ? result.settings : [];
+            hidePanelOverlay(shell);
+            setList(shell, '');
+            return renderRows(shell, settings, id);
+        }).then(function() {
+            if (phase !== 'render') {
+                return null;
+            }
+            if (openCategory) {
+                setCategory(shell, openCategory);
+            }
+            applyFilter(shell);
+            if (openStatus) {
+                showStatus(shell);
+            }
+            phase = 'done';
+            return null;
+        }).catch(function(error) {
+            if (phase === 'strings' || phase === 'done') {
+                throw error;
+            }
+            if (!shell.isConnected) {
+                return null;
+            }
+            hidePanelOverlay(shell);
+            setList(shell, loadingStrings[1]);
+            if (openStatus) {
+                showStatus(shell);
+                return null;
+            }
+            return Str.get_string('settings_modal_count', 'local_dixeo', 0);
+        }).then(function(label) {
+            if (typeof label === 'string') {
+                setCount(shell, label);
+            }
+            return null;
         });
     };
 
@@ -1544,6 +1597,7 @@ define([
             setUiLocked(shell, true);
             showPanelOverlay(shell, session.savingLabel, 'saving');
             const fallbackReady = Str.get_string('settings_modal_save_error', 'local_dixeo');
+            let saveError = null;
             Ajax.call([{
                 methodname: 'local_dixeo_save_settings',
                 args: {
@@ -1566,10 +1620,16 @@ define([
                 hidePanelOverlay(shell);
                 setUiLocked(shell, false);
                 publishDirty(shell);
-                return fallbackReady.then(function(fallback) {
-                    showSaveError(shell, saveErrorText(error, fallback));
+                saveError = error;
+                return fallbackReady;
+            }).then(function(fallback) {
+                if (!saveError) {
                     return null;
-                });
+                }
+                showSaveError(shell, saveErrorText(saveError, fallback));
+                return null;
+            }).catch(function() {
+                return null;
             });
         });
     };
@@ -1679,55 +1739,65 @@ define([
         }
         const stringsReady = Str.get_strings(requests);
         const bodyReady = Templates.renderForPromise('local_dixeo/settings_modal', {});
+        let modalStrings = [];
+        let modalRendered = {html: '', js: ''};
+        let createdModal = null;
+        const paintTitle = function() {
+            const title = createdModal.getRoot()[0].querySelector('[data-region="title"]');
+            if (!title) {
+                return;
+            }
+            const heading = document.createElement('span');
+            heading.textContent = modalStrings[0];
+            title.replaceChildren(heading);
+            if (modalStrings[1]) {
+                const crumbs = document.createElement('span');
+                crumbs.className = 'local-dixeo-settings-crumbs';
+                crumbs.textContent = modalStrings[1];
+                title.appendChild(crumbs);
+            }
+        };
         return Promise.all([stringsReady, bodyReady]).then(function(results) {
-            const strings = results[0];
-            const rendered = results[1];
+            modalStrings = results[0];
+            modalRendered = results[1];
             return Modal.create({
-                title: strings[0],
-                body: rendered.html,
+                title: modalStrings[0],
+                body: modalRendered.html,
                 large: true,
                 removeOnClose: true,
                 show: true,
                 returnElement: button,
-            }).then(function(modal) {
-                const paintTitle = function() {
-                    const title = modal.getRoot()[0].querySelector('[data-region="title"]');
-                    if (!title) {
-                        return;
-                    }
-                    const heading = document.createElement('span');
-                    heading.textContent = strings[0];
-                    title.replaceChildren(heading);
-                    if (strings[1]) {
-                        const crumbs = document.createElement('span');
-                        crumbs.className = 'local-dixeo-settings-crumbs';
-                        crumbs.textContent = strings[1];
-                        title.appendChild(crumbs);
-                    }
-                };
-                const titleReady = modal.titlePromise ? modal.titlePromise.then(paintTitle) : paintTitle();
-                return Promise.resolve(titleReady).then(function() {
-                    Templates.runTemplateJS(rendered.js);
-                    const shell = modal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
-                    if (button.dataset.courseid) {
-                        shell.dataset.courseid = button.dataset.courseid;
-                        shell.dataset.canmanagesync = button.dataset.canmanagesync === '1' ? '1' : '0';
-                    }
-                    bindClose(modal, shell);
-                    bindAdvanced(shell);
-                    bindDraft(shell);
-                    bindSave(shell);
-                    bindFilter(shell);
-                    bindStatus(shell);
-                    if (button.dataset.preferencesonly === '1') {
-                        return showPreferencesOnly(shell);
-                    }
-                    const initial = button.dataset.initial || '';
-                    const openOnStatus = initial === 'status' || (!!button.dataset.courseid && initial === '');
-                    const openCategory = !openOnStatus && initial && initial !== 'status' ? initial : '';
-                    return loadSettings(shell, button.dataset.contextid, openOnStatus, openCategory);
-                });
             });
+        }).then(function(modal) {
+            createdModal = modal;
+            if (modal.titlePromise) {
+                return modal.titlePromise;
+            }
+            paintTitle();
+            return null;
+        }).then(function() {
+            if (createdModal.titlePromise) {
+                paintTitle();
+            }
+            Templates.runTemplateJS(modalRendered.js);
+            const shell = createdModal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+            if (button.dataset.courseid) {
+                shell.dataset.courseid = button.dataset.courseid;
+                shell.dataset.canmanagesync = button.dataset.canmanagesync === '1' ? '1' : '0';
+            }
+            bindClose(createdModal, shell);
+            bindAdvanced(shell);
+            bindDraft(shell);
+            bindSave(shell);
+            bindFilter(shell);
+            bindStatus(shell);
+            if (button.dataset.preferencesonly === '1') {
+                return showPreferencesOnly(shell);
+            }
+            const initial = button.dataset.initial || '';
+            const openOnStatus = initial === 'status' || (!!button.dataset.courseid && initial === '');
+            const openCategory = !openOnStatus && initial && initial !== 'status' ? initial : '';
+            return loadSettings(shell, button.dataset.contextid, openOnStatus, openCategory);
         });
     };
 

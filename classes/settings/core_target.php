@@ -25,13 +25,18 @@ namespace local_dixeo\settings;
  */
 final class core_target {
     /**
+     * Record the Moodle admin setting this catalogue entry overrides.
+     *
      * @param string $plugin Frankenstyle plugin that owns the admin setting. Empty for a legacy $CFG name.
      * @param string $name Setting name within the plugin, or the full legacy config name.
      * @param bool $legacycfg True when the admin setting name has no plugin slash (glossary_entbypage).
      */
     public function __construct(
+        /** @var string Frankenstyle plugin that owns the admin setting. Empty for a legacy $CFG name. */
         public readonly string $plugin,
+        /** @var string Setting name within the plugin, or the full legacy config name. */
         public readonly string $name,
+        /** @var bool True when the admin setting name has no plugin slash. */
         public readonly bool $legacycfg,
     ) {
     }

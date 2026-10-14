@@ -595,5 +595,10 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101205, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026101402) {
+        // File sync for a new course and for module changes runs inside that change. No schema change.
+        upgrade_plugin_savepoint(true, 2026101402, 'local', 'dixeo');
+    }
+
     return true;
 }

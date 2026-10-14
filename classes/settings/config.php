@@ -283,6 +283,8 @@ final class config {
     }
 
     /**
+     * Catalogue entry for this component and key.
+     *
      * @param string $component Frankenstyle component.
      * @param string $name Catalogue key.
      * @return definition
@@ -579,7 +581,7 @@ final class config {
      * Effective text at one layer, walking parents when that layer has no own row.
      *
      * @param string $layer Site, Dixeo, or course.
-     * @param array<string, string|null> $stored Own values. Null means no row.
+     * @param array $stored Own values. Null means no row.
      * @param string $fallback Catalogue default for a Dixeo-only setting.
      * @return string
      */
@@ -591,6 +593,8 @@ final class config {
     }
 
     /**
+     * Dixeo or course level declared for this context.
+     *
      * @param definition $definition Catalogue entry.
      * @param \context $context Requested context.
      * @return string
@@ -611,6 +615,8 @@ final class config {
     }
 
     /**
+     * Require the capability that edits this level.
+     *
      * @param string $level Dixeo or course.
      * @param \context $context Context being edited.
      */
@@ -715,6 +721,8 @@ final class config {
     }
 
     /**
+     * Stored Dixeo value, or null when plugin config has no row.
+     *
      * @param definition $definition Catalogue entry.
      * @return string|null Null when plugin config has no row.
      */
@@ -727,6 +735,8 @@ final class config {
     }
 
     /**
+     * Stored course value, or null when this course has no override.
+     *
      * @param definition $definition Catalogue entry.
      * @param \context $context Course context.
      * @return string|null Null when this course has no override.
@@ -745,6 +755,8 @@ final class config {
     }
 
     /**
+     * Remove the stored value at this context.
+     *
      * @param definition $definition Catalogue entry.
      * @param \context $context Context whose stored value is removed.
      * @param string $level Dixeo or course.
@@ -763,6 +775,8 @@ final class config {
     }
 
     /**
+     * Store a cleaned value at this context.
+     *
      * @param definition $definition Catalogue entry.
      * @param \context $context Context being written.
      * @param string $level Dixeo or course.

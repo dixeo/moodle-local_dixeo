@@ -556,6 +556,8 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * Setting-updated events recorded by the sink.
+     *
      * @param \phpunit_event_sink $sink Event sink.
      * @return \local_dixeo\event\setting_updated[]
      */
@@ -567,6 +569,8 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * Catalogue row with this key.
+     *
      * @param array[] $rows Layer rows.
      * @param string $name Catalogue key.
      * @return array
@@ -599,6 +603,8 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * One layer from a catalogue row.
+     *
      * @param array $row One catalogue row from get_layers.
      * @param string $level Site, Dixeo, or course.
      * @return array
@@ -613,6 +619,8 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * Database conditions for the course learning-intent row.
+     *
      * @param \context_course $context Course context.
      * @return array<string, int|string>
      */
@@ -625,6 +633,8 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * Database conditions for the course file-sync row.
+     *
      * @param \context_course $context Course context.
      * @return array<string, int|string>
      */

@@ -34,7 +34,6 @@ use local_dixeo\external\service_factory;
  * @covers \local_dixeo\external\get_settings
  */
 final class get_settings_test extends \advanced_testcase {
-
     /**
      * A teacher receives the same course rows the helper returns.
      */

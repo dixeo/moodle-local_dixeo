@@ -35,7 +35,6 @@ use local_dixeo\settings\config;
  * @covers \local_dixeo\external\save_settings
  */
 final class save_settings_test extends \advanced_testcase {
-
     /**
      * A course intent is stored, cleared when emptied, and does not touch an omitted switch.
      */

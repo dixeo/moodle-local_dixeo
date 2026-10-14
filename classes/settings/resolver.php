@@ -62,7 +62,7 @@ final class resolver {
      * that key the start is the Dixeo layer, using $fallback when Dixeo has no own row.
      *
      * @param string $level Level being read.
-     * @param array<string, string|null> $stored Own value per layer that this setting has. Null means no own row.
+     * @param array $stored Own value per layer that this setting has. Null means no own row.
      * @param string $fallback Catalogue default, used when no core site value and no own row exist.
      * @return array{value: string, source: string}
      */
@@ -91,7 +91,7 @@ final class resolver {
      *
      * @param string $level Level being written.
      * @param string $value Cleaned value to store.
-     * @param array<string, string|null> $stored Own values of the parent layers. The current level is ignored.
+     * @param array $stored Own values of the parent layers. The current level is ignored.
      * @param string $fallback Catalogue default, used when this setting has no core site value.
      * @return bool
      */

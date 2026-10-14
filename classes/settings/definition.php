@@ -33,6 +33,8 @@ final class definition {
     public const TYPES = ['bool', 'select', 'multiselect', 'text', 'number', 'textarea'];
 
     /**
+     * Store one catalogue setting.
+     *
      * @param string $key Storage key, unique within the component.
      * @param string $shortname Shortname shown in the settings manager.
      * @param string $component Frankenstyle component that owns the setting.
@@ -52,22 +54,39 @@ final class definition {
      * @param bool $record True when a course value is a stored snapshot. An unset course stays empty and does not inherit Dixeo.
      */
     public function __construct(
+        /** @var string Storage key, unique within the component. */
         private string $key,
+        /** @var string Shortname shown in the settings manager. */
         private string $shortname,
+        /** @var string Frankenstyle component that owns the setting. */
         private string $component,
+        /** @var string One of {@see self::TYPES}. */
         private string $type,
+        /** @var string Shipped default. */
         private string $default,
+        /** @var string[] Levels at which the setting exists, in chain order. */
         private array $levels,
+        /** @var string Feature-group id. */
         private string $feature,
+        /** @var string Plugin-group id. */
         private string $plugingroup,
+        /** @var string Language-string key for the help text. */
         private string $help,
+        /** @var bool True when the value must be hidden from users who cannot edit the Dixeo layer. */
         private bool $sensitive,
+        /** @var string[] Allowed values for a select or multiselect. */
         private array $options,
+        /** @var core_target|null Moodle admin setting this entry overrides, or null when Dixeo-only. */
         private ?core_target $core,
+        /** @var bool True when a course value is always stored, including Off and a value equal to its parent. */
         private bool $retain = false,
+        /** @var string|null Catalogue key whose Dixeo value the retained badge compares with. */
         private ?string $retainparent = null,
+        /** @var array Select option id to display label. */
         private array $labels = [],
+        /** @var string[] Levels the settings manager shows but does not save. */
         private array $readonlylevels = [],
+        /** @var bool True when a course value is a stored snapshot that does not inherit Dixeo. */
         private bool $record = false,
     ) {
     }
@@ -300,6 +319,8 @@ final class definition {
     }
 
     /**
+     * Require a non-empty string field from a catalogue row.
+     *
      * @param array $raw Catalogue row.
      * @param string $field Field name.
      * @return string
@@ -313,6 +334,8 @@ final class definition {
     }
 
     /**
+     * Storage key, unique within the component.
+     *
      * @return string
      */
     public function get_key(): string {
@@ -320,6 +343,8 @@ final class definition {
     }
 
     /**
+     * Shortname shown in the settings manager.
+     *
      * @return string
      */
     public function get_shortname(): string {
@@ -327,6 +352,8 @@ final class definition {
     }
 
     /**
+     * Frankenstyle component that owns the setting.
+     *
      * @return string
      */
     public function get_component(): string {
@@ -334,6 +361,8 @@ final class definition {
     }
 
     /**
+     * Control type.
+     *
      * @return string
      */
     public function get_type(): string {
@@ -341,6 +370,8 @@ final class definition {
     }
 
     /**
+     * Shipped default.
+     *
      * @return string
      */
     public function get_default(): string {
@@ -348,6 +379,8 @@ final class definition {
     }
 
     /**
+     * Levels at which the setting exists.
+     *
      * @return string[]
      */
     public function get_levels(): array {
@@ -355,6 +388,8 @@ final class definition {
     }
 
     /**
+     * Feature-group id.
+     *
      * @return string
      */
     public function get_feature(): string {
@@ -362,6 +397,8 @@ final class definition {
     }
 
     /**
+     * Plugin-group id.
+     *
      * @return string
      */
     public function get_plugingroup(): string {
@@ -369,6 +406,8 @@ final class definition {
     }
 
     /**
+     * Language-string key for the help text.
+     *
      * @return string
      */
     public function get_help(): string {
@@ -376,6 +415,8 @@ final class definition {
     }
 
     /**
+     * Whether the value is hidden from users who cannot edit the Dixeo layer.
+     *
      * @return bool
      */
     public function is_sensitive(): bool {
@@ -401,6 +442,8 @@ final class definition {
     }
 
     /**
+     * Moodle admin setting this entry overrides, or null when the setting is Dixeo-only.
+     *
      * @return core_target|null
      */
     public function get_core(): ?core_target {

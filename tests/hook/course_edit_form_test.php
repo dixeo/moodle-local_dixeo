@@ -359,6 +359,8 @@ final class course_edit_form_test extends \advanced_testcase {
     }
 
     /**
+     * Course edit form for the given course.
+     *
      * @param \stdClass $course Course record.
      * @param \moodle_database $db Database.
      * @return \testable_course_edit_form

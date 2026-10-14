@@ -25,6 +25,8 @@ namespace local_dixeo\settings;
  */
 class unresolved_core_target_exception extends \coding_exception {
     /**
+     * Name the catalogue key and the admin setting that could not be resolved.
+     *
      * @param string $settingkey Catalogue key that declared the target.
      * @param string $adminsettingname Admin-tree name that could not be resolved.
      */

@@ -34,8 +34,9 @@ use core_external\external_value;
  * Writes the submitted catalogue values through the settings helper.
  */
 class save_settings extends external_api {
-
     /**
+     * Parameters for the settings write.
+     *
      * @return external_function_parameters
      */
     public static function execute_parameters(): external_function_parameters {
@@ -86,6 +87,8 @@ class save_settings extends external_api {
     }
 
     /**
+     * The write returns nothing.
+     *
      * @return null
      */
     public static function execute_returns() {

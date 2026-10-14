@@ -233,6 +233,8 @@ class course_edit_form {
     }
 
     /**
+     * Course id from the form element, or zero when it is empty.
+     *
      * @param mixed $raw Value from the course id element.
      * @return int
      */
@@ -241,6 +243,8 @@ class course_edit_form {
     }
 
     /**
+     * Text stored in a form element.
+     *
      * @param mixed $raw Value from a form element.
      * @return string
      */

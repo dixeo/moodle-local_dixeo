@@ -24,7 +24,10 @@ use local_dixeo\service\file_sync_policy;
 /**
  * The file sync pill opens the course settings modal on Status.
  *
- * @covers \local_dixeo\hook\output\sync_indicator_injector
+ * @package    local_dixeo
+ * @copyright  2026 Dixeo
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @covers     \local_dixeo\hook\output\sync_indicator_injector
  */
 final class sync_indicator_injector_test extends \advanced_testcase {
     /**
@@ -124,6 +127,8 @@ final class sync_indicator_injector_test extends \advanced_testcase {
     }
 
     /**
+     * Course that has one file-sync block instance.
+     *
      * @return array{0: \stdClass, 1: \context_course}
      */
     private function course_with_sync_block(): array {
@@ -152,6 +157,8 @@ final class sync_indicator_injector_test extends \advanced_testcase {
     }
 
     /**
+     * Point the global page at this course.
+     *
      * @param \stdClass $course
      * @param \context_course $context
      */
