@@ -69,6 +69,7 @@ class save_settings extends external_api {
         ]);
         $context = \context::instance_by_id($params['contextid']);
         self::validate_context($context);
+        get_settings::warm_designer_templates();
         $config = service_factory::get_settings_config();
 
         foreach ($params['settings'] as $setting) {

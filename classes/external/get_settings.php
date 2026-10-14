@@ -59,6 +59,7 @@ class get_settings extends external_api {
         ]);
         $context = \context::instance_by_id($params['contextid']);
         self::validate_context($context);
+        self::warm_designer_templates();
 
         return [
             'settings' => service_factory::get_settings_config()->get_layers($context),
@@ -83,6 +84,21 @@ class get_settings extends external_api {
                         new external_value(PARAM_ALPHANUMEXT, 'Allowed value for a select'),
                         'Allowed values for a select. Empty for every other type.'
                     ),
+                    'optionlabels' => new external_multiple_structure(
+                        new external_single_structure([
+                            'value' => new external_value(PARAM_ALPHANUMEXT, 'Option value'),
+                            'label' => new external_value(PARAM_TEXT, 'Option label'),
+                        ]),
+                        'Display labels for select options. Empty when the modal loads labels from language strings.',
+                        VALUE_DEFAULT,
+                        []
+                    ),
+                    'readonly' => new external_value(
+                        PARAM_BOOL,
+                        'True when the open level cannot change this setting',
+                        VALUE_DEFAULT,
+                        false
+                    ),
                     'coremissing' => new external_value(PARAM_BOOL, 'True when a declared core target cannot be resolved'),
                     'value' => new external_value(PARAM_RAW, 'Effective value'),
                     'source' => new external_value(PARAM_ALPHA, 'Layer that supplied the effective value'),
@@ -103,5 +119,22 @@ class get_settings extends external_api {
                 ])
             ),
         ]);
+    }
+
+    /**
+     * Fill the pedagogical template cache before the catalogue is read.
+     *
+     * The designer catalogue reads that cache and does not call the API itself.
+     */
+    public static function warm_designer_templates(): void {
+        global $CFG;
+        $lib = $CFG->dirroot . '/blocks/dixeo_designer/lib.php';
+        if (!is_readable($lib)) {
+            return;
+        }
+        require_once($lib);
+        if (function_exists('block_dixeo_designer_warm_course_templates')) {
+            block_dixeo_designer_warm_course_templates();
+        }
     }
 }

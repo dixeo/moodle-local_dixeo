@@ -65,7 +65,8 @@
             <button type="button"
                     class="btn {{siteclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
                     data-action="local-dixeo-settings-parent"
-                    data-layer="site">{{sitevalue}}</button>
+                    data-layer="site"
+                    {{#readonly}}disabled{{/readonly}}>{{sitevalue}}</button>
             {{/hassite}}
         </div>
         <div class="local-dixeo-settings-parent" role="cell" data-layer="dixeo">
@@ -74,12 +75,15 @@
             <button type="button"
                     class="btn {{dixeoclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
                     data-action="local-dixeo-settings-parent"
-                    data-layer="dixeo">{{dixeovalue}}</button>
+                    data-layer="dixeo"
+                    {{#readonly}}disabled{{/readonly}}>{{dixeovalue}}</button>
             {{/hasdixeo}}
         </div>
         <div class="local-dixeo-settings-row-value" role="cell">
             <div class="local-dixeo-settings-caption">
+                {{#badge}}
                 <span class="local-dixeo-settings-badge{{#badgeown}} local-dixeo-settings-badge-own{{/badgeown}}">{{badge}}</span>
+                {{/badge}}
                 <span class="local-dixeo-settings-icons">
                     <button type="button"
                             class="btn local-dixeo-settings-icon"
@@ -94,19 +98,29 @@
             <button type="button"
                     class="btn local-dixeo-settings-control {{valueclass}}"
                     data-action="local-dixeo-settings-value"
-                    aria-pressed="{{#valueon}}true{{/valueon}}{{^valueon}}false{{/valueon}}">
+                    aria-pressed="{{#valueon}}true{{/valueon}}{{^valueon}}false{{/valueon}}"
+                    {{#readonly}}disabled{{/readonly}}>
                 <span class="local-dixeo-settings-control-label">{{displayvalue}}</span>
                 <span class="local-dixeo-settings-switch" aria-hidden="true"></span>
             </button>
             {{/isbool}}
+            {{#istext}}
+            <input type="text"
+                   class="form-control local-dixeo-settings-control {{valueclass}}"
+                   value="{{displayvalue}}"
+                   data-action="local-dixeo-settings-value"
+                   {{#readonly}}disabled{{/readonly}}>
+            {{/istext}}
             {{#istextarea}}
             <textarea class="form-control local-dixeo-settings-control {{valueclass}}"
                       rows="3"
-                      data-action="local-dixeo-settings-value">{{displayvalue}}</textarea>
+                      data-action="local-dixeo-settings-value"
+                      {{#readonly}}disabled{{/readonly}}>{{displayvalue}}</textarea>
             {{/istextarea}}
             {{#isselect}}
             <select class="form-select local-dixeo-settings-control {{valueclass}}"
-                    data-action="local-dixeo-settings-value">
+                    data-action="local-dixeo-settings-value"
+                    {{#readonly}}disabled{{/readonly}}>
                 {{#options}}
                 <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                 {{/options}}
@@ -117,6 +131,7 @@
                 <select class="form-control local-dixeo-settings-control {{valueclass}}"
                         size="{{optioncount}}"
                         data-action="local-dixeo-settings-value"
+                        {{#readonly}}disabled{{/readonly}}
                         multiple>
                     {{#options}}
                     <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>

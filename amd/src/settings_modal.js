@@ -881,6 +881,23 @@ define([
     };
 
     /**
+     * Option labels sent with the catalogue. Missing options still use language strings.
+     *
+     * @param {Object} setting Catalogue row.
+     * @returns {Object<string, string>}
+     */
+    const suppliedOptionLabels = function(setting) {
+        const labels = {};
+        (Array.isArray(setting.optionlabels) ? setting.optionlabels : []).forEach(function(item) {
+            if (!item || item.value === undefined || item.value === null) {
+                return;
+            }
+            labels[String(item.value)] = item.label || '';
+        });
+        return labels;
+    };
+
+    /**
      * Replace the list with one read-only row per setting.
      *
      * @param {HTMLElement} shell
@@ -919,6 +936,8 @@ define([
         requests.push({key: 'settings_category_tutor', component: 'local_dixeo'});
         requests.push({key: 'settings_category_dixeo_tutor', component: 'local_dixeo'});
         requests.push({key: 'settings_category_imagegeneration', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_designer', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_dixeo_designer', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -926,7 +945,11 @@ define([
         });
         const optionAt = requests.length;
         settings.forEach(function(setting) {
+            const supplied = suppliedOptionLabels(setting);
             (Array.isArray(setting.options) ? setting.options : []).forEach(function(option) {
+                if (Object.prototype.hasOwnProperty.call(supplied, option)) {
+                    return;
+                }
                 requests.push({key: setting.name + '_' + option, component: setting.component});
             });
         });
@@ -946,8 +969,13 @@ define([
             let optionCursor = optionAt;
             const rows = settings.map(function(setting, index) {
                 const labelAt = fixedCount + (index * 2);
+                const supplied = suppliedOptionLabels(setting);
                 const optionlabels = {};
                 (Array.isArray(setting.options) ? setting.options : []).forEach(function(option) {
+                    if (Object.prototype.hasOwnProperty.call(supplied, option)) {
+                        optionlabels[option] = supplied[option];
+                        return;
+                    }
                     optionlabels[option] = strings[optionCursor];
                     optionCursor = optionCursor + 1;
                 });
@@ -973,6 +1001,8 @@ define([
                     tutor: strings[extraAt + 8],
                     dixeo_tutor: strings[extraAt + 9],
                     imagegeneration: strings[extraAt + 10],
+                    designer: strings[extraAt + 11],
+                    dixeo_designer: strings[extraAt + 12],
                 },
                 contextid: contextid,
                 saving: false,
@@ -1278,7 +1308,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry) {
+            if (!entry || entry.setting.readonly) {
                 return;
             }
             const action = actionEl.dataset.action;
@@ -1299,7 +1329,8 @@ define([
         shell.addEventListener('input', function(event) {
             const session = sessions.get(shell);
             const control = event.target.closest('[data-action="local-dixeo-settings-value"]');
-            if (!session || session.saving || !control || control.tagName !== 'TEXTAREA') {
+            const istext = control && control.tagName === 'INPUT' && control.type === 'text';
+            if (!session || session.saving || !control || (control.tagName !== 'TEXTAREA' && !istext)) {
                 return;
             }
             const row = control.closest('.local-dixeo-settings-row');
@@ -1307,7 +1338,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry) {
+            if (!entry || entry.setting.readonly) {
                 return;
             }
             commitDraft(shell, row, entry, control.value);
@@ -1323,7 +1354,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry) {
+            if (!entry || entry.setting.readonly) {
                 return;
             }
             commitDraft(shell, row, entry, selectValue(control, entry));

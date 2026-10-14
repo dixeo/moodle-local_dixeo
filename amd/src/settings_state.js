@@ -243,6 +243,9 @@ define([], function() {
      * @returns {string|null}
      */
     const nextDraft = function(entry, action, layer) {
+        if (entry.setting && entry.setting.readonly) {
+            return null;
+        }
         if (action === 'revert') {
             return entry.saved;
         }
@@ -266,6 +269,18 @@ define([], function() {
      * @returns {Object}
      */
     const draftView = function(entry, labels) {
+        if (entry.setting && entry.setting.readonly) {
+            return {
+                badge: '',
+                display: displayFor(entry.setting, entry.draft, labels),
+                valueclass: 'local-dixeo-settings-supplied',
+                siteclass: 'local-dixeo-settings-inherited',
+                dixeoclass: 'local-dixeo-settings-inherited',
+                showrevert: false,
+                pressed: entry.draft === '1',
+                badgeown: false,
+            };
+        }
         const source = draftOrigin(entry.setting, entry.draft);
         return {
             badge: labels.badges[source],
@@ -289,7 +304,7 @@ define([], function() {
         const changes = [];
         Object.keys(entries).forEach(function(key) {
             const entry = entries[key];
-            if (entry.draft === entry.saved) {
+            if (entry.setting.readonly || entry.draft === entry.saved) {
                 return;
             }
             changes.push({
@@ -393,7 +408,17 @@ define([], function() {
             }
         });
         const names = labels.names || {};
-        Object.keys(seen).sort().forEach(function(id) {
+        // Dixeo is the first group after All. Every other group stays alphabetical.
+        const pinned = mode === 'plugin' ? 'dixeo_core' : 'dixeo';
+        Object.keys(seen).sort(function(left, right) {
+            if (left === pinned) {
+                return -1;
+            }
+            if (right === pinned) {
+                return 1;
+            }
+            return left.localeCompare(right);
+        }).forEach(function(id) {
             const value = mode + ':' + id;
             items.push({
                 value: value,
@@ -454,9 +479,11 @@ define([], function() {
             shortname: setting.shortname,
             shortnameurl: shortnameUrl(setting, wwwroot),
             isbool: setting.type === 'bool',
+            istext: setting.type === 'text',
             istextarea: setting.type === 'textarea',
             isselect: setting.type === 'select',
             ismultiselect: setting.type === 'multiselect',
+            readonly: setting.readonly === true || setting.readonly === 1,
             optioncount: Array.isArray(setting.options) ? Math.min(10, setting.options.length) : 0,
             options: (Array.isArray(setting.options) ? setting.options : []).map(function(value) {
                 return {

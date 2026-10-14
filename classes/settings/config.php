@@ -23,8 +23,9 @@ namespace local_dixeo\settings;
  * config, and the catalogue default is that layer's value when nothing is stored. A site
  * layer exists only for a core Moodle config the setting overrides. A course value is a row
  * in local_dixeo_setting. A course value that matches its parent is removed, except a retained
- * setting, which stays stored including Off. A course-only setting has no stored Dixeo parent;
- * its unset value is still the Dixeo catalogue default.
+ * setting, which stays stored including Off. A recorded course value is a snapshot: unset stays
+ * empty and does not inherit Dixeo, and a value equal to Dixeo stays stored. A course-only setting
+ * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
  * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
  * Callers do not query the table.
  *
@@ -53,6 +54,10 @@ final class config {
     public function get(string $component, string $name, \context $context): resolved_value {
         $definition = $this->definition($component, $name);
         $level = $this->level_for($definition, $context);
+        if ($definition->records_course_value() && $level === resolver::LAYER_COURSE) {
+            $own = $this->own_value($definition, $context, $level);
+            return new resolved_value($own ?? '', resolver::LAYER_COURSE);
+        }
         if ($definition->retains_value()) {
             $own = $this->own_value($definition, $context, $level);
             $value = $own ?? $definition->get_default();
@@ -87,8 +92,15 @@ final class config {
         $level = $this->level_for($definition, $context);
         if ($checkcapability) {
             $this->require_edit($level, $context);
+            if ($definition->is_readonly_at($level)) {
+                throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" is read-only at this level.");
+            }
         }
         $value = clean_param($value, PARAM_TEXT);
+        if ($definition->records_course_value() && $level === resolver::LAYER_COURSE) {
+            $this->write_recorded_course($definition, $context, $value);
+            return;
+        }
         if ($definition->get_type() === 'multiselect') {
             $value = $this->normalise_multiselect($definition, $value);
         }
@@ -263,6 +275,9 @@ final class config {
      * @return array
      */
     private function layer_row(definition $definition, \context $context, string $level): array {
+        if ($definition->records_course_value() && $level === resolver::LAYER_COURSE) {
+            return $this->recorded_layer_row($definition, $context);
+        }
         if ($definition->retains_value()) {
             return $this->retained_layer_row($definition, $context);
         }
@@ -280,7 +295,7 @@ final class config {
             ];
         }
 
-        return [
+        return $this->with_choice_fields($definition, $level, [
             'component' => $definition->get_component(),
             'name' => $definition->get_key(),
             'shortname' => $definition->get_shortname(),
@@ -293,7 +308,111 @@ final class config {
             'value' => $effective['value'],
             'source' => $effective['source'],
             'layers' => $layers,
-        ];
+        ]);
+    }
+
+    /**
+     * Course snapshot that does not inherit the Dixeo value.
+     *
+     * The Dixeo cell still shows the default used for new generated structures. The course cell
+     * is the stored template, or empty when this course was not generated with one.
+     *
+     * @param definition $definition Catalogue entry with {@see definition::records_course_value()}.
+     * @param \context $context Course context.
+     * @return array
+     */
+    private function recorded_layer_row(definition $definition, \context $context): array {
+        $own = $this->read_course($definition, $context);
+        $value = $own ?? '';
+        $dixeo = $this->read_dixeo($definition);
+        $parent = $dixeo ?? $definition->get_default();
+        $options = $definition->get_options();
+        if ($value !== '' && !in_array($value, $options, true) && preg_match('/^[a-zA-Z0-9_-]+$/', $value)) {
+            $options[] = $value;
+        }
+
+        return $this->with_choice_fields($definition, resolver::LAYER_COURSE, [
+            'component' => $definition->get_component(),
+            'name' => $definition->get_key(),
+            'shortname' => $definition->get_shortname(),
+            'type' => $definition->get_type(),
+            'feature' => $definition->get_feature(),
+            'plugingroup' => $definition->get_plugingroup(),
+            'help' => $definition->get_help(),
+            'options' => $options,
+            'coremissing' => false,
+            'value' => $value,
+            'source' => resolver::LAYER_COURSE,
+            'layers' => [
+                [
+                    'level' => resolver::LAYER_DIXEO,
+                    'value' => $parent,
+                    'stored' => $dixeo,
+                    'customised' => $dixeo !== null,
+                ],
+                [
+                    'level' => resolver::LAYER_COURSE,
+                    'value' => $value,
+                    'stored' => $own,
+                    'customised' => $own !== null,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Attach select labels and whether the open level can be saved.
+     *
+     * An option that is not in the catalogue list keeps its id as the label so a stored
+     * template can still be shown after it leaves the remote list.
+     *
+     * @param definition $definition Catalogue entry.
+     * @param string $level Open level.
+     * @param array $row Layer row that already contains options.
+     * @return array
+     */
+    private function with_choice_fields(definition $definition, string $level, array $row): array {
+        $options = array_values($row['options'] ?? $definition->get_options());
+        $labels = $definition->get_labels();
+        $known = $definition->get_options();
+        $optionlabels = [];
+        foreach ($options as $option) {
+            if (array_key_exists($option, $labels)) {
+                $optionlabels[] = ['value' => $option, 'label' => $labels[$option]];
+            } else if (!in_array($option, $known, true)) {
+                $optionlabels[] = ['value' => $option, 'label' => $option];
+            }
+        }
+        $row['options'] = $options;
+        $row['optionlabels'] = $optionlabels;
+        $row['readonly'] = $definition->is_readonly_at($level);
+        return $row;
+    }
+
+    /**
+     * Store a course snapshot, including a value equal to the Dixeo default.
+     *
+     * An empty value deletes the row. The course then reads as empty rather than as Dixeo.
+     *
+     * @param definition $definition Catalogue entry with {@see definition::records_course_value()}.
+     * @param \context $context Course context.
+     * @param string $value Template id, or an empty string when none was used.
+     */
+    private function write_recorded_course(definition $definition, \context $context, string $value): void {
+        $current = $this->read_course($definition, $context);
+        if ($value === '') {
+            if ($current === null) {
+                return;
+            }
+            $this->delete_stored($definition, $context, resolver::LAYER_COURSE);
+            $this->notify_updated($definition, $context);
+            return;
+        }
+        if ($current === $value) {
+            return;
+        }
+        $this->write_stored($definition, $context, resolver::LAYER_COURSE, $value);
+        $this->notify_updated($definition, $context);
     }
 
     /**
@@ -312,7 +431,7 @@ final class config {
         $parent = $this->retained_parent_value($definition);
         $matches = $value === $parent;
 
-        return [
+        return $this->with_choice_fields($definition, resolver::LAYER_COURSE, [
             'component' => $definition->get_component(),
             'name' => $definition->get_key(),
             'shortname' => $definition->get_shortname(),
@@ -338,7 +457,7 @@ final class config {
                     'customised' => $own !== null && !$matches,
                 ],
             ],
-        ];
+        ]);
     }
 
     /**

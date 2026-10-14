@@ -1340,6 +1340,12 @@ label[for="local-dixeo-settings-category"] {
     min-height: 5.5rem;
 }
 
+.local-dixeo-settings-control:disabled,
+.local-dixeo-settings-parent .btn:disabled {
+    opacity: 1;
+    cursor: default;
+}
+
 .local-dixeo-settings-control.btn {
     display: flex;
     align-items: center;

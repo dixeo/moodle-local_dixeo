@@ -484,6 +484,55 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * A manual course does not inherit the Dixeo pedagogical template.
+     */
+    public function test_course_template_stays_empty_until_generation_records_it(): void {
+        global $DB;
+        $this->setAdminUser();
+        set_config('coursetemplate', 'tpl-default', 'block_dixeo_designer');
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $manual = $config->get('block_dixeo_designer', 'coursetemplate', $context);
+        $this->assertSame('', $manual->get_value());
+        $this->assertSame(resolver::LAYER_COURSE, $manual->get_source());
+
+        $row = $this->layer_named($config->get_layers($context), 'coursetemplate');
+        $this->assertTrue($row['readonly']);
+        $this->assertSame('', $row['value']);
+        $this->assertSame('tpl-default', $this->layer_level($row, resolver::LAYER_DIXEO)['value']);
+        $this->assertNull($this->layer_level($row, resolver::LAYER_COURSE)['stored']);
+
+        $this->expectException(\coding_exception::class);
+        $config->set('block_dixeo_designer', 'coursetemplate', $context, 'tpl-default');
+    }
+
+    /**
+     * Generation can store the template that was used, including the current Dixeo default.
+     */
+    public function test_recorded_course_template_is_kept_when_it_matches_dixeo(): void {
+        global $DB;
+        $this->setAdminUser();
+        set_config('coursetemplate', 'tpl-default', 'block_dixeo_designer');
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $config->set('block_dixeo_designer', 'coursetemplate', $context, 'tpl-default', false);
+
+        $this->assertTrue($DB->record_exists(config::TABLE, [
+            'contextid' => $context->id,
+            'component' => 'block_dixeo_designer',
+            'name' => 'coursetemplate',
+        ]));
+        $recorded = $config->get('block_dixeo_designer', 'coursetemplate', $context);
+        $this->assertSame('tpl-default', $recorded->get_value());
+        $dixeo = $config->get('block_dixeo_designer', 'coursetemplate', \context_system::instance());
+        $this->assertSame('tpl-default', $dixeo->get_value());
+    }
+
+    /**
      * @param \phpunit_event_sink $sink Event sink.
      * @return \local_dixeo\event\setting_updated[]
      */

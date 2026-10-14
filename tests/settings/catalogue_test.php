@@ -186,6 +186,69 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * Designer defaults stay at the Dixeo layer. The pedagogical template is also a read-only course snapshot.
+     */
+    public function test_load_returns_designer_settings(): void {
+        $settings = catalogue::load();
+
+        $category = $settings['categoryname'];
+        $this->assertSame('block_dixeo_designer', $category->get_component());
+        $this->assertSame('text', $category->get_type());
+        $this->assertSame(['dixeo'], $category->get_levels());
+        $this->assertSame('designer', $category->get_feature());
+        $this->assertSame(get_string('default_categoryname', 'block_dixeo_designer'), $category->get_default());
+        $this->assertFalse($category->records_course_value());
+
+        $configure = $settings['self_enrol_configure'];
+        $this->assertSame(['dixeo'], $configure->get_levels());
+        $this->assertSame('bool', $configure->get_type());
+        $this->assertSame('0', $configure->get_default());
+        $generatekey = $settings['self_enrol_generate_key'];
+        $this->assertSame(['dixeo'], $generatekey->get_levels());
+        $this->assertSame('1', $generatekey->get_default());
+
+        $template = $settings['coursetemplate'];
+        $this->assertSame(['dixeo', 'course'], $template->get_levels());
+        $this->assertSame('select', $template->get_type());
+        $this->assertSame('', $template->get_default());
+        $this->assertContains('', $template->get_options());
+        $this->assertTrue($template->records_course_value());
+        $this->assertTrue($template->is_readonly_at('course'));
+        $this->assertFalse($template->is_readonly_at('dixeo'));
+        $this->assertSame(
+            get_string('coursetemplate_none', 'block_dixeo_designer'),
+            $template->get_labels()['']
+        );
+
+        $this->assertArrayHasKey('certificate_generation', $settings);
+        $this->assertSame(['dixeo'], $settings['certificate_generation']->get_levels());
+        $this->assertSame('0', $settings['certificate_generation']->get_default());
+        $this->assertSame(['dixeo'], $settings['certificate_template']->get_levels());
+        $this->assertSame('select', $settings['certificate_template']->get_type());
+        $location = $settings['certificate_location'];
+        $this->assertSame(['dixeo'], $location->get_levels());
+        $this->assertSame(['summary', 'last'], $location->get_options());
+        $this->assertSame('last', $location->get_default());
+
+        foreach ([
+            'categoryname',
+            'coursetemplate',
+            'certificate_generation',
+            'certificate_template',
+            'certificate_location',
+            'self_enrol_configure',
+            'self_enrol_generate_key',
+        ] as $key) {
+            $setting = $settings[$key];
+            $this->assertFalse($setting->has_core());
+            $this->assertTrue(get_string_manager()->string_exists($key, 'block_dixeo_designer'));
+            $this->assertTrue(get_string_manager()->string_exists($setting->get_help(), 'block_dixeo_designer'));
+        }
+        $this->assertTrue(get_string_manager()->string_exists('settings_category_designer', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('settings_category_dixeo_designer', 'local_dixeo'));
+    }
+
+    /**
      * A core target that exists in the admin tree is kept.
      */
     public function test_existing_core_target_is_accepted(): void {

@@ -47,6 +47,9 @@ final class definition {
      * @param core_target|null $core Moodle admin setting this entry overrides, or null when Dixeo-only.
      * @param bool $retain True when a course value is always stored, including Off and a value equal to its parent.
      * @param string|null $retainparent Catalogue key, in this component, whose Dixeo value the retained badge compares with.
+     * @param array $labels Select option id to display label. Empty when the modal loads labels from language strings.
+     * @param string[] $readonlylevels Levels the settings manager shows but does not save.
+     * @param bool $record True when a course value is a stored snapshot. An unset course stays empty and does not inherit Dixeo.
      */
     public function __construct(
         private string $key,
@@ -63,6 +66,9 @@ final class definition {
         private ?core_target $core,
         private bool $retain = false,
         private ?string $retainparent = null,
+        private array $labels = [],
+        private array $readonlylevels = [],
+        private bool $record = false,
     ) {
     }
 
@@ -132,6 +138,22 @@ final class definition {
             $retainparent = $raw['retainparent'];
         }
 
+        $labels = self::require_labels($key, $raw['labels'] ?? null, $options);
+        $readonlylevels = self::require_readonly_levels($key, $raw['readonly'] ?? null, $levels);
+        $record = false;
+        if (array_key_exists('record', $raw)) {
+            if (!is_bool($raw['record'])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare record as a boolean.");
+            }
+            $record = $raw['record'];
+        }
+        if ($record && !in_array('course', $levels, true)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" record requires the course level.");
+        }
+        if ($record && $retain) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" cannot both retain and record a course value.");
+        }
+
         return new self(
             $key,
             self::require_string($raw, 'shortname'),
@@ -147,7 +169,61 @@ final class definition {
             $core,
             $retain,
             $retainparent,
+            $labels,
+            $readonlylevels,
+            $record,
         );
+    }
+
+    /**
+     * Optional display labels for select options. Missing labels are loaded from language strings.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param mixed $labels Raw id to label map, or null when omitted.
+     * @param string[] $options Allowed option ids.
+     * @return array<string, string>
+     */
+    private static function require_labels(string $key, mixed $labels, array $options): array {
+        if ($labels === null) {
+            return [];
+        }
+        if (!is_array($labels)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" must declare labels as an array.");
+        }
+        $clean = [];
+        foreach ($labels as $value => $label) {
+            $value = (string) $value;
+            if (!in_array($value, $options, true) || !is_string($label)) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" has an invalid option label.");
+            }
+            $clean[$value] = $label;
+        }
+        return $clean;
+    }
+
+    /**
+     * Levels the settings manager shows without saving.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param mixed $readonly Raw level list, or null when omitted.
+     * @param string[] $levels Levels this setting declares.
+     * @return string[]
+     */
+    private static function require_readonly_levels(string $key, mixed $readonly, array $levels): array {
+        if ($readonly === null) {
+            return [];
+        }
+        if (!is_array($readonly) || !array_is_list($readonly)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" must declare readonly as a list of levels.");
+        }
+        $clean = [];
+        foreach ($readonly as $level) {
+            if (!is_string($level) || !in_array($level, $levels, true) || in_array($level, $clean, true)) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" has an invalid readonly level.");
+            }
+            $clean[] = $level;
+        }
+        return $clean;
     }
 
     /**
@@ -169,6 +245,8 @@ final class definition {
     /**
      * Select and multiselect options are a non-empty list of unique ids.
      *
+     * An id may be empty, so a select can offer None. Hyphens are allowed so template ids can be stored.
+     *
      * @param string $key Catalogue key, used in the error.
      * @param mixed $options Raw options list.
      * @return string[]
@@ -180,7 +258,7 @@ final class definition {
 
         $clean = [];
         foreach ($options as $option) {
-            if (!is_string($option) || !preg_match('/^[a-zA-Z0-9_]+$/', $option)) {
+            if (!is_string($option) || !preg_match('/^[a-zA-Z0-9_-]*$/', $option)) {
                 throw new \coding_exception("Dixeo setting \"{$key}\" has an invalid option.");
             }
             if (in_array($option, $clean, true)) {
@@ -347,5 +425,35 @@ final class definition {
      */
     public function get_retain_parent(): ?string {
         return $this->retainparent;
+    }
+
+    /**
+     * Display labels supplied with the catalogue. Options without a label use a language string.
+     *
+     * @return array<string, string>
+     */
+    public function get_labels(): array {
+        return $this->labels;
+    }
+
+    /**
+     * True when the settings manager must not save this level.
+     *
+     * A trusted caller can still store the value with the capability check turned off.
+     *
+     * @param string $level Dixeo, course, activity, or user.
+     * @return bool
+     */
+    public function is_readonly_at(string $level): bool {
+        return in_array($level, $this->readonlylevels, true);
+    }
+
+    /**
+     * True when an unset course value stays empty instead of inheriting Dixeo.
+     *
+     * @return bool
+     */
+    public function records_course_value(): bool {
+        return $this->record;
     }
 }
