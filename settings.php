@@ -68,16 +68,16 @@ if ($hassiteconfig) {
         PARAM_ALPHANUMEXT
     ));
 
-    // New-course file sync default. Existing courses keep their own value.
-    $settings->add(new admin_setting_heading(
-        'local_dixeo/file_synchronization',
-        get_string('file_synchronization', 'local_dixeo'),
-        ''
-    ));
-    $settings->add(new \local_dixeo\admin_setting_filesync_enabled_default());
-
-    // Image generation is a Dixeo feature, so the section is omitted while Dixeo is off.
+    // File sync and image generation are Dixeo features, so both sections are omitted while Dixeo is off.
     if (\local_dixeo\external\service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+        // New-course file sync default. Existing courses keep their own value.
+        $settings->add(new admin_setting_heading(
+            'local_dixeo/file_synchronization',
+            get_string('file_synchronization', 'local_dixeo'),
+            ''
+        ));
+        $settings->add(new \local_dixeo\admin_setting_filesync_enabled_default());
+
         $settings->add(new admin_setting_heading(
             'local_dixeo/image_generation',
             get_string('image_generation', 'local_dixeo'),

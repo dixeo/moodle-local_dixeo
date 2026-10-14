@@ -56,7 +56,7 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
-     * The Image generation section is omitted while Dixeo is off and returns when it is on.
+     * File synchronization and image generation are omitted while Dixeo is off and return when it is on.
      */
     public function test_image_generation_section_follows_the_dixeo_switch(): void {
         $config = \local_dixeo\external\service_factory::get_settings_config();
@@ -66,6 +66,8 @@ final class admin_setting_enabled_test extends \advanced_testcase {
         $off = $this->settings_page();
         $this->assertTrue(isset($off->settings->local_dixeoenabled));
         $this->assertTrue(isset($off->settings->local_dixeoapi_url));
+        $this->assertFalse(isset($off->settings->local_dixeofile_synchronization));
+        $this->assertFalse(isset($off->settings->local_dixeofilesync_enabled_default));
         $this->assertFalse(isset($off->settings->local_dixeoimage_generation));
         $this->assertFalse(isset($off->settings->local_dixeoimage_generation_enabled));
         $this->assertFalse(isset($off->settings->local_dixeoimage_generation_course_mode));
@@ -74,6 +76,8 @@ final class admin_setting_enabled_test extends \advanced_testcase {
 
         $config->set('local_dixeo', 'enabled', $system, '1');
         $on = $this->settings_page();
+        $this->assertTrue(isset($on->settings->local_dixeofile_synchronization));
+        $this->assertTrue(isset($on->settings->local_dixeofilesync_enabled_default));
         $this->assertTrue(isset($on->settings->local_dixeoimage_generation));
         $this->assertTrue(isset($on->settings->local_dixeoimage_generation_content_mode));
     }
@@ -84,7 +88,9 @@ final class admin_setting_enabled_test extends \advanced_testcase {
      * @return \admin_settingpage
      */
     private function settings_page(): \admin_settingpage {
-        $page = admin_get_root(true, true)->locate('local_dixeo');
+        global $CFG;
+        require_once($CFG->libdir . '/adminlib.php');
+        $page = \admin_get_root(true, true)->locate('local_dixeo');
         $this->assertInstanceOf(\admin_settingpage::class, $page);
         return $page;
     }
