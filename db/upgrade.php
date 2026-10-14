@@ -549,56 +549,74 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026090800, 'local', 'dixeo');
     }
 
-    if ($oldversion < 2026100900) {
-        $table = new xmldb_table('local_dixeo_setting');
-        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
-        $table->add_field('contextid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('component', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('name', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('value', XMLDB_TYPE_TEXT, null, null, null, null, null);
-        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_index('idx_context_component_name', XMLDB_INDEX_UNIQUE, ['contextid', 'component', 'name']);
-
-        if (!$dbman->table_exists($table)) {
-            $dbman->create_table($table);
+    if ($oldversion < 2026101403) {
+        // Copy file sync flags when the table is new, or when that copy has not run yet.
+        $created = local_dixeo_ensure_setting_table();
+        if ($created || $oldversion < 2026101205) {
+            local_dixeo_copy_filesync_settings();
         }
 
-        upgrade_plugin_savepoint(true, 2026100900, 'local', 'dixeo');
-    }
-
-    if ($oldversion < 2026101205) {
-        $records = $DB->get_records('local_dixeo_course_ai', null, '', 'id, courseid, enabled');
-        foreach ($records as $record) {
-            $context = \context_course::instance((int) $record->courseid, IGNORE_MISSING);
-            if (!$context) {
-                continue;
-            }
-            $existing = $DB->get_record('local_dixeo_setting', [
-                'contextid' => $context->id,
-                'component' => 'local_dixeo',
-                'name' => 'filesync_enabled',
-            ]);
-            $value = ((int) $record->enabled) === 1 ? '1' : '0';
-            if ($existing) {
-                $existing->value = $value;
-                $DB->update_record('local_dixeo_setting', $existing);
-                continue;
-            }
-            $DB->insert_record('local_dixeo_setting', (object) [
-                'contextid' => $context->id,
-                'component' => 'local_dixeo',
-                'name' => 'filesync_enabled',
-                'value' => $value,
-            ]);
-        }
-
-        upgrade_plugin_savepoint(true, 2026101205, 'local', 'dixeo');
-    }
-
-    if ($oldversion < 2026101402) {
-        // File sync for a new course and for module changes runs inside that change. No schema change.
-        upgrade_plugin_savepoint(true, 2026101402, 'local', 'dixeo');
+        upgrade_plugin_savepoint(true, 2026101403, 'local', 'dixeo');
     }
 
     return true;
+}
+
+/**
+ * Create the course setting table when it is not installed yet.
+ *
+ * @return bool True when this call created the table.
+ */
+function local_dixeo_ensure_setting_table(): bool {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+    $table = new xmldb_table('local_dixeo_setting');
+    if ($dbman->table_exists($table)) {
+        return false;
+    }
+
+    $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+    $table->add_field('contextid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+    $table->add_field('component', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+    $table->add_field('name', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+    $table->add_field('value', XMLDB_TYPE_TEXT, null, null, null, null, null);
+    $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+    $table->add_index('idx_context_component_name', XMLDB_INDEX_UNIQUE, ['contextid', 'component', 'name']);
+    $dbman->create_table($table);
+    return true;
+}
+
+/**
+ * Copy each course file sync flag into the course setting table.
+ *
+ * @return void
+ */
+function local_dixeo_copy_filesync_settings(): void {
+    global $DB;
+
+    $records = $DB->get_records('local_dixeo_course_ai', null, '', 'id, courseid, enabled');
+    foreach ($records as $record) {
+        $context = \context_course::instance((int) $record->courseid, IGNORE_MISSING);
+        if (!$context) {
+            continue;
+        }
+        $existing = $DB->get_record('local_dixeo_setting', [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+        ]);
+        $value = ((int) $record->enabled) === 1 ? '1' : '0';
+        if ($existing) {
+            $existing->value = $value;
+            $DB->update_record('local_dixeo_setting', $existing);
+            continue;
+        }
+        $DB->insert_record('local_dixeo_setting', (object) [
+            'contextid' => $context->id,
+            'component' => 'local_dixeo',
+            'name' => 'filesync_enabled',
+            'value' => $value,
+        ]);
+    }
 }

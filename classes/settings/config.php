@@ -735,6 +735,22 @@ final class config {
     }
 
     /**
+     * Whether course setting rows can be read.
+     *
+     * A course has no stored override until local_dixeo_setting exists.
+     *
+     * @return bool
+     */
+    private function course_table_ready(): bool {
+        static $ready = null;
+        if ($ready === null) {
+            global $DB;
+            $ready = $DB->get_manager()->table_exists(self::TABLE);
+        }
+        return $ready;
+    }
+
+    /**
      * Stored course value, or null when this course has no override.
      *
      * @param definition $definition Catalogue entry.
@@ -743,6 +759,9 @@ final class config {
      */
     private function read_course(definition $definition, \context $context): ?string {
         global $DB;
+        if (!$this->course_table_ready()) {
+            return null;
+        }
         $value = $DB->get_field(self::TABLE, 'value', [
             'contextid' => $context->id,
             'component' => $definition->get_component(),
@@ -767,6 +786,9 @@ final class config {
             unset_config($definition->get_key(), $definition->get_component());
             return;
         }
+        if (!$this->course_table_ready()) {
+            return;
+        }
         $DB->delete_records(self::TABLE, [
             'contextid' => $context->id,
             'component' => $definition->get_component(),
@@ -786,6 +808,9 @@ final class config {
         global $DB;
         if ($level === resolver::LAYER_DIXEO) {
             set_config($definition->get_key(), $value, $definition->get_component());
+            return;
+        }
+        if (!$this->course_table_ready()) {
             return;
         }
 
