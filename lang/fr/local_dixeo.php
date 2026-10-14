@@ -426,6 +426,7 @@ $string['settings_modal_unsaved_confirm'] = 'Fermer sans enregistrer ces modific
 $string['settings_modal_unsaved_count'] = '{$a} modifications non enregistrées';
 $string['settings_modal_unsaved_none'] = 'Aucune modification non enregistrée';
 $string['settings_modal_unsaved_title'] = 'Modifications non enregistrées';
+$string['settings_readonly'] = 'Ce paramètre ne peut pas être modifié';
 $string['settings_revert'] = 'Annuler les modifications de {$a}';
 $string['settings_value_empty'] = 'vide';
 $string['settings_value_off'] = 'Désactivé';

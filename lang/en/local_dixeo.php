@@ -426,6 +426,7 @@ $string['settings_modal_unsaved_confirm'] = 'Close without saving these changes?
 $string['settings_modal_unsaved_count'] = '{$a} unsaved changes';
 $string['settings_modal_unsaved_none'] = 'No unsaved changes';
 $string['settings_modal_unsaved_title'] = 'Unsaved changes';
+$string['settings_readonly'] = 'This setting cannot be changed';
 $string['settings_revert'] = 'Revert changes to {$a}';
 $string['settings_value_empty'] = 'empty';
 $string['settings_value_off'] = 'Off';

@@ -273,9 +273,9 @@ define([], function() {
             return {
                 badge: '',
                 display: displayFor(entry.setting, entry.draft, labels),
-                valueclass: 'local-dixeo-settings-supplied',
-                siteclass: 'local-dixeo-settings-inherited',
-                dixeoclass: 'local-dixeo-settings-inherited',
+                valueclass: 'local-dixeo-settings-readonly',
+                siteclass: 'local-dixeo-settings-readonly',
+                dixeoclass: 'local-dixeo-settings-readonly',
                 showrevert: false,
                 pressed: entry.draft === '1',
                 badgeown: false,
@@ -472,6 +472,8 @@ define([], function() {
         return {
             component: setting.component,
             name: setting.name,
+            feature: setting.feature || '',
+            plugingroup: setting.plugingroup || '',
             label: label,
             help: help,
             badge: view.badge,
@@ -501,6 +503,7 @@ define([], function() {
             dixeovalue: dixeo || '',
             dixeoclass: view.dixeoclass,
             valueclass: view.valueclass,
+            readonlylabel: labels.readonly || '',
             revertlabel: String(labels.revert || '').replace('{$a}', label),
             showrevert: view.showrevert,
         };

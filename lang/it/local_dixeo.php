@@ -426,6 +426,7 @@ $string['settings_modal_unsaved_confirm'] = 'Chiudere senza salvare queste modif
 $string['settings_modal_unsaved_count'] = '{$a} modifiche non salvate';
 $string['settings_modal_unsaved_none'] = 'Nessuna modifica non salvata';
 $string['settings_modal_unsaved_title'] = 'Modifiche non salvate';
+$string['settings_readonly'] = 'Questa impostazione non può essere modificata';
 $string['settings_revert'] = 'Annulla le modifiche a {$a}';
 $string['settings_value_empty'] = 'vuoto';
 $string['settings_value_off'] = 'Disattivo';

@@ -46,7 +46,9 @@
         </div>
     </div>
     {{#rows}}
-    <div class="local-dixeo-settings-row" role="row" data-component="{{component}}" data-name="{{name}}">
+    <div class="local-dixeo-settings-row" role="row"
+         data-component="{{component}}" data-name="{{name}}"
+         data-feature="{{feature}}" data-plugingroup="{{plugingroup}}">
         <div class="local-dixeo-settings-row-name" role="cell">
             <div class="local-dixeo-settings-row-label">{{label}}</div>
             <div class="local-dixeo-settings-row-meta">
@@ -85,6 +87,11 @@
                 <span class="local-dixeo-settings-badge{{#badgeown}} local-dixeo-settings-badge-own{{/badgeown}}">{{badge}}</span>
                 {{/badge}}
                 <span class="local-dixeo-settings-icons">
+                    {{#readonly}}
+                    <span class="local-dixeo-settings-lock" title="{{readonlylabel}}">
+                        {{#pix}} t/locked, core, {{readonlylabel}} {{/pix}}
+                    </span>
+                    {{/readonly}}
                     <button type="button"
                             class="btn local-dixeo-settings-icon"
                             data-action="local-dixeo-settings-revert"

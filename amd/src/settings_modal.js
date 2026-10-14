@@ -675,6 +675,139 @@ define([
     };
 
     /**
+     * Place a group or feature title immediately before a row.
+     *
+     * @param {HTMLElement} table
+     * @param {HTMLElement} row
+     * @param {string} className
+     * @param {string} titleClass
+     * @param {string} tag
+     * @param {string} text
+     */
+    const insertGroupTitle = function(table, row, className, titleClass, tag, text) {
+        const heading = document.createElement('div');
+        heading.className = className;
+        heading.setAttribute('role', 'row');
+        const title = document.createElement(tag);
+        title.className = titleClass;
+        title.textContent = text;
+        heading.appendChild(title);
+        table.insertBefore(heading, row);
+    };
+
+    /**
+     * Feature headings on All features. Plugin headings on All plugins, with a feature subheading.
+     *
+     * A single selected feature or plugin already names the list, so that view has no group heading.
+     * A selected plugin still shows its feature subheadings. Rows stay in catalogue order inside a
+     * group. Groups follow the category order.
+     *
+     * @param {HTMLElement} shell
+     */
+    const syncGroupHeadings = function(shell) {
+        const session = sessions.get(shell);
+        const table = shell.querySelector('.local-dixeo-settings-table');
+        if (!session || !table) {
+            return;
+        }
+        table.querySelectorAll('.local-dixeo-settings-group, .local-dixeo-settings-subgroup').forEach(function(heading) {
+            heading.remove();
+        });
+        const rows = Array.from(table.querySelectorAll('.local-dixeo-settings-row'));
+        const grouping = shell.dataset.grouping === 'plugin' ? 'plugin' : 'feature';
+        const allselected = selectedCategory(shell) === 'all';
+        const show = grouping === 'plugin' || allselected;
+        const byOrder = function(left, right) {
+            return Number(left.dataset.order) - Number(right.dataset.order);
+        };
+        const compareId = function(left, right, pinned) {
+            if (left === pinned) {
+                return -1;
+            }
+            if (right === pinned) {
+                return 1;
+            }
+            return left.localeCompare(right);
+        };
+        if (!show) {
+            rows.sort(byOrder);
+            rows.forEach(function(row) {
+                table.appendChild(row);
+            });
+            return;
+        }
+        const names = session.categoryNames || {};
+        const labelFor = function(id) {
+            return names[id] || id;
+        };
+        rows.sort(function(left, right) {
+            if (grouping === 'plugin') {
+                const leftplugin = left.dataset.plugingroup || '';
+                const rightplugin = right.dataset.plugingroup || '';
+                if (leftplugin !== rightplugin) {
+                    return compareId(leftplugin, rightplugin, 'dixeo_core');
+                }
+            }
+            const leftfeature = left.dataset.feature || '';
+            const rightfeature = right.dataset.feature || '';
+            if (leftfeature !== rightfeature) {
+                return compareId(leftfeature, rightfeature, 'dixeo');
+            }
+            return byOrder(left, right);
+        });
+        let currentplugin = null;
+        let currentfeature = null;
+        rows.forEach(function(row) {
+            table.appendChild(row);
+            if (row.hidden) {
+                return;
+            }
+            const feature = row.dataset.feature || '';
+            if (grouping === 'plugin') {
+                const plugin = row.dataset.plugingroup || '';
+                if (plugin && plugin !== currentplugin) {
+                    currentplugin = plugin;
+                    currentfeature = null;
+                    if (allselected) {
+                        insertGroupTitle(
+                            table,
+                            row,
+                            'local-dixeo-settings-group',
+                            'local-dixeo-settings-group-title',
+                            'h3',
+                            labelFor(plugin)
+                        );
+                    }
+                }
+                if (feature && feature !== currentfeature) {
+                    currentfeature = feature;
+                    insertGroupTitle(
+                        table,
+                        row,
+                        'local-dixeo-settings-subgroup',
+                        'local-dixeo-settings-subgroup-title',
+                        'h4',
+                        labelFor(feature)
+                    );
+                }
+                return;
+            }
+            if (!feature || feature === currentfeature) {
+                return;
+            }
+            currentfeature = feature;
+            insertGroupTitle(
+                table,
+                row,
+                'local-dixeo-settings-group',
+                'local-dixeo-settings-group-title',
+                'h3',
+                labelFor(feature)
+            );
+        });
+    };
+
+    /**
      * Hide rows that miss the search, the Customised pill, or the category. The count is how many remain.
      *
      * While Status is open, the category counts may change and the status panel does not.
@@ -714,6 +847,7 @@ define([
         if (empty) {
             empty.hidden = shown !== 0;
         }
+        syncGroupHeadings(shell);
         if (session.toolbarCount) {
             setCount(shell, session.toolbarCount.replace('{$a}', String(shown)));
         }
@@ -923,6 +1057,7 @@ define([
             {key: 'settings_revert', component: 'local_dixeo'},
             {key: 'settings_modal_unsaved_count', component: 'local_dixeo'},
             {key: 'settings_modal_unsaved_none', component: 'local_dixeo'},
+            {key: 'settings_readonly', component: 'local_dixeo'},
         ];
         const extraAt = requests.length;
         requests.push({key: 'settings_modal_count', component: 'local_dixeo'});
@@ -964,6 +1099,7 @@ define([
                     site: strings[9],
                 },
                 revert: strings[10],
+                readonly: strings[13],
             };
             const entries = {};
             let optionCursor = optionAt;
@@ -1023,6 +1159,9 @@ define([
                 if (list) {
                     list.dataset.advanced = '0';
                     list.innerHTML = rendered.html;
+                    list.querySelectorAll('.local-dixeo-settings-row').forEach(function(row, index) {
+                        row.dataset.order = String(index);
+                    });
                 }
                 Templates.runTemplateJS(rendered.js);
                 return null;

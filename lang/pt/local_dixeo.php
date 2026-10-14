@@ -426,6 +426,7 @@ $string['settings_modal_unsaved_confirm'] = 'Fechar sem guardar estas alteraçõ
 $string['settings_modal_unsaved_count'] = '{$a} alterações por guardar';
 $string['settings_modal_unsaved_none'] = 'Sem alterações por guardar';
 $string['settings_modal_unsaved_title'] = 'Alterações por guardar';
+$string['settings_readonly'] = 'Esta definição não pode ser alterada';
 $string['settings_revert'] = 'Reverter as alterações de {$a}';
 $string['settings_value_empty'] = 'vazio';
 $string['settings_value_off'] = 'Desligado';

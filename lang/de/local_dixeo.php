@@ -426,6 +426,7 @@ $string['settings_modal_unsaved_confirm'] = 'Diese Änderungen ohne Speichern sc
 $string['settings_modal_unsaved_count'] = '{$a} ungespeicherte Änderungen';
 $string['settings_modal_unsaved_none'] = 'Keine ungespeicherten Änderungen';
 $string['settings_modal_unsaved_title'] = 'Ungespeicherte Änderungen';
+$string['settings_readonly'] = 'Diese Einstellung kann nicht geändert werden';
 $string['settings_revert'] = 'Änderungen an {$a} rückgängig machen';
 $string['settings_value_empty'] = 'leer';
 $string['settings_value_off'] = 'Aus';
