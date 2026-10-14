@@ -558,6 +558,24 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * A Moodle admin setting with no catalogue override is the live config value.
+     */
+    public function test_moodle_config_without_an_override_is_the_live_value(): void {
+        $config = new config();
+        $system = \context_system::instance();
+
+        set_config('format', 'weeks', 'moodlecourse');
+        $this->assertSame('weeks', $config->get_moodle('moodlecourse', 'format', $system));
+
+        unset_config('format', 'moodlecourse');
+        $this->assertSame('', $config->get_moodle('moodlecourse', 'format', $system));
+
+        set_config('framewidth', '800', 'scorm');
+        $pluginconfig = $config->moodle_plugin_config('scorm', $system);
+        $this->assertSame('800', (string) $pluginconfig->framewidth);
+    }
+
+    /**
      * @param array $row One catalogue row from get_layers.
      * @param string $level Site, Dixeo, or course.
      * @return array

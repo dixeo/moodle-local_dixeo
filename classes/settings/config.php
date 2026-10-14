@@ -27,7 +27,9 @@ namespace local_dixeo\settings;
  * empty and does not inherit Dixeo, and a value equal to Dixeo stays stored. A course-only setting
  * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
  * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
- * Callers do not query the table.
+ * Callers do not query the table. {@see self::get_moodle()} is the read path for a Moodle admin
+ * setting: a catalogue entry that overrides it supplies the effective value, and otherwise the
+ * live Moodle value is returned.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -68,6 +70,52 @@ final class config {
         $stored = $this->stored_values($definition, $context, $level);
         $effective = resolver::effective($level, $stored, $definition->get_default());
         return new resolved_value($effective['value'], $effective['source']);
+    }
+
+    /**
+     * Effective value of a Moodle admin setting.
+     *
+     * A catalogue entry whose core target is this plugin and name supplies the value, including
+     * its Dixeo and course layers. Any other name is the live Moodle value. An unset Moodle
+     * value is an empty string.
+     *
+     * @param string $plugin Frankenstyle plugin, or an empty string for a legacy $CFG name.
+     * @param string $name Setting name within the plugin, or the legacy config name.
+     * @param \context $context System context, or a course context when a course override can apply.
+     * @return string
+     */
+    public function get_moodle(string $plugin, string $name, \context $context): string {
+        $definition = $this->definition_overriding($plugin, $name);
+        if ($definition !== null) {
+            $readcontext = $context;
+            if (!in_array($this->open_level($context), $definition->get_levels(), true)) {
+                if (!in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
+                    $definition = null;
+                } else {
+                    $readcontext = \context_system::instance();
+                }
+            }
+            if ($definition !== null) {
+                return $this->get($definition->get_component(), $definition->get_key(), $readcontext)->get_value();
+            }
+        }
+        return $this->raw_moodle($plugin, $name);
+    }
+
+    /**
+     * Moodle admin config for one plugin, with catalogue overrides applied to matching names.
+     *
+     * @param string $plugin Frankenstyle plugin, such as `scorm` or `resource`.
+     * @param \context $context System context, or a course context when a course override can apply.
+     * @return \stdClass
+     */
+    public function moodle_plugin_config(string $plugin, \context $context): \stdClass {
+        $config = get_config($plugin);
+        $object = is_object($config) ? $config : new \stdClass();
+        foreach ($this->definitions_overriding_plugin($plugin) as $name) {
+            $object->{$name} = $this->get_moodle($plugin, $name, $context);
+        }
+        return $object;
     }
 
     /**
@@ -740,5 +788,61 @@ final class config {
             return;
         }
         $DB->insert_record(self::TABLE, (object) ($conditions + ['value' => $value]));
+    }
+
+    /**
+     * Catalogue entry that overrides this Moodle admin setting, if one is declared.
+     *
+     * @param string $plugin Frankenstyle plugin, or an empty string for a legacy $CFG name.
+     * @param string $name Setting name.
+     * @return definition|null
+     */
+    private function definition_overriding(string $plugin, string $name): ?definition {
+        foreach (catalogue::load() as $definition) {
+            $core = $definition->get_core();
+            if ($core !== null && $core->plugin === $plugin && $core->name === $name) {
+                return $definition;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Moodle setting names in one plugin that a catalogue entry overrides.
+     *
+     * @param string $plugin Frankenstyle plugin.
+     * @return string[]
+     */
+    private function definitions_overriding_plugin(string $plugin): array {
+        if ($plugin === '') {
+            return [];
+        }
+        $names = [];
+        foreach (catalogue::load() as $definition) {
+            $core = $definition->get_core();
+            if ($core !== null && !$core->legacycfg && $core->plugin === $plugin) {
+                $names[] = $core->name;
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * Live Moodle value, without a Dixeo override.
+     *
+     * @param string $plugin Frankenstyle plugin, or an empty string for a legacy $CFG name.
+     * @param string $name Setting name.
+     * @return string
+     */
+    private function raw_moodle(string $plugin, string $name): string {
+        if ($plugin === '') {
+            global $CFG;
+            return isset($CFG->{$name}) ? (string) $CFG->{$name} : '';
+        }
+        $value = get_config($plugin, $name);
+        if ($value === false || $value === null) {
+            return '';
+        }
+        return (string) $value;
     }
 }
