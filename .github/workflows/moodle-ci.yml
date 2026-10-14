@@ -66,6 +66,8 @@ jobs:
           # Needed for get_module_types courseid=0 (designer system-context) PHPUnit coverage.
           # Match Dixeo sibling branch: development/main/release → same on block_dixeo_designer.
           moodle-plugin-ci add-plugin --branch "$DIXEO_DEP_BRANCH" dixeo/moodle-block_dixeo_designer
+          # Course form tests cover the tutor switch. Same sibling branch as the plugin under test.
+          moodle-plugin-ci add-plugin --branch "$DIXEO_DEP_BRANCH" dixeo/block_dixeo_tutor
           moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
         env:
           DB: ${{ matrix.database }}

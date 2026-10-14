@@ -98,15 +98,20 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
         $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
         $this->assertLessThan($positions[course_edit_form::FILESYNC], $positions[course_edit_form::ENABLED]);
-        $this->assertLessThan($positions[course_edit_form::TUTOR], $positions[course_edit_form::FILESYNC]);
-        $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::TUTOR]);
-        $tutor = $mform->getElement(course_edit_form::TUTOR);
-        $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::TUTOR));
-        $this->assertSame('1', $this->element_value($tutor->getValue()));
-        $this->assertStringContainsString(
-            get_string('tutor_enabled_help', 'block_dixeo_tutor'),
-            $tutor->_helpbutton
-        );
+        if ($this->tutor_installed()) {
+            $this->assertLessThan($positions[course_edit_form::TUTOR], $positions[course_edit_form::FILESYNC]);
+            $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::TUTOR]);
+            $tutor = $mform->getElement(course_edit_form::TUTOR);
+            $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::TUTOR));
+            $this->assertSame('1', $this->element_value($tutor->getValue()));
+            $this->assertStringContainsString(
+                get_string('tutor_enabled_help', 'block_dixeo_tutor'),
+                $tutor->_helpbutton
+            );
+        } else {
+            $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::FILESYNC]);
+            $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
+        }
         $this->assertSame(
             service_factory::get_settings_config()->get(
                 'local_dixeo',
@@ -151,10 +156,14 @@ final class course_edit_form_test extends \advanced_testcase {
             '0',
             $this->element_value($form->get_quick_form()->getElement(course_edit_form::FILESYNC)->getValue())
         );
-        $this->assertSame(
-            '1',
-            $this->element_value($form->get_quick_form()->getElement(course_edit_form::TUTOR)->getValue())
-        );
+        if ($this->tutor_installed()) {
+            $this->assertSame(
+                '1',
+                $this->element_value($form->get_quick_form()->getElement(course_edit_form::TUTOR)->getValue())
+            );
+        } else {
+            $this->assertFalse($form->get_quick_form()->elementExists(course_edit_form::TUTOR));
+        }
     }
 
     /**
@@ -298,6 +307,10 @@ final class course_edit_form_test extends \advanced_testcase {
     public function test_course_save_stores_tutor_on_and_off(): void {
         global $DB;
 
+        if (!$this->tutor_installed()) {
+            $this->markTestSkipped('Student Tutor is not installed.');
+        }
+
         $course = $this->getDataGenerator()->create_course();
         $context = \context_course::instance($course->id);
         $config = service_factory::get_settings_config();
@@ -322,6 +335,19 @@ final class course_edit_form_test extends \advanced_testcase {
     }
 
     /**
+     * Whether the Student Tutor block is installed.
+     *
+     * The course form omits the tutor switch when the block is not installed.
+     *
+     * @return bool
+     */
+    private function tutor_installed(): bool {
+        return array_key_exists('dixeo_tutor', \core_component::get_plugin_list('block'));
+    }
+
+    /**
+     * Text stored in a form element.
+     *
      * @param mixed $raw Value from a form element.
      * @return string
      */

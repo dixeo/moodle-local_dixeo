@@ -220,25 +220,39 @@ final class catalogue_test extends \advanced_testcase {
             $template->get_labels()['']
         );
 
-        $this->assertArrayHasKey('certificate_generation', $settings);
-        $this->assertSame(['dixeo'], $settings['certificate_generation']->get_levels());
-        $this->assertSame('0', $settings['certificate_generation']->get_default());
-        $this->assertSame(['dixeo'], $settings['certificate_template']->get_levels());
-        $this->assertSame('select', $settings['certificate_template']->get_type());
-        $location = $settings['certificate_location'];
-        $this->assertSame(['dixeo'], $location->get_levels());
-        $this->assertSame(['summary', 'last'], $location->get_options());
-        $this->assertSame('last', $location->get_default());
+        // Certificate rows are registered only when the certificate plugins are installed.
+        $certificatekeys = [
+            'certificate_generation',
+            'certificate_template',
+            'certificate_location',
+        ];
+        $certificates = block_dixeo_designer_certificate_settings() !== [];
+        if ($certificates) {
+            $this->assertArrayHasKey('certificate_generation', $settings);
+            $this->assertSame(['dixeo'], $settings['certificate_generation']->get_levels());
+            $this->assertSame('0', $settings['certificate_generation']->get_default());
+            $this->assertSame(['dixeo'], $settings['certificate_template']->get_levels());
+            $this->assertSame('select', $settings['certificate_template']->get_type());
+            $location = $settings['certificate_location'];
+            $this->assertSame(['dixeo'], $location->get_levels());
+            $this->assertSame(['summary', 'last'], $location->get_options());
+            $this->assertSame('last', $location->get_default());
+        } else {
+            foreach ($certificatekeys as $key) {
+                $this->assertArrayNotHasKey($key, $settings);
+            }
+        }
 
         foreach ([
             'categoryname',
             'coursetemplate',
-            'certificate_generation',
-            'certificate_template',
-            'certificate_location',
             'self_enrol_configure',
             'self_enrol_generate_key',
-        ] as $key) {
+        ];
+        if ($certificates) {
+            $designerkeys = array_merge($designerkeys, $certificatekeys);
+        }
+        foreach ($designerkeys as $key) {
             $setting = $settings[$key];
             $this->assertFalse($setting->has_core());
             $this->assertTrue(get_string_manager()->string_exists($key, 'block_dixeo_designer'));
