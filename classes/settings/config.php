@@ -434,6 +434,7 @@ final class config {
         $row['options'] = $options;
         $row['optionlabels'] = $optionlabels;
         $row['readonly'] = $definition->is_readonly_at($level);
+        $row['defaultvalue'] = $definition->get_default();
         return $row;
     }
 

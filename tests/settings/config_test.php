@@ -269,6 +269,29 @@ final class config_test extends \advanced_testcase {
         $this->assertNull($dixeo['stored']);
         $this->assertFalse($dixeo['customised']);
         $this->assertSame('1', $dixeo['value']);
+        $this->assertSame('1', $enabled['defaultvalue']);
+        $this->assertSame('coursetitle', $pill['defaultvalue']);
+    }
+
+    /**
+     * A Dixeo value is customised when it differs from the catalogue default, and not when it matches.
+     */
+    public function test_dixeo_layer_is_customised_only_when_it_differs_from_the_default(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $system = \context_system::instance();
+
+        $config->set('local_dixeo', 'filesync_pill', $system, 'footer');
+        $changed = $this->layer_named($config->get_layers($system), 'filesync_pill');
+        $this->assertSame('footer', $changed['value']);
+        $this->assertSame('coursetitle', $changed['defaultvalue']);
+        $this->assertTrue($this->layer_level($changed, resolver::LAYER_DIXEO)['customised']);
+
+        $config->set('local_dixeo', 'filesync_pill', $system, 'coursetitle');
+        $cleared = $this->layer_named($config->get_layers($system), 'filesync_pill');
+        $this->assertSame('coursetitle', $cleared['value']);
+        $this->assertNull($this->layer_level($cleared, resolver::LAYER_DIXEO)['stored']);
+        $this->assertFalse($this->layer_level($cleared, resolver::LAYER_DIXEO)['customised']);
     }
 
     /**

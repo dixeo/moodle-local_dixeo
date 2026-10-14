@@ -126,7 +126,7 @@ define([], function() {
     };
 
     /**
-     * Value the current level inherits. Dixeo when that layer exists, otherwise the site value.
+     * Value a course row inherits. Dixeo when that layer exists, otherwise the site value.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @returns {string}
@@ -138,6 +138,49 @@ define([], function() {
         }
         const site = layerRaw(setting, 'site');
         return site === null ? '' : site;
+    };
+
+    /**
+     * True when the modal is open at the Dixeo layer. A course row includes a course layer.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @returns {boolean}
+     */
+    const atDixeoLevel = function(setting) {
+        return !layerAt(setting, 'course');
+    };
+
+    /**
+     * Value a Dixeo-level draft is compared with.
+     *
+     * A linked Moodle setting uses the site value. A setting with no Moodle parent uses the
+     * catalogue default.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @returns {string}
+     */
+    const dixeoBaseline = function(setting) {
+        const site = layerRaw(setting, 'site');
+        if (site !== null) {
+            return site;
+        }
+        if (setting.defaultvalue !== undefined && setting.defaultvalue !== null) {
+            return String(setting.defaultvalue);
+        }
+        return '';
+    };
+
+    /**
+     * Value that decides the Customised label for the open level.
+     *
+     * @param {Object} setting Catalogue row from get_settings.
+     * @returns {string}
+     */
+    const comparisonParent = function(setting) {
+        if (atDixeoLevel(setting)) {
+            return dixeoBaseline(setting);
+        }
+        return immediateParent(setting);
     };
 
     /**
@@ -161,13 +204,23 @@ define([], function() {
     };
 
     /**
-     * Badge source for a draft. An own value is customised. A parent value uses the layer that supplies it.
+     * Badge source for a draft.
+     *
+     * At the Dixeo level the badge is Customised when the draft differs from the linked site
+     * value, or from the catalogue default when the setting has no Moodle parent. A course
+     * draft is Customised when it differs from the Dixeo value it inherits.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @param {string} draft
      * @returns {string} customised, dixeo, or site.
      */
     const draftOrigin = function(setting, draft) {
+        if (atDixeoLevel(setting)) {
+            if (draft !== dixeoBaseline(setting)) {
+                return 'customised';
+            }
+            return layerAt(setting, 'site') ? 'site' : 'dixeo';
+        }
         if (draft !== immediateParent(setting)) {
             return 'customised';
         }
@@ -228,7 +281,7 @@ define([], function() {
             setting: setting,
             saved: saved,
             draft: saved,
-            parent: immediateParent(setting),
+            parent: comparisonParent(setting),
             site: layerRaw(setting, 'site'),
             dixeo: layerRaw(setting, 'dixeo'),
         };
@@ -330,7 +383,7 @@ define([], function() {
 
     /**
      * Whether a row stays visible. Search, Customised only, and the category all apply.
-     * Customised means the draft has its own value, including one that is not saved yet.
+     * Customised means the draft differs from the comparison parent, including a change that is not saved yet.
      *
      * @param {Object} entry Row from {@link entryFor}, with haystack set.
      * @param {{query: string, customisedOnly: boolean, category: string}} filter

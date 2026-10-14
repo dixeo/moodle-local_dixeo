@@ -100,6 +100,10 @@ class get_settings extends external_api {
                         false
                     ),
                     'coremissing' => new external_value(PARAM_BOOL, 'True when a declared core target cannot be resolved'),
+                    'defaultvalue' => new external_value(
+                        PARAM_RAW,
+                        'Catalogue default. At the Dixeo level a value that differs from the linked site setting, or from this default when there is no Moodle parent, is customised.'
+                    ),
                     'value' => new external_value(PARAM_RAW, 'Effective value'),
                     'source' => new external_value(PARAM_ALPHA, 'Layer that supplied the effective value'),
                     'layers' => new external_multiple_structure(
