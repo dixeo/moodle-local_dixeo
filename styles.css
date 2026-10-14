@@ -618,7 +618,7 @@ h2:has(.dixeo-sync-indicator),
     justify-content: flex-end;
 }
 
-#page-admin-setting-local_dixeo .local-dixeo-settings-open {
+.path-admin .local-dixeo-settings-open {
     text-align: right;
 }
 

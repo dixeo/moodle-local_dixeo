@@ -30,6 +30,7 @@ namespace local_dixeo\hook\output;
 
 use core\hook\output\before_footer_html_generation;
 use core\hook\output\before_standard_top_of_body_html_generation;
+use local_dixeo\admin_setting_modal_open;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\file_sync_policy;
 
@@ -59,14 +60,14 @@ class sync_indicator_injector {
     }
 
     /**
-     * Load the settings modal on the Dixeo plugin admin page.
+     * Load the settings modal on Dixeo plugin admin pages.
      *
      * @return void
      */
     private static function prepare_admin_settings_modal(): void {
         global $PAGE;
 
-        if ($PAGE->pagetype !== 'admin-setting-local_dixeo') {
+        if (!admin_setting_modal_open::applies_to_current_page()) {
             return;
         }
         $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');

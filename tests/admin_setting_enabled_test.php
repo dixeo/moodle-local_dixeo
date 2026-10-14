@@ -108,6 +108,37 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
+     * Every other Dixeo plugin admin page has the same button.
+     */
+    public function test_other_plugin_pages_open_the_dixeo_layer_modal(): void {
+        global $CFG;
+        require_once($CFG->libdir . '/adminlib.php');
+        $root = \admin_get_root(true, true);
+        $sections = [
+            'blocksettingdixeo_tutor' => 'block_dixeo_tutorsettings_modal_open',
+            'blocksettingdixeo_designer' => 'block_dixeo_designersettings_modal_open',
+            'local_dixeo_assistant' => 'local_dixeo_assistantsettings_modal_open',
+        ];
+        $checked = 0;
+        foreach ($sections as $section => $settingname) {
+            $page = $root->locate($section);
+            if (!$page instanceof \admin_settingpage) {
+                continue;
+            }
+            $checked++;
+            $this->assertTrue(isset($page->settings->$settingname), $section);
+            $html = $page->settings->$settingname->output_html('');
+            $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html, $section);
+            $this->assertStringContainsString(
+                'data-contextid="' . \context_system::instance()->id . '"',
+                $html,
+                $section
+            );
+        }
+        $this->assertGreaterThan(0, $checked);
+    }
+
+    /**
      * A null write, used when no value was posted, does not turn Dixeo off.
      */
     public function test_null_write_leaves_the_stored_value_unchanged(): void {
