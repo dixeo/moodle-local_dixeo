@@ -1021,6 +1021,18 @@ label[for="local-dixeo-settings-category"] {
     display: none;
 }
 
+.local-dixeo-settings-preferences-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-top: 16px;
+}
+
+.local-dixeo-settings-preferences-panel[hidden] {
+    display: none;
+}
+
 .local-dixeo-settings-status-card {
     max-width: 420px;
     border: 1px solid #e2e8f0;

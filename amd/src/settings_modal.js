@@ -566,6 +566,10 @@ define([
             panel.hidden = false;
             panel.dataset.canmanagesync = shell.dataset.canmanagesync === '1' ? '1' : '0';
         }
+        const preferences = shell.querySelector('[data-region="local-dixeo-settings-preferences"]');
+        if (preferences) {
+            preferences.hidden = true;
+        }
         const select = shell.querySelector('#local-dixeo-settings-category');
         if (select && [...select.options].some(function(option) {
             return option.value === 'status';
@@ -578,6 +582,91 @@ define([
             scheduleStatusPoll(shell);
             return null;
         }).catch(function() {
+            return null;
+        });
+    };
+
+    /**
+     * Hide the course preferences panel and show the settings list again.
+     *
+     * @param {HTMLElement} shell
+     */
+    const leavePreferences = function(shell) {
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-preferences"]');
+        if (panel) {
+            panel.hidden = true;
+        }
+        if (shell.dataset.panel !== 'preferences') {
+            return;
+        }
+        delete shell.dataset.panel;
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (list) {
+            list.hidden = false;
+        }
+    };
+
+    /**
+     * Load the delete-conversation label. The button stays hidden when Tutor is not installed.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise}
+     */
+    const prepareDeleteConversation = function(shell) {
+        const button = shell.querySelector('[data-action="delete-conversation"]');
+        if (!button || !shell.dataset.courseid) {
+            return Promise.resolve();
+        }
+        if (button.dataset.ready === '1') {
+            button.hidden = false;
+            return Promise.resolve();
+        }
+        return Str.get_strings([
+            {key: 'deleteconversation', component: 'block_dixeo_tutor'},
+            {key: 'deleteconversationconfirm', component: 'block_dixeo_tutor'},
+            {key: 'delete', component: 'moodle'},
+        ]).then(function(strings) {
+            const label = button.querySelector('[data-region="delete-conversation-label"]');
+            if (label) {
+                label.textContent = strings[0];
+            }
+            button.setAttribute('aria-label', strings[0]);
+            button.dataset.confirm = strings[1];
+            button.dataset.yes = strings[2];
+            button.dataset.ready = '1';
+            button.hidden = false;
+            return null;
+        }).catch(function() {
+            button.hidden = true;
+            return null;
+        });
+    };
+
+    /**
+     * Show course preferences. Outside a course the settings list stays in place.
+     *
+     * @param {HTMLElement} shell
+     */
+    const showPreferences = function(shell) {
+        const panel = shell.querySelector('[data-region="local-dixeo-settings-preferences"]');
+        if (!shell.dataset.courseid || !panel) {
+            return;
+        }
+        shell.dataset.panel = 'preferences';
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        if (list) {
+            list.hidden = true;
+        }
+        const status = shell.querySelector('[data-region="local-dixeo-settings-status"]');
+        if (status) {
+            status.hidden = true;
+        }
+        panel.hidden = false;
+        const session = sessions.get(shell);
+        if (session && session.toolbarCount) {
+            setCount(shell, session.toolbarCount.replace('{$a}', '0'));
+        }
+        prepareDeleteConversation(shell).catch(function() {
             return null;
         });
     };
@@ -690,6 +779,52 @@ define([
     };
 
     /**
+     * Confirm, then erase the current user's tutor conversation in this course.
+     *
+     * @param {HTMLElement} shell
+     * @param {HTMLElement} button
+     * @returns {Promise}
+     */
+    const deleteConversation = function(shell, button) {
+        const courseid = parseInt(shell.dataset.courseid, 10);
+        if (!courseid || button.dataset.busy === '1' || button.dataset.ready !== '1') {
+            return Promise.resolve();
+        }
+        let confirmed = false;
+        return Notification.deleteCancelPromise(
+            button.getAttribute('aria-label') || '',
+            button.dataset.confirm || '',
+            button.dataset.yes || '',
+            {triggerElement: button}
+        ).then(function() {
+            confirmed = true;
+            button.dataset.busy = '1';
+            button.disabled = true;
+            return Ajax.call([{
+                methodname: 'block_dixeo_tutor_delete_conversation',
+                args: {courseid: courseid},
+            }])[0];
+        }).then(function() {
+            if (!confirmed) {
+                return null;
+            }
+            window.dispatchEvent(new CustomEvent('dixeo-tutor-conversation-deleted', {
+                detail: {courseid: courseid},
+            }));
+            return null;
+        }).catch(function(error) {
+            if (confirmed) {
+                Notification.exception(error);
+            }
+            return null;
+        }).then(function() {
+            delete button.dataset.busy;
+            button.disabled = false;
+            return null;
+        });
+    };
+
+    /**
      * Status is not a category. Its button and its actions stay off the settings draft.
      *
      * @param {HTMLElement} shell
@@ -708,6 +843,22 @@ define([
             }
             event.preventDefault();
             runStatusAction(shell, action.dataset.action);
+        });
+    };
+
+    /**
+     * Delete conversation lives on the preferences panel and is not a setting draft.
+     *
+     * @param {HTMLElement} shell
+     */
+    const bindPreferences = function(shell) {
+        shell.addEventListener('click', function(event) {
+            const button = event.target.closest('[data-action="delete-conversation"]');
+            if (!button || button.hidden) {
+                return;
+            }
+            event.preventDefault();
+            deleteConversation(shell, button);
         });
     };
 
@@ -856,7 +1007,7 @@ define([
         if (!session) {
             return;
         }
-        if (shell.dataset.panel === 'status') {
+        if (shell.dataset.panel === 'status' || shell.dataset.panel === 'preferences') {
             renderCategories(shell);
             return;
         }
@@ -1000,6 +1151,32 @@ define([
     };
 
     /**
+     * Preferences is a category with no settings. Inside a course it shows course actions.
+     *
+     * @param {HTMLElement} shell
+     * @param {string} category
+     */
+    const selectCategory = function(shell, category) {
+        const value = category || 'all';
+        if (value === 'preferences') {
+            leaveStatus(shell);
+            setCategory(shell, 'preferences');
+            if (shell.dataset.courseid) {
+                showPreferences(shell);
+                renderCategories(shell);
+                return;
+            }
+            leavePreferences(shell);
+            applyFilter(shell);
+            return;
+        }
+        leavePreferences(shell);
+        leaveStatus(shell);
+        setCategory(shell, value);
+        applyFilter(shell);
+    };
+
+    /**
      * Search, Customised only, and the category filter together and leave the draft in place.
      *
      * @param {HTMLElement} shell
@@ -1020,7 +1197,7 @@ define([
             const grouping = event.target.closest('.local-dixeo-settings-grouping [data-grouping]');
             if (grouping) {
                 setGrouping(shell, grouping.dataset.grouping);
-                if (shell.dataset.panel !== 'status') {
+                if (shell.dataset.panel !== 'status' && shell.dataset.panel !== 'preferences') {
                     setCategory(shell, 'all');
                 }
                 applyFilter(shell);
@@ -1028,9 +1205,7 @@ define([
             }
             const category = event.target.closest('.local-dixeo-settings-category-list [data-category]');
             if (category) {
-                leaveStatus(shell);
-                setCategory(shell, category.dataset.category || 'all');
-                applyFilter(shell);
+                selectCategory(shell, category.dataset.category || 'all');
             }
         });
         shell.addEventListener('change', function(event) {
@@ -1042,12 +1217,11 @@ define([
                 return;
             }
             if (select.value === 'status') {
+                leavePreferences(shell);
                 showStatus(shell);
                 return;
             }
-            leaveStatus(shell);
-            setCategory(shell, select.value || 'all');
-            applyFilter(shell);
+            selectCategory(shell, select.value || 'all');
         });
     };
 
@@ -1250,6 +1424,10 @@ define([
             return renderRows(shell, settings, id);
         }).then(function() {
             if (phase !== 'render') {
+                return null;
+            }
+            if (shell.dataset.panel === 'preferences') {
+                phase = 'done';
                 return null;
             }
             if (openCategory) {
@@ -1720,6 +1898,7 @@ define([
             }
             setList(shell, '');
             setCount(shell, strings[1]);
+            showPreferences(shell);
             return null;
         });
     };
@@ -1791,6 +1970,7 @@ define([
             bindSave(shell);
             bindFilter(shell);
             bindStatus(shell);
+            bindPreferences(shell);
             if (button.dataset.preferencesonly === '1') {
                 return showPreferencesOnly(shell);
             }
