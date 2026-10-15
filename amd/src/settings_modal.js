@@ -643,14 +643,134 @@ define([
     };
 
     /**
-     * Show course preferences. Outside a course the settings list stays in place.
+     * Preference controls rendered in the preferences panel, keyed by catalogue name.
+     *
+     * @type {Object<string, string>}
+     */
+    const preferenceFields = {
+        generation_language: '[data-region="generation-language"]',
+    };
+
+    /**
+     * Session used by the footer when the modal has not loaded catalogue rows.
      *
      * @param {HTMLElement} shell
+     * @returns {Promise<Object>}
+     */
+    const ensurePreferenceSession = function(shell) {
+        const existing = sessions.get(shell);
+        if (existing && existing.countLabel) {
+            existing.preferenceDrafts = existing.preferenceDrafts || {};
+            existing.entries = existing.entries || {};
+            return Promise.resolve(existing);
+        }
+        return Str.get_strings([
+            {key: 'settings_modal_unsaved_count', component: 'local_dixeo'},
+            {key: 'settings_modal_unsaved_none', component: 'local_dixeo'},
+            {key: 'settings_modal_saving', component: 'local_dixeo'},
+        ]).then(function(strings) {
+            const session = sessions.get(shell) || {
+                entries: {},
+                labels: {},
+                preferenceDrafts: {},
+                contextid: parseInt(shell.dataset.contextid || '0', 10) || 0,
+                saving: false,
+            };
+            session.entries = session.entries || {};
+            session.preferenceDrafts = session.preferenceDrafts || {};
+            session.countLabel = session.countLabel || strings[0];
+            session.noneLabel = session.noneLabel || strings[1];
+            session.savingLabel = session.savingLabel || strings[2];
+            sessions.set(shell, session);
+            return session;
+        });
+    };
+
+    /**
+     * Paint stored preference drafts into their controls.
+     *
+     * @param {HTMLElement} shell
+     * @param {Object} session
+     * @returns {boolean} Whether any preference control is shown.
+     */
+    const applyStoredPreferences = function(shell, session) {
+        let shown = false;
+        Object.keys(preferenceFields).forEach(function(name) {
+            const field = shell.querySelector(preferenceFields[name]);
+            const select = field ? field.querySelector('[data-preference="' + name + '"]') : null;
+            const preference = session.preferenceDrafts[name];
+            if (!field || !select || !preference) {
+                return;
+            }
+            if (select.dataset.ready !== '1') {
+                select.replaceChildren();
+                (preference.options || []).forEach(function(option) {
+                    const node = document.createElement('option');
+                    node.value = option.value;
+                    node.textContent = option.label;
+                    select.appendChild(node);
+                });
+                select.dataset.ready = '1';
+            }
+            if (select.value !== preference.draft) {
+                select.value = preference.draft;
+            }
+            const visible = !!preference.show && select.options.length > 1;
+            field.hidden = !visible;
+            if (visible) {
+                shown = true;
+            }
+        });
+        return shown;
+    };
+
+    /**
+     * Load the preference catalogue. Controls stay hidden until their definition says to show them.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise<boolean>} Whether a preference control is shown.
+     */
+    const preparePreferences = function(shell) {
+        if (!shell.querySelector('[data-region="local-dixeo-settings-preferences"]')) {
+            return Promise.resolve(false);
+        }
+        return ensurePreferenceSession(shell).then(function() {
+            if (shell.dataset.preferencesready === '1') {
+                return applyStoredPreferences(shell, sessions.get(shell));
+            }
+            return Ajax.call([{
+                methodname: 'local_dixeo_get_preferences',
+                args: {},
+            }])[0].then(function(result) {
+                const session = sessions.get(shell);
+                const list = result && Array.isArray(result.preferences) ? result.preferences : [];
+                list.forEach(function(preference) {
+                    const current = session.preferenceDrafts[preference.name] || {
+                        saved: String(preference.value || ''),
+                        draft: String(preference.value || ''),
+                    };
+                    current.options = preference.options || [];
+                    current.show = !!preference.show;
+                    session.preferenceDrafts[preference.name] = current;
+                });
+                shell.dataset.preferencesready = '1';
+                return applyStoredPreferences(shell, session);
+            }).catch(function() {
+                return false;
+            });
+        });
+    };
+
+    /**
+     * Show preferences. The language control is site-wide. Deleting a conversation needs a course.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise<boolean>} False when neither the language control nor a course action is shown.
      */
     const showPreferences = function(shell) {
         const panel = shell.querySelector('[data-region="local-dixeo-settings-preferences"]');
-        if (!shell.dataset.courseid || !panel) {
-            return;
+        if (!panel) {
+            return Promise.resolve(false);
         }
         shell.dataset.panel = 'preferences';
         const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
@@ -662,12 +782,18 @@ define([
             status.hidden = true;
         }
         panel.hidden = false;
-        const session = sessions.get(shell);
-        if (session && session.toolbarCount) {
-            setCount(shell, session.toolbarCount.replace('{$a}', '0'));
-        }
-        prepareDeleteConversation(shell).catch(function() {
-            return null;
+        const token = String(Date.now());
+        shell.dataset.preferencestoken = token;
+        return Promise.all([
+            prepareDeleteConversation(shell),
+            preparePreferences(shell),
+        ]).then(function(results) {
+            if (shell.dataset.preferencestoken !== token || shell.dataset.panel !== 'preferences') {
+                return true;
+            }
+            return !!results[1] || !!shell.dataset.courseid;
+        }).catch(function() {
+            return !!shell.dataset.courseid;
         });
     };
 
@@ -847,7 +973,7 @@ define([
     };
 
     /**
-     * Delete conversation lives on the preferences panel and is not a setting draft.
+     * Delete conversation stays immediate. Preference controls join the settings draft.
      *
      * @param {HTMLElement} shell
      */
@@ -859,6 +985,22 @@ define([
             }
             event.preventDefault();
             deleteConversation(shell, button);
+        });
+        shell.addEventListener('change', function(event) {
+            const select = event.target.closest('[data-preference]');
+            if (!select || select.dataset.ready !== '1') {
+                return;
+            }
+            const session = sessions.get(shell);
+            const preference = session && session.preferenceDrafts
+                ? session.preferenceDrafts[select.dataset.preference]
+                : null;
+            if (!preference || preference.draft === select.value) {
+                return;
+            }
+            preference.draft = select.value;
+            clearSaveError(shell);
+            publishDirty(shell);
         });
     };
 
@@ -998,7 +1140,7 @@ define([
     /**
      * Hide rows that miss the search, the Customised pill, or the category. The count is how many remain.
      *
-     * While Status is open, the category counts may change and the status panel does not.
+     * Status and My preferences leave the toolbar count unchanged. Their category counts may still change.
      *
      * @param {HTMLElement} shell
      */
@@ -1019,7 +1161,9 @@ define([
             category: selectedCategory(shell),
         };
         let shown = 0;
-        shell.querySelectorAll('.local-dixeo-settings-row').forEach(function(row) {
+        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        const rows = list ? list.querySelectorAll('.local-dixeo-settings-row') : [];
+        rows.forEach(function(row) {
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
             const visible = entry ? State.matches(entry, filter) : false;
             row.hidden = !visible;
@@ -1056,7 +1200,7 @@ define([
             return;
         }
         const atDixeo = !shell.dataset.courseid;
-        const visible = Array.from(shell.querySelectorAll('.local-dixeo-settings-row')).filter(function(row) {
+        const visible = Array.from(list.querySelectorAll('.local-dixeo-settings-row')).filter(function(row) {
             return !row.hidden;
         });
         const showSite = visible.some(function(row) {
@@ -1126,17 +1270,19 @@ define([
             button.hidden = !!item.hidden;
             const name = document.createElement('span');
             name.textContent = item.label;
-            const count = document.createElement('span');
-            count.className = 'local-dixeo-settings-category-count';
-            count.textContent = String(item.count);
             button.appendChild(name);
-            button.appendChild(count);
+            if (!item.preferences) {
+                const count = document.createElement('span');
+                count.className = 'local-dixeo-settings-category-count';
+                count.textContent = String(item.count);
+                button.appendChild(count);
+            }
             setPressed(button, shell.dataset.panel !== 'status' && item.value === selectedCategory(shell));
             list.appendChild(button);
 
             const option = document.createElement('option');
             option.value = item.value;
-            option.textContent = item.label + ' (' + item.count + ')';
+            option.textContent = item.preferences ? item.label : item.label + ' (' + item.count + ')';
             option.hidden = !!item.hidden;
             option.disabled = !!item.hidden;
             select.appendChild(option);
@@ -1161,13 +1307,16 @@ define([
         if (value === 'preferences') {
             leaveStatus(shell);
             setCategory(shell, 'preferences');
-            if (shell.dataset.courseid) {
-                showPreferences(shell);
-                renderCategories(shell);
-                return;
-            }
-            leavePreferences(shell);
-            applyFilter(shell);
+            showPreferences(shell).then(function(shown) {
+                if (!shown && shell.dataset.panel === 'preferences') {
+                    leavePreferences(shell);
+                    applyFilter(shell);
+                }
+                return null;
+            }).catch(function() {
+                return null;
+            });
+            renderCategories(shell);
             return;
         }
         leavePreferences(shell);
@@ -1352,6 +1501,7 @@ define([
                     'dixeo_designer': strings[extraAt + 12],
                 },
                 contextid: contextid,
+                preferenceDrafts: {},
                 saving: false,
             });
             const context = {
@@ -1432,6 +1582,9 @@ define([
             }
             if (openCategory) {
                 setCategory(shell, openCategory);
+            }
+            if (openStatus) {
+                shell.dataset.panel = 'status';
             }
             applyFilter(shell);
             if (openStatus) {
@@ -1560,7 +1713,38 @@ define([
     };
 
     /**
-     * Footer count, Save, and data-dirty follow the number of drafts that differ.
+     * How many preference drafts differ from the stored value.
+     *
+     * @param {Object} session
+     * @returns {number}
+     */
+    const preferenceDirtyCount = function(session) {
+        const preferences = session.preferenceDrafts || {};
+        return Object.keys(preferences).filter(function(name) {
+            return preferences[name].draft !== preferences[name].saved;
+        }).length;
+    };
+
+    /**
+     * Preferences whose draft differs, in the save service shape.
+     *
+     * @param {Object} session
+     * @returns {Array<{name: string, value: string}>}
+     */
+    const changedPreferences = function(session) {
+        const preferences = session.preferenceDrafts || {};
+        return Object.keys(preferences).filter(function(name) {
+            return preferences[name].draft !== preferences[name].saved;
+        }).map(function(name) {
+            return {
+                name: name,
+                value: preferences[name].draft,
+            };
+        });
+    };
+
+    /**
+     * Footer count, Save, and data-dirty follow catalogue and preference drafts.
      *
      * @param {HTMLElement} shell
      */
@@ -1569,7 +1753,7 @@ define([
         if (!session) {
             return;
         }
-        const count = State.dirtyCount(session.entries);
+        const count = State.dirtyCount(session.entries || {}) + preferenceDirtyCount(session);
         const save = shell.querySelector('[data-action="local-dixeo-settings-save"]');
         if (save) {
             save.disabled = session.saving || count === 0;
@@ -1609,10 +1793,9 @@ define([
      * @param {HTMLElement} shell
      */
     const clearSaveError = function(shell) {
-        const error = shell.querySelector('[data-region="local-dixeo-settings-save-error"]');
-        if (error) {
+        shell.querySelectorAll('[data-region="local-dixeo-settings-save-error"]').forEach(function(error) {
             error.remove();
-        }
+        });
     };
 
     /**
@@ -1622,7 +1805,9 @@ define([
      * @param {string} message
      */
     const showSaveError = function(shell, message) {
-        const list = shell.querySelector('[data-region="local-dixeo-settings-list"]');
+        const list = shell.dataset.panel === 'preferences'
+            ? shell.querySelector('[data-region="local-dixeo-settings-preferences"]')
+            : shell.querySelector('[data-region="local-dixeo-settings-list"]');
         if (!list) {
             return;
         }
@@ -1753,8 +1938,10 @@ define([
     };
 
     /**
-     * Save the rows whose draft differs. Success clears the course cache and reloads the page.
-     * Failure leaves the modal and the draft in place.
+     * Save catalogue drafts and preference drafts together.
+     *
+     * Success clears the applied cache and reloads the page. Failure leaves the modal
+     * and the draft in place.
      *
      * @param {HTMLElement} shell
      */
@@ -1765,8 +1952,9 @@ define([
             if (!button || !session || session.saving || button.disabled) {
                 return;
             }
-            const settings = State.changedSettings(session.entries);
-            if (!settings.length) {
+            const settings = State.changedSettings(session.entries || {});
+            const preferences = changedPreferences(session);
+            if (!settings.length && !preferences.length) {
                 return;
             }
             event.preventDefault();
@@ -1776,13 +1964,27 @@ define([
             showPanelOverlay(shell, session.savingLabel, 'saving');
             const fallbackReady = Str.get_string('settings_modal_save_error', 'local_dixeo');
             let saveError = null;
-            Ajax.call([{
-                methodname: 'local_dixeo_save_settings',
-                args: {
-                    contextid: session.contextid,
-                    settings: settings,
-                },
-            }])[0].then(function() {
+            const writes = [];
+            if (settings.length) {
+                writes.push(Ajax.call([{
+                    methodname: 'local_dixeo_save_settings',
+                    args: {
+                        contextid: session.contextid,
+                        settings: settings,
+                    },
+                }])[0]);
+            }
+            if (preferences.length) {
+                writes.push(Ajax.call([{
+                    methodname: 'local_dixeo_set_preferences',
+                    args: {
+                        contextid: session.contextid || parseInt(shell.dataset.contextid || '0', 10) || 0,
+                        courseid: parseInt(shell.dataset.courseid || '0', 10) || 0,
+                        preferences: preferences,
+                    },
+                }])[0]);
+            }
+            Promise.all(writes).then(function() {
                 if (!shell.isConnected) {
                     return null;
                 }
@@ -1870,10 +2072,7 @@ define([
         shell.dataset.preferencesonly = '1';
         setCategory(shell, 'preferences');
         leaveStatus(shell);
-        return Str.get_strings([
-            {key: 'settings_modal_preferences', component: 'local_dixeo'},
-            {key: 'settings_modal_count', component: 'local_dixeo', param: 0},
-        ]).then(function(strings) {
+        return Str.get_string('settings_modal_preferences', 'local_dixeo').then(function(label) {
             const list = shell.querySelector('[data-region="local-dixeo-settings-category-list"]');
             const select = shell.querySelector('#local-dixeo-settings-category');
             if (list) {
@@ -1883,7 +2082,7 @@ define([
                 button.className = 'btn btn-outline-secondary';
                 button.dataset.category = 'preferences';
                 const name = document.createElement('span');
-                name.textContent = strings[0];
+                name.textContent = label;
                 button.appendChild(name);
                 setPressed(button, true);
                 list.appendChild(button);
@@ -1892,12 +2091,11 @@ define([
                 select.replaceChildren();
                 const option = document.createElement('option');
                 option.value = 'preferences';
-                option.textContent = strings[0];
+                option.textContent = label;
                 select.appendChild(option);
                 select.value = 'preferences';
             }
             setList(shell, '');
-            setCount(shell, strings[1]);
             showPreferences(shell);
             return null;
         });
@@ -1960,6 +2158,9 @@ define([
             }
             Templates.runTemplateJS(modalRendered.js);
             const shell = createdModal.getRoot()[0].querySelector('.local-dixeo-settings-modal');
+            if (button.dataset.contextid) {
+                shell.dataset.contextid = button.dataset.contextid;
+            }
             if (button.dataset.courseid) {
                 shell.dataset.courseid = button.dataset.courseid;
                 shell.dataset.canmanagesync = button.dataset.canmanagesync === '1' ? '1' : '0';

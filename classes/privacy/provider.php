@@ -33,6 +33,7 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
+use local_dixeo\service\generation_language_helper;
 
 /**
  * Privacy provider for course AI sync records and Dixeo API transfers.
@@ -48,7 +49,8 @@ use local_dixeo\external\service_factory;
 class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
-    \core_privacy\local\request\plugin\provider {
+    \core_privacy\local\request\plugin\provider,
+    \core_privacy\local\request\user_preference_provider {
     /** @var string Course AI sync configuration table. */
     public const TABLE_COURSE_AI = 'local_dixeo_course_ai';
 
@@ -80,6 +82,11 @@ class provider implements
      * @return collection The updated collection.
      */
     public static function get_metadata(collection $collection): collection {
+        $collection->add_user_preference(
+            generation_language_helper::PREFERENCE,
+            'privacy:metadata:preference:generation_language'
+        );
+
         $collection->add_database_table(
             self::TABLE_COURSE_AI,
             [
@@ -975,6 +982,24 @@ class provider implements
         );
 
         return null;
+    }
+
+    /**
+     * Export the generation language preference.
+     *
+     * @param int $userid
+     */
+    public static function export_user_preferences(int $userid): void {
+        $language = get_user_preferences(generation_language_helper::PREFERENCE, null, $userid);
+        if (!is_string($language) || $language === '') {
+            return;
+        }
+        writer::export_user_preference(
+            'local_dixeo',
+            generation_language_helper::PREFERENCE,
+            $language,
+            get_string('privacy:metadata:preference:generation_language', 'local_dixeo')
+        );
     }
 
     /**

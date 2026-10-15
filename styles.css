@@ -1033,6 +1033,31 @@ label[for="local-dixeo-settings-category"] {
     display: none;
 }
 
+.local-dixeo-settings-preference[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-preference .local-dixeo-settings-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
+    border-top: 0;
+}
+
+.local-dixeo-settings-preference .local-dixeo-settings-row-label {
+    margin: 0;
+}
+
+.local-dixeo-settings-modal .local-dixeo-settings-preference select.form-select.local-dixeo-settings-control {
+    appearance: none;
+    height: 44px;
+    padding: 7px 28px 7px 8px;
+    line-height: 20px;
+    background-color: #fff;
+    background-image: url([[pix:local_dixeo|select_chevron]]);
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 8px;
+}
+
 .local-dixeo-settings-status-card {
     max-width: 420px;
     border: 1px solid #e2e8f0;

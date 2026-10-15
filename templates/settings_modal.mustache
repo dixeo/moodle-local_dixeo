@@ -105,6 +105,24 @@
             <div class="local-dixeo-settings-preferences-panel"
                  data-region="local-dixeo-settings-preferences"
                  hidden>
+                <div class="local-dixeo-settings-preference" data-region="generation-language" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <label class="local-dixeo-settings-row-label" for="local-dixeo-generation-language">
+                                {{#str}}generation_language, local_dixeo{{/str}}
+                            </label>
+                            <div class="local-dixeo-settings-row-help">
+                                {{#str}}generation_language_desc, local_dixeo{{/str}}
+                            </div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <select id="local-dixeo-generation-language"
+                                    class="form-select local-dixeo-settings-control local-dixeo-settings-supplied"
+                                    data-preference="generation_language"></select>
+                        </div>
+                    </div>
+                </div>
                 <div class="local-dixeo-settings-status-actions">
                     <button type="button"
                             class="btn btn-outline-danger"

@@ -147,4 +147,23 @@ $functions = [
         'ajax' => true,
         'capabilities' => '',
     ],
+
+    // Read the current user's Dixeo preferences.
+    'local_dixeo_get_preferences' => [
+        'classname' => 'local_dixeo\external\get_preferences',
+        'description' => 'Read the current user Dixeo preferences',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
+
+    // Store the current user's Dixeo preferences.
+    'local_dixeo_set_preferences' => [
+        'classname' => 'local_dixeo\external\set_preferences',
+        'description' => 'Store the current user Dixeo preferences',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => '',
+    ],
 ];
