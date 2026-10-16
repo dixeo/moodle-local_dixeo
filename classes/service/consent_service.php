@@ -307,8 +307,10 @@ class consent_service {
         if ((string) $latest->version !== self::VERSION) {
             return false;
         }
-        if ((string) $latest->lang === current_language()
-                && !hash_equals((string) $latest->documenthash, $this->notice()->hash())) {
+        if (
+            (string) $latest->lang === current_language()
+            && !hash_equals((string) $latest->documenthash, $this->notice()->hash())
+        ) {
             return false;
         }
         return true;

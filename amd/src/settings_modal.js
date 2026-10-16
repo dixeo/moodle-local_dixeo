@@ -678,6 +678,78 @@ define([
     };
 
     /**
+     * Paint the terms modal and the status line under My preferences.
+     *
+     * @param {HTMLElement} shell
+     * @param {Object|null} modal
+     * @param {Object} result
+     * @returns {null}
+     */
+    const paintConsent = function(shell, modal, result) {
+        const status = shell.querySelector('[data-region="consent-status"]');
+        if (status && result && result.termsstatus) {
+            status.textContent = result.termsstatus;
+        }
+        if (!modal) {
+            return null;
+        }
+        // A string passed to setBody() updates the DOM immediately and does not return a promise.
+        modal.setBody(result.html || '');
+        const root = modal.getRoot();
+        const node = root && root[0] ? root[0] : document;
+        ConsentGate.bindSave(node);
+        ConsentGate.bindReview(node);
+        return null;
+    };
+
+    /**
+     * Save the review form and paint the returned markup.
+     *
+     * @param {HTMLElement} shell
+     * @param {Object} modal
+     * @param {HTMLFormElement} form
+     * @returns {Promise}
+     */
+    const saveConsentForm = function(shell, modal, form) {
+        const actionInput = form.querySelector('[name="action"]');
+        const processing = form.querySelector('[name="processing"]');
+        const terms = form.querySelector('[name="terms"]');
+        const action = actionInput ? actionInput.value : '';
+        if (action === 'saveprocessing' && (!(processing && processing.checked) || !(terms && terms.checked))) {
+            return Promise.resolve(null);
+        }
+        return Ajax.call([{
+            methodname: 'local_dixeo_save_consent',
+            args: {
+                action: action,
+                processing: !!(processing && processing.checked),
+            },
+        }])[0].then(function(saved) {
+            if (saved && saved.message) {
+                Notification.addNotification({message: saved.message, type: 'success'});
+            }
+            if (saved && saved.reload) {
+                window.location.reload();
+                return null;
+            }
+            return paintConsent(shell, modal, saved);
+        });
+    };
+
+    /**
+     * Submit the review form through the consent web service.
+     *
+     * @param {HTMLElement} shell
+     * @param {Object} modal
+     */
+    const bindConsentSubmit = function(shell, modal) {
+        modal.getRoot().on('submit', 'form', function(event) {
+            event.preventDefault();
+            saveConsentForm(shell, modal, event.target).catch(Notification.exception);
+        });
+    };
+
+    /**
      * Open the terms document so the user can re-read it or withdraw.
      *
      * @param {HTMLElement} shell
@@ -689,71 +761,34 @@ define([
             return Promise.resolve();
         }
         button.dataset.busy = '1';
-        let consentModal = null;
-        const paint = function(result) {
-            const status = shell.querySelector('[data-region="consent-status"]');
-            if (status && result && result.termsstatus) {
-                status.textContent = result.termsstatus;
-            }
-            if (!consentModal) {
-                return null;
-            }
-            // setBody() updates the DOM immediately for a string and does not return a promise.
-            consentModal.setBody(result.html || '');
-            const root = consentModal.getRoot();
-            const node = root && root[0] ? root[0] : document;
-            ConsentGate.bindSave(node);
-            ConsentGate.bindReview(node);
-            return null;
-        };
+        let consentTitle = '';
+        let loaded = null;
         return Str.get_string('consent_title', 'local_dixeo').then(function(title) {
+            consentTitle = title;
             return Ajax.call([{
                 methodname: 'local_dixeo_get_consent_manage',
                 args: {},
-            }])[0].then(function(result) {
-                if (!result || !result.show) {
-                    return null;
-                }
-                return Modal.create({
-                    title: title,
-                    body: result.html,
-                    large: true,
-                    removeOnClose: true,
-                    show: true,
-                    returnElement: button,
-                }).then(function(modal) {
-                    consentModal = modal;
-                    paint(result);
-                    modal.getRoot().on('submit', 'form', function(event) {
-                        event.preventDefault();
-                        const form = event.target;
-                        const actionInput = form.querySelector('[name="action"]');
-                        const processing = form.querySelector('[name="processing"]');
-                        const terms = form.querySelector('[name="terms"]');
-                        const action = actionInput ? actionInput.value : '';
-                        if (action === 'saveprocessing' && (!(processing && processing.checked) || !(terms && terms.checked))) {
-                            return;
-                        }
-                        Ajax.call([{
-                            methodname: 'local_dixeo_save_consent',
-                            args: {
-                                action: action,
-                                processing: !!(processing && processing.checked),
-                            },
-                        }])[0].then(function(saved) {
-                            if (saved && saved.message) {
-                                Notification.addNotification({message: saved.message, type: 'success'});
-                            }
-                            if (saved && saved.reload) {
-                                window.location.reload();
-                                return null;
-                            }
-                            return paint(saved);
-                        }).catch(Notification.exception);
-                    });
-                    return null;
-                });
+            }])[0];
+        }).then(function(result) {
+            loaded = result;
+            if (!result || !result.show) {
+                return null;
+            }
+            return Modal.create({
+                title: consentTitle,
+                body: result.html,
+                large: true,
+                removeOnClose: true,
+                show: true,
+                returnElement: button,
             });
+        }).then(function(modal) {
+            if (!modal || !loaded) {
+                return null;
+            }
+            paintConsent(shell, modal, loaded);
+            bindConsentSubmit(shell, modal);
+            return null;
         }).catch(Notification.exception).then(function() {
             delete button.dataset.busy;
             return null;
@@ -765,9 +800,12 @@ define([
      *
      * @type {Object<string, string>}
      */
-    const preferenceFields = {
-        generation_language: '[data-region="generation-language"]',
-    };
+    const preferenceFields = [
+        {
+            name: 'generation_language',
+            selector: '[data-region="generation-language"]',
+        },
+    ];
 
     /**
      * Session used by the footer when the modal has not loaded catalogue rows.
@@ -813,10 +851,10 @@ define([
      */
     const applyStoredPreferences = function(shell, session) {
         let shown = false;
-        Object.keys(preferenceFields).forEach(function(name) {
-            const field = shell.querySelector(preferenceFields[name]);
-            const select = field ? field.querySelector('[data-preference="' + name + '"]') : null;
-            const preference = session.preferenceDrafts[name];
+        preferenceFields.forEach(function(fielddef) {
+            const field = shell.querySelector(fielddef.selector);
+            const select = field ? field.querySelector('[data-preference="' + fielddef.name + '"]') : null;
+            const preference = session.preferenceDrafts[fielddef.name];
             if (!field || !select || !preference) {
                 return;
             }
@@ -854,14 +892,16 @@ define([
         }
         return ensurePreferenceSession(shell).then(function() {
             if (shell.dataset.preferencesready === '1') {
-                return applyStoredPreferences(shell, sessions.get(shell));
+                return null;
             }
             return Ajax.call([{
                 methodname: 'local_dixeo_get_preferences',
                 args: {},
-            }])[0].then(function(result) {
-                const session = sessions.get(shell);
-                const list = result && Array.isArray(result.preferences) ? result.preferences : [];
+            }])[0];
+        }).then(function(result) {
+            const session = sessions.get(shell);
+            if (result) {
+                const list = Array.isArray(result.preferences) ? result.preferences : [];
                 list.forEach(function(preference) {
                     const current = session.preferenceDrafts[preference.name] || {
                         saved: String(preference.value || ''),
@@ -872,10 +912,10 @@ define([
                     session.preferenceDrafts[preference.name] = current;
                 });
                 shell.dataset.preferencesready = '1';
-                return applyStoredPreferences(shell, session);
-            }).catch(function() {
-                return false;
-            });
+            }
+            return applyStoredPreferences(shell, session);
+        }).catch(function() {
+            return false;
         });
     };
 

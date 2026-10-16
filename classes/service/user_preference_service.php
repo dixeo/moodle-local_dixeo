@@ -52,8 +52,8 @@ class user_preference_service {
      * Unknown names and invalid values are rejected. Preferences omitted from the
      * list stay unchanged.
      *
-     * @param int $userid
-     * @param array<int, array{name: string, value: string}> $preferences
+     * @param int $userid User id.
+     * @param array $preferences Submitted preferences. Each item has name and value.
      */
     public static function store_for_user(int $userid, array $preferences): void {
         foreach ($preferences as $preference) {

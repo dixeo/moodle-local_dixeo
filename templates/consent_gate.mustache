@@ -16,6 +16,32 @@
     * returnurl - Local URL to reopen after Continue
     * exiturl - Site home
     * version - Document version
+
+    Example context (json):
+    {
+        "title": "Terms of Use and Privacy Notice",
+        "sections": [
+            {
+                "id": "local-dixeo-consent-terms-section",
+                "heading": "Terms of Use",
+                "blocks": [
+                    {
+                        "paragraph": "These terms are a contract."
+                    }
+                ]
+            }
+        ],
+        "termscheckbox": "I have read and agree to the Terms of Use and acknowledge the Privacy Notice.",
+        "processingcheckbox": "My tutor usage will be recorded for usage analytics and reports.",
+        "continuelabel": "Continue",
+        "exitlabel": "Exit",
+        "actionurl": "https://example.com/local/dixeo/consent.php",
+        "sesskey": "sesskey",
+        "courseid": 2,
+        "returnurl": "https://example.com/course/view.php?id=2",
+        "exiturl": "https://example.com/",
+        "version": "2026-10-15.1"
+    }
 }}
 <div class="local-dixeo-consent-lock" data-region="local-dixeo-consent-lock">
     <div class="local-dixeo-consent-dialog"
@@ -38,11 +64,11 @@
             <input type="hidden" name="returnurl" value="{{returnurl}}">
             <input type="hidden" name="version" value="{{version}}">
             <label class="local-dixeo-consent-check" for="local-dixeo-consent-terms">
-                <input type="checkbox" name="terms" id="local-dixeo-consent-terms" value="1" required autocomplete="off">
+                <input type="checkbox" name="terms" id="local-dixeo-consent-terms" value="1" required>
                 <span>{{termscheckbox}}</span>
             </label>
             <label class="local-dixeo-consent-check" for="local-dixeo-consent-processing">
-                <input type="checkbox" name="processing" id="local-dixeo-consent-processing" value="1" required autocomplete="off">
+                <input type="checkbox" name="processing" id="local-dixeo-consent-processing" value="1" required>
                 <span>{{processingcheckbox}}</span>
             </label>
             <div class="local-dixeo-consent-actions">

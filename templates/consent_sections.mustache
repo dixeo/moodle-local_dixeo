@@ -5,6 +5,35 @@
 
     Context variables required:
     * sections - List of heading, id, and blocks (paragraph or list)
+    * hasdataprotection - True when a data-privacy requests link is shown
+    * dataprotectionurl - Data-privacy requests URL
+    * dataprotectionlabel - Label for that link
+
+    Example context (json):
+    {
+        "sections": [
+            {
+                "id": "local-dixeo-consent-terms-section",
+                "heading": "Terms of Use",
+                "blocks": [
+                    {
+                        "paragraph": "These terms are a contract."
+                    },
+                    {
+                        "list": true,
+                        "items": [
+                            {
+                                "text": "Your user id"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "hasdataprotection": true,
+        "dataprotectionurl": "https://example.com/privacy",
+        "dataprotectionlabel": "Open your data privacy requests"
+    }
 }}
 {{#sections}}
 <section class="local-dixeo-consent-section" id="{{id}}">
