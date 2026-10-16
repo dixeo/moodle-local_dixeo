@@ -39,6 +39,75 @@ $string['cachedef_coursetemplates'] = 'Modelos de estrutura de curso em cache da
 $string['cachedef_installedplugintypes'] = 'Tipos de plugins de atividade instalados em cache para geração Dixeo';
 $string['cachedef_moduletypes'] = 'Tipos de módulo em cache da API Dixeo';
 $string['configure_api'] = 'Configurar API';
+$string['consent_close'] = 'Fechar';
+$string['consent_continue'] = 'Continuar';
+$string['consent_error_terms_required'] = 'Marque as duas caixas antes de continuar.';
+$string['consent_error_version'] = 'Estes termos foram atualizados. Leia a versão atual e continue novamente.';
+$string['consent_exit'] = 'Sair';
+$string['consent_manage'] = 'Termos e privacidade Dixeo';
+$string['consent_manage_intro'] = 'Reveja os termos de utilização e o aviso de privacidade, ou revogue a sua aceitação.';
+$string['consent_privacy_body'] = 'Este aviso explica como os seus dados pessoais são usados quando o Dixeo está ativado, conforme exigido pelos artigos 13.º e 14.º do RGPD. Lê-lo não constitui, por si só, um consentimento.
+
+Quem é responsável. {$a->sitename}, a organização que opera este sítio, é o responsável pelo tratamento: decide por que razão e como os seus dados pessoais são usados. Contacto: {$a->contact}. O Dixeo, que fornece os plugins e os serviços de IA, é o subcontratante. Este sítio envia dados para a API Dixeo em {$a->apiurl} para que o Dixeo possa prestar as funções descritas nos termos de utilização. As cópias remotas são conservadas segundo o contrato entre {$a->sitename} e o Dixeo. Este sítio não consegue apagar essas cópias remotas através das ferramentas de privacidade do Moodle. Para questões sobre os serviços do Dixeo, contacte contact@dixeo.com.
+
+Dados que este sítio armazena ou envia, conforme declarado à API de privacidade do Moodle:
+
+- O seu identificador de utilizador Moodle, enviado com os pedidos que inicia
+- As mensagens que escreve ao tutor, as instruções e o texto visível da página, para o tutor poder responder no contexto da página
+- Títulos e resumos de disciplinas, secções e atividades; instruções; imagens de origem; e ficheiros da disciplina, incluindo texto extraído de pacotes SCORM, carregados para geração, edição de imagens ou sincronização de ficheiros
+- Nomes, descrições e definições de estrutura de modelos de disciplina armazenados na API Dixeo
+- Identificadores de tarefas, tipos de operação, montantes de créditos e a disciplina ou atividade a que cada tarefa pertence
+- Instruções de imagem e estado da tarefa. Os registos locais de tarefas de imagem são apagados 7 dias depois de a tarefa terminar
+- O idioma que escolhe para os testes e as lições gerados pelo tutor
+- O identificador de utilizador e a hora registados quando alguém ativa ou desativa a sincronização de ficheiros de uma disciplina
+
+Base jurídica. Prestar tutoria, geração, imagens, sincronização de ficheiros, contabilização de créditos e análises de utilização do tutor é necessário para executar os termos de utilização (artigo 6.º, n.º 1, alínea b). Manter registos operacionais para segurança, apoio e contabilização de créditos é do interesse legítimo de {$a->sitename} (artigo 6.º, n.º 1, alínea f).
+
+Destinatários. Os seus dados são partilhados com a API Dixeo e, para os relatórios de créditos, com o pessoal que este sítio autorizou. Os relatórios de utilização do tutor só são visíveis para pessoal autorizado.
+
+Transferências internacionais. Os dados são enviados para a API Dixeo indicada acima. Qualquer transferência para fora do seu país, e as garantias aplicáveis, estão estabelecidas no contrato entre {$a->sitename} e o Dixeo. Este sítio não consegue ver nem descrever o próprio mecanismo de transferência.
+
+Conservação. Os registos locais de tarefas de imagem são conservados durante 7 dias depois de a tarefa terminar. Os outros registos locais mantêm-se enquanto a sua conta existir e são removidos quando os seus dados pessoais são apagados no Moodle. A conservação remota segue o contrato entre {$a->sitename} e o Dixeo.
+
+Os seus direitos. Pode pedir a {$a->sitename} acesso, retificação, apagamento, limitação ou uma cópia portátil dos seus dados e pode opor-se ao tratamento baseado em interesses legítimos. Também pode apresentar reclamação a uma autoridade de controlo. Se este sítio tiver as ferramentas de privacidade do Moodle, use-as para contactar o encarregado de proteção de dados.
+
+Aceitação dos termos. Aceita os termos de utilização para abrir uma disciplina em que o Dixeo está ativado. As análises de utilização do tutor serão registadas. Se não concordar, escolha Sair.
+
+Uso de IA. O Dixeo usa IA para redigir respostas do tutor, conteúdo da disciplina e imagens. Quando um professor o ativa, produz também sugestões de revisão ou classificação de trabalhos para as pessoas da disciplina. Qualquer nota que {$a->sitename} trate como definitiva é controlada pelo professor e pelas regras de avaliação próprias deste sítio.
+
+Os seus dados não são usados para marketing.';
+$string['consent_privacy_contact_admin'] = 'o administrador do sítio';
+$string['consent_privacy_dataprotection'] = 'Abrir os seus pedidos de privacidade';
+$string['consent_privacy_heading'] = 'Aviso de privacidade';
+$string['consent_processing_body'] = 'O Dixeo regista análises de utilização do tutor: o número de mensagens, testes de prática e lições que cria, o modo do tutor, a disciplina, a atividade e a hora. O texto das suas mensagens não é armazenado nestes registos. O pessoal autorizado pode ver os números nos relatórios de utilização do tutor.';
+$string['consent_processing_checkbox'] = 'A minha utilização do tutor (número de mensagens, modos, disciplinas, atividades e marcas temporais, sem o texto das mensagens) será registada para análises e relatórios de utilização.';
+$string['consent_processing_heading'] = 'Análises de utilização';
+$string['consent_review'] = 'Rever';
+$string['consent_save_processing'] = 'Guardar';
+$string['consent_saved_processing'] = 'A sua escolha de análise foi guardada.';
+$string['consent_status_accepted'] = 'Aceitou os termos de utilização (versão {$a->version}) em {$a->time}. As análises de utilização do tutor serão registadas (versão {$a->processingversion}) desde {$a->processingtime}.';
+$string['consent_status_processing_off'] = 'As análises de utilização do tutor não estão a ser registadas.';
+$string['consent_status_processing_on'] = 'As análises de utilização do tutor serão registadas (versão {$a->version}) desde {$a->time}.';
+$string['consent_status_terms_accepted'] = 'Aceitou os termos de utilização (versão {$a->version}) em {$a->time}.';
+$string['consent_status_terms_none'] = 'Não aceitou os termos de utilização atuais. Uma disciplina em que o Dixeo está ativado pedir-lho-á antes de poder continuar.';
+$string['consent_terms_body'] = 'Estes termos são um contrato entre si e {$a->sitename}, a organização que opera este sítio. Aplicam-se sempre que usa o Dixeo numa disciplina.
+
+O Dixeo, fornecedor dos plugins e dos serviços de IA usados neste sítio, oferece tutoria com IA, geração de conteúdo, geração de imagens, sincronização de ficheiros da disciplina e contabilização de créditos nas disciplinas em que está ativado. Ao continuar, aceita usar estas funções ao abrigo destes termos.
+
+Não deve submeter conteúdo ilícito nem conteúdo que não tenha o direito de partilhar. O resultado da IA pode estar incompleto ou inexato. É responsável pela forma como o usa, incluindo qualquer trabalho que entregue para a disciplina.
+
+O Dixeo pode estar indisponível se o serviço for suspenso ou se os créditos se esgotarem. A sincronização de ficheiros e as tarefas de IA dependem de o serviço Dixeo permanecer disponível.
+
+Se não concordar, escolha Sair. Não poderá entrar nesta disciplina enquanto o Dixeo estiver ativado. Pode retirar a sua aceitação a qualquer momento na configuração Dixeo, em As minhas preferências, e a disciplina voltará a pedir-lha. A retirada não apaga o trabalho da disciplina que já criou.
+
+Versão do documento {$a->version}.';
+$string['consent_terms_checkbox'] = 'Li e aceito os termos de utilização e tomo conhecimento do aviso de privacidade.';
+$string['consent_terms_heading'] = 'Termos de utilização';
+$string['consent_title'] = 'Termos de utilização e aviso de privacidade';
+$string['consent_withdraw_confirm'] = 'Revogar retira a sua aceitação dos termos de utilização. As análises de utilização do tutor já guardadas são eliminadas. Uma disciplina em que o Dixeo está ativado voltará a pedi-las.';
+$string['consent_withdraw_confirm_title'] = 'Revogar a aceitação?';
+$string['consent_withdraw_terms'] = 'Revogar';
+$string['consent_withdrawn_terms'] = 'A sua aceitação dos termos de utilização foi retirada. Uma disciplina Dixeo voltará a pedir-lha.';
 $string['content_image_failed'] = 'Ocorreu um erro';
 $string['content_image_generating'] = 'A gerar...';
 $string['contentimagetitlefallback'] = 'Imagem de conteúdo';
@@ -283,6 +352,13 @@ Concentre-se no contexto do curso fornecido.';
 $string['practice_quiz_scope_activity_description'] = 'a atividade «{$a->name}»';
 $string['practice_quiz_scope_course_description'] = 'o curso completo «{$a->name}»';
 $string['practice_quiz_scope_section_description'] = 'a secção «{$a->name}»';
+$string['preferences_delete_conversation'] = 'Eliminar a conversa do tutor';
+$string['preferences_delete_conversation_desc'] = 'Isto elimina apenas a sua conversa com o tutor na disciplina atual. As conversas nas outras disciplinas mantêm-se.';
+$string['privacy:metadata:consent'] = 'Registos da aceitação dos termos de utilização, com o utilizador, a hora e o aviso que foi mostrado.';
+$string['privacy:metadata:consent:action'] = 'Se o utilizador concedeu ou retirou a aceitação.';
+$string['privacy:metadata:consent:documentid'] = 'O aviso guardado a que esta decisão se refere.';
+$string['privacy:metadata:consent:timecreated'] = 'Quando o utilizador concedeu ou retirou a escolha.';
+$string['privacy:metadata:consent:userid'] = 'Utilizador a quem o registo pertence.';
 $string['privacy:metadata:course_ai'] = 'Configuração e estado da sincronização de ficheiros AI por curso.';
 $string['privacy:metadata:course_ai:courseid'] = 'O curso a que pertence esta configuração de sincronização.';
 $string['privacy:metadata:course_ai:disabledat'] = 'A hora em que a sincronização de ficheiros foi desativada.';
@@ -380,6 +456,7 @@ $string['privacy:metadata:tutor_usage_session:messagecount'] = 'Mensagens na ses
 $string['privacy:metadata:tutor_usage_session:timeend'] = 'Hora de fim da sessão';
 $string['privacy:metadata:tutor_usage_session:timestart'] = 'Hora de início da sessão';
 $string['privacy:metadata:tutor_usage_session:userid'] = 'O id do utilizador';
+$string['privacy:path:consent'] = 'Escolhas sobre termos e privacidade';
 $string['privacy:path:conversation'] = 'Conversa do tutor';
 $string['privacy:path:course_ai'] = 'Sincronização AI do curso';
 $string['privacy:path:credit_usage'] = 'Utilização de créditos';

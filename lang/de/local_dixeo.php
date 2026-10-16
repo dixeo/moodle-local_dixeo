@@ -39,6 +39,75 @@ $string['cachedef_coursetemplates'] = 'Zwischengespeicherte Kursstrukturvorlagen
 $string['cachedef_installedplugintypes'] = 'Zwischengespeicherte installierte Aktivitäts-Plugin-Typen für die Dixeo-Generierung';
 $string['cachedef_moduletypes'] = 'Zwischengespeicherte Modultypen von der Dixeo-API';
 $string['configure_api'] = 'API konfigurieren';
+$string['consent_close'] = 'Schließen';
+$string['consent_continue'] = 'Weiter';
+$string['consent_error_terms_required'] = 'Setzen Sie beide Häkchen, bevor Sie fortfahren.';
+$string['consent_error_version'] = 'Diese Bedingungen wurden aktualisiert. Lesen Sie die aktuelle Fassung und fahren Sie dann fort.';
+$string['consent_exit'] = 'Beenden';
+$string['consent_manage'] = 'Dixeo-Bedingungen und Datenschutz';
+$string['consent_manage_intro'] = 'Lesen Sie die Nutzungsbedingungen und den Datenschutzhinweis erneut oder widerrufen Sie Ihre Annahme.';
+$string['consent_privacy_body'] = 'Dieser Hinweis erklärt, wie Ihre personenbezogenen Daten verwendet werden, wenn Dixeo aktiviert ist, wie es die Artikel 13 und 14 der DSGVO verlangen. Ihn zu lesen ist für sich genommen keine Einwilligung.
+
+Wer verantwortlich ist. {$a->sitename}, die Organisation, die diese Website betreibt, ist der Verantwortliche: sie entscheidet, warum und wie Ihre personenbezogenen Daten verwendet werden. Kontakt: {$a->contact}. Dixeo, das die Plugins und KI-Dienste bereitstellt, ist der Auftragsverarbeiter. Diese Website sendet Daten an die Dixeo-API unter {$a->apiurl}, damit Dixeo die in den Nutzungsbedingungen beschriebenen Funktionen bereitstellen kann. Entfernte Kopien werden nach dem Vertrag zwischen {$a->sitename} und Dixeo aufbewahrt. Diese Website kann diese entfernten Kopien nicht über die Datenschutzwerkzeuge von Moodle löschen. Fragen zu den Diensten von Dixeo richten Sie an contact@dixeo.com.
+
+Daten, die diese Website speichert oder sendet, wie gegenüber der Datenschutz-API von Moodle angegeben:
+
+- Ihre Moodle-Benutzer-ID, gesendet mit Anfragen, die Sie starten
+- Tutor-Nachrichten, die Sie schreiben, Anweisungen und sichtbarer Seitentext, damit der Tutor im Kontext der Seite antworten kann
+- Titel und Zusammenfassungen von Kursen, Abschnitten und Aktivitäten; Prompts; Quellbilder; und Kursdateien, einschließlich aus SCORM-Paketen extrahiertem Text, die für Generierung, Bildbearbeitung oder Dateisynchronisation hochgeladen werden
+- Namen, Beschreibungen und Strukturdefinitionen von Kursvorlagen, die auf der Dixeo-API gespeichert sind
+- Auftrags-IDs, Vorgangsarten, Kreditbeträge und der Kurs oder die Aktivität, zu dem jeder Auftrag gehört
+- Bild-Prompts und Auftragsstatus. Lokale Bildauftragsdatensätze werden 7 Tage nach Abschluss des Auftrags gelöscht
+- Die Sprache, die Sie für Tests und Lektionen wählen, die der Tutor erzeugt
+- Die Benutzer-ID und die Uhrzeit, die erfasst werden, wenn jemand die Dateisynchronisation eines Kurses aktiviert oder deaktiviert
+
+Rechtsgrundlage. Tutoring, Generierung, Bilder, Dateisynchronisation, Kreditabrechnung und Tutor-Nutzungsanalysen sind erforderlich, um die Nutzungsbedingungen zu erfüllen (Artikel 6 Absatz 1 Buchstabe b). Operative Aufzeichnungen für Sicherheit, Support und Kreditabrechnung beruhen auf dem berechtigten Interesse von {$a->sitename} (Artikel 6 Absatz 1 Buchstabe f).
+
+Empfänger. Ihre Daten werden mit der Dixeo-API und, für Kreditberichte, mit Personal geteilt, das diese Website dazu berechtigt hat. Tutor-Nutzungsberichte sind nur für berechtigtes Personal sichtbar.
+
+Internationale Übermittlungen. Daten werden an die oben genannte Dixeo-API gesendet. Jede Übermittlung außerhalb Ihres Landes und die dafür geltenden Garantien sind im Vertrag zwischen {$a->sitename} und Dixeo festgelegt. Diese Website kann den Übermittlungsmechanismus selbst weder sehen noch beschreiben.
+
+Aufbewahrung. Lokale Bildauftragsdatensätze werden 7 Tage nach Abschluss des Auftrags aufbewahrt. Andere lokale Datensätze bleiben bestehen, solange Ihr Konto existiert, und werden entfernt, wenn Ihre personenbezogenen Daten in Moodle gelöscht werden. Die entfernte Aufbewahrung folgt dem Vertrag zwischen {$a->sitename} und Dixeo.
+
+Ihre Rechte. Sie können von {$a->sitename} Auskunft, Berichtigung, Löschung, Einschränkung oder eine übertragbare Kopie Ihrer Daten verlangen und einer Verarbeitung auf Grundlage berechtigter Interessen widersprechen. Sie können auch Beschwerde bei einer Aufsichtsbehörde einlegen. Wenn diese Website die Datenschutzwerkzeuge von Moodle hat, nutzen Sie diese, um die Datenschutzbeauftragte oder den Datenschutzbeauftragten zu erreichen.
+
+Annahme der Bedingungen. Sie akzeptieren die Nutzungsbedingungen, um einen Kurs zu öffnen, in dem Dixeo aktiviert ist. Tutor-Nutzungsanalysen werden erfasst. Wenn Sie nicht zustimmen, wählen Sie Beenden.
+
+Einsatz von KI. Dixeo nutzt KI, um Tutor-Antworten, Kursinhalte und Bilder zu entwerfen. Wenn eine Lehrkraft es einschaltet, erzeugt sie außerdem Vorschläge zur Durchsicht oder Bewertung von Aufgaben für Personen im Kurs. Eine Note, die {$a->sitename} als endgültig behandelt, bleibt unter der Kontrolle der Lehrkraft und der eigenen Bewertungsregeln dieser Website.
+
+Ihre Daten werden nicht für Werbung verwendet.';
+$string['consent_privacy_contact_admin'] = 'die Website-Administration';
+$string['consent_privacy_dataprotection'] = 'Ihre Datenschutzanfragen öffnen';
+$string['consent_privacy_heading'] = 'Datenschutzhinweis';
+$string['consent_processing_body'] = 'Dixeo erfasst Tutor-Nutzungsanalysen: die Anzahl der Nachrichten, Übungstests und Lektionen, die Sie erstellen, den Tutormodus, den Kurs, die Aktivität und die Uhrzeit. Der Text Ihrer Nachrichten wird in diesen Datensätzen nicht gespeichert. Berechtigtes Personal kann die Zahlen in Tutor-Nutzungsberichten sehen.';
+$string['consent_processing_checkbox'] = 'Meine Tutornutzung (Nachrichtenanzahl, Modi, Kurse, Aktivitäten und Zeitstempel, ohne Nachrichtentext) wird für Nutzungsanalysen und Berichte erfasst.';
+$string['consent_processing_heading'] = 'Nutzungsanalysen';
+$string['consent_review'] = 'Überprüfen';
+$string['consent_save_processing'] = 'Speichern';
+$string['consent_saved_processing'] = 'Ihre Analysenauswahl wurde gespeichert.';
+$string['consent_status_accepted'] = 'Sie haben die Nutzungsbedingungen akzeptiert (Version {$a->version}) am {$a->time}. Tutor-Nutzungsanalysen werden erfasst (Version {$a->processingversion}) seit {$a->processingtime}.';
+$string['consent_status_processing_off'] = 'Tutor-Nutzungsanalysen werden nicht erfasst.';
+$string['consent_status_processing_on'] = 'Tutor-Nutzungsanalysen werden erfasst (Version {$a->version}) seit {$a->time}.';
+$string['consent_status_terms_accepted'] = 'Sie haben die Nutzungsbedingungen akzeptiert (Version {$a->version}) am {$a->time}.';
+$string['consent_status_terms_none'] = 'Sie haben die aktuellen Nutzungsbedingungen nicht akzeptiert. Ein Kurs, in dem Dixeo aktiviert ist, fragt Sie, bevor Sie fortfahren können.';
+$string['consent_terms_body'] = 'Diese Bedingungen sind ein Vertrag zwischen Ihnen und {$a->sitename}, der Organisation, die diese Website betreibt. Sie gelten, wann immer Sie Dixeo in einem Kurs nutzen.
+
+Dixeo, der Anbieter der Plugins und KI-Dienste auf dieser Website, bietet KI-Tutoring, Inhaltserzeugung, Bilderzeugung, Synchronisation von Kursdateien und Kreditabrechnung in Kursen an, in denen es aktiviert ist. Wenn Sie fortfahren, stimmen Sie zu, diese Funktionen unter diesen Bedingungen zu nutzen.
+
+Sie dürfen keine rechtswidrigen Inhalte und keine Inhalte übermitteln, die Sie nicht teilen dürfen. KI-Ausgaben können unvollständig oder unzutreffend sein. Sie sind dafür verantwortlich, wie Sie sie verwenden, einschließlich der Arbeiten, die Sie für den Kurs einreichen.
+
+Dixeo kann nicht verfügbar sein, wenn der Dienst ausgesetzt ist oder die Kredite aufgebraucht sind. Dateisynchronisation und KI-Aufträge hängen davon ab, dass der Dixeo-Dienst verfügbar bleibt.
+
+Wenn Sie nicht zustimmen, wählen Sie Beenden. Sie können diesen Kurs nicht betreten, solange Dixeo aktiviert ist. Sie können Ihre Annahme jederzeit in der Dixeo-Konfiguration unter Meine Präferenzen widerrufen, und der Kurs fragt Sie erneut. Der Widerruf löscht keine Kursarbeiten, die Sie bereits erstellt haben.
+
+Dokumentversion {$a->version}.';
+$string['consent_terms_checkbox'] = 'Ich habe die Nutzungsbedingungen gelesen und akzeptiere sie und nehme den Datenschutzhinweis zur Kenntnis.';
+$string['consent_terms_heading'] = 'Nutzungsbedingungen';
+$string['consent_title'] = 'Nutzungsbedingungen und Datenschutzhinweis';
+$string['consent_withdraw_confirm'] = 'Der Widerruf nimmt Ihre Annahme der Nutzungsbedingungen zurück. Bereits gespeicherte Tutor-Nutzungsanalysen werden gelöscht. Ein Kurs, in dem Dixeo aktiviert ist, fragt Sie erneut.';
+$string['consent_withdraw_confirm_title'] = 'Annahme widerrufen?';
+$string['consent_withdraw_terms'] = 'Widerrufen';
+$string['consent_withdrawn_terms'] = 'Ihre Annahme der Nutzungsbedingungen wurde widerrufen. Ein Dixeo-Kurs wird Sie erneut fragen.';
 $string['content_image_failed'] = 'Es ist ein Fehler aufgetreten';
 $string['content_image_generating'] = 'Wird generiert...';
 $string['contentimagetitlefallback'] = 'Inhaltsbild';
@@ -283,6 +352,13 @@ Konzentrieren Sie sich auf den bereitgestellten Kurskontext.';
 $string['practice_quiz_scope_activity_description'] = 'die Aktivität „{$a->name}"';
 $string['practice_quiz_scope_course_description'] = 'den gesamten Kurs „{$a->name}"';
 $string['practice_quiz_scope_section_description'] = 'den Abschnitt „{$a->name}"';
+$string['preferences_delete_conversation'] = 'Tutor-Konversation löschen';
+$string['preferences_delete_conversation_desc'] = 'Dies löscht nur Ihre Tutor-Konversation in diesem Kurs. Konversationen in anderen Kursen bleiben unverändert.';
+$string['privacy:metadata:consent'] = 'Aufzeichnungen über die Annahme der Nutzungsbedingungen, einschließlich des Nutzers, des Zeitpunkts und des angezeigten Hinweises.';
+$string['privacy:metadata:consent:action'] = 'Ob der Nutzer die Annahme erteilt oder widerrufen hat.';
+$string['privacy:metadata:consent:documentid'] = 'Der gespeicherte Hinweis, auf den sich diese Entscheidung bezieht.';
+$string['privacy:metadata:consent:timecreated'] = 'Wann der Nutzer erteilt oder widerrufen hat.';
+$string['privacy:metadata:consent:userid'] = 'Der Nutzer, zu dem der Datensatz gehört.';
 $string['privacy:metadata:course_ai'] = 'KI-Dateisynchronisationskonfiguration und -status pro Kurs.';
 $string['privacy:metadata:course_ai:courseid'] = 'Der Kurs, zu dem diese Synchronisationskonfiguration gehört.';
 $string['privacy:metadata:course_ai:disabledat'] = 'Der Zeitpunkt der Deaktivierung der Dateisynchronisation.';
@@ -380,6 +456,7 @@ $string['privacy:metadata:tutor_usage_session:messagecount'] = 'Nachrichten in d
 $string['privacy:metadata:tutor_usage_session:timeend'] = 'Sitzungsendzeit';
 $string['privacy:metadata:tutor_usage_session:timestart'] = 'Sitzungsstartzeit';
 $string['privacy:metadata:tutor_usage_session:userid'] = 'Die Benutzer-ID';
+$string['privacy:path:consent'] = 'Entscheidungen zu Bedingungen und Datenschutz';
 $string['privacy:path:conversation'] = 'Tutor-Konversation';
 $string['privacy:path:course_ai'] = 'Kurs-KI-Synchronisation';
 $string['privacy:path:credit_usage'] = 'Kreditnutzung';
