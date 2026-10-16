@@ -30,8 +30,9 @@ define([
     'core/templates',
     'core/user_date',
     'core_form/changechecker',
+    'local_dixeo/consent_gate',
     'local_dixeo/settings_state',
-], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, ChangeChecker, State) {
+], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, ChangeChecker, ConsentGate, State) {
     let bound = false;
 
     /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
@@ -607,37 +608,154 @@ define([
     };
 
     /**
-     * Load the delete-conversation label. The button stays hidden when Tutor is not installed.
+     * Show the current-course delete row when Tutor is installed.
      *
      * @param {HTMLElement} shell
-     * @returns {Promise}
+     * @returns {Promise<boolean>} Whether the row is shown.
      */
     const prepareDeleteConversation = function(shell) {
-        const button = shell.querySelector('[data-action="delete-conversation"]');
-        if (!button || !shell.dataset.courseid) {
-            return Promise.resolve();
+        const row = shell.querySelector('[data-region="delete-conversation"]');
+        const button = row ? row.querySelector('[data-action="delete-conversation"]') : null;
+        if (!row || !button || !shell.dataset.courseid) {
+            if (row) {
+                row.hidden = true;
+            }
+            return Promise.resolve(false);
         }
         if (button.dataset.ready === '1') {
-            button.hidden = false;
-            return Promise.resolve();
+            row.hidden = false;
+            return Promise.resolve(true);
         }
         return Str.get_strings([
-            {key: 'deleteconversation', component: 'block_dixeo_tutor'},
+            {key: 'preferences_delete_conversation', component: 'local_dixeo'},
             {key: 'deleteconversationconfirm', component: 'block_dixeo_tutor'},
             {key: 'delete', component: 'moodle'},
         ]).then(function(strings) {
-            const label = button.querySelector('[data-region="delete-conversation-label"]');
-            if (label) {
-                label.textContent = strings[0];
-            }
             button.setAttribute('aria-label', strings[0]);
             button.dataset.confirm = strings[1];
             button.dataset.yes = strings[2];
             button.dataset.ready = '1';
-            button.hidden = false;
-            return null;
+            row.hidden = false;
+            return true;
         }).catch(function() {
-            button.hidden = true;
+            row.hidden = true;
+            return false;
+        });
+    };
+
+    /**
+     * Fill the terms row. The review button opens the document in its own modal.
+     *
+     * @param {HTMLElement} shell
+     * @returns {Promise<boolean>} Whether the row is shown.
+     */
+    const prepareConsent = function(shell) {
+        const row = shell.querySelector('[data-region="consent-manage"]');
+        if (!row) {
+            return Promise.resolve(false);
+        }
+        if (shell.dataset.consentready === '1') {
+            row.hidden = shell.dataset.consentshow !== '1';
+            return Promise.resolve(shell.dataset.consentshow === '1');
+        }
+        return Ajax.call([{
+            methodname: 'local_dixeo_get_consent_manage',
+            args: {},
+        }])[0].then(function(result) {
+            const status = row.querySelector('[data-region="consent-status"]');
+            const show = !!(result && result.show);
+            shell.dataset.consentready = '1';
+            shell.dataset.consentshow = show ? '1' : '0';
+            if (status) {
+                status.textContent = result && result.termsstatus ? result.termsstatus : '';
+            }
+            row.hidden = !show;
+            return show;
+        }).catch(function() {
+            row.hidden = true;
+            return false;
+        });
+    };
+
+    /**
+     * Open the terms document so the user can re-read it or withdraw.
+     *
+     * @param {HTMLElement} shell
+     * @param {HTMLElement} button
+     * @returns {Promise}
+     */
+    const openConsent = function(shell, button) {
+        if (button.dataset.busy === '1') {
+            return Promise.resolve();
+        }
+        button.dataset.busy = '1';
+        let consentModal = null;
+        const paint = function(result) {
+            const status = shell.querySelector('[data-region="consent-status"]');
+            if (status && result && result.termsstatus) {
+                status.textContent = result.termsstatus;
+            }
+            if (!consentModal) {
+                return null;
+            }
+            // setBody() updates the DOM immediately for a string and does not return a promise.
+            consentModal.setBody(result.html || '');
+            const root = consentModal.getRoot();
+            const node = root && root[0] ? root[0] : document;
+            ConsentGate.bindSave(node);
+            ConsentGate.bindReview(node);
+            return null;
+        };
+        return Str.get_string('consent_title', 'local_dixeo').then(function(title) {
+            return Ajax.call([{
+                methodname: 'local_dixeo_get_consent_manage',
+                args: {},
+            }])[0].then(function(result) {
+                if (!result || !result.show) {
+                    return null;
+                }
+                return Modal.create({
+                    title: title,
+                    body: result.html,
+                    large: true,
+                    removeOnClose: true,
+                    show: true,
+                    returnElement: button,
+                }).then(function(modal) {
+                    consentModal = modal;
+                    paint(result);
+                    modal.getRoot().on('submit', 'form', function(event) {
+                        event.preventDefault();
+                        const form = event.target;
+                        const actionInput = form.querySelector('[name="action"]');
+                        const processing = form.querySelector('[name="processing"]');
+                        const terms = form.querySelector('[name="terms"]');
+                        const action = actionInput ? actionInput.value : '';
+                        if (action === 'saveprocessing' && (!(processing && processing.checked) || !(terms && terms.checked))) {
+                            return;
+                        }
+                        Ajax.call([{
+                            methodname: 'local_dixeo_save_consent',
+                            args: {
+                                action: action,
+                                processing: !!(processing && processing.checked),
+                            },
+                        }])[0].then(function(saved) {
+                            if (saved && saved.message) {
+                                Notification.addNotification({message: saved.message, type: 'success'});
+                            }
+                            if (saved && saved.reload) {
+                                window.location.reload();
+                                return null;
+                            }
+                            return paint(saved);
+                        }).catch(Notification.exception);
+                    });
+                    return null;
+                });
+            });
+        }).catch(Notification.exception).then(function() {
+            delete button.dataset.busy;
             return null;
         });
     };
@@ -762,10 +880,10 @@ define([
     };
 
     /**
-     * Show preferences. The language control is site-wide. Deleting a conversation needs a course.
+     * Show preferences. Language is first, terms and privacy second, then the current-course delete row.
      *
      * @param {HTMLElement} shell
-     * @returns {Promise<boolean>} False when neither the language control nor a course action is shown.
+     * @returns {Promise<boolean>} False when no preference row is shown.
      */
     const showPreferences = function(shell) {
         const panel = shell.querySelector('[data-region="local-dixeo-settings-preferences"]');
@@ -787,11 +905,12 @@ define([
         return Promise.all([
             prepareDeleteConversation(shell),
             preparePreferences(shell),
+            prepareConsent(shell),
         ]).then(function(results) {
             if (shell.dataset.preferencestoken !== token || shell.dataset.panel !== 'preferences') {
                 return true;
             }
-            return !!results[1] || !!shell.dataset.courseid;
+            return !!results[0] || !!results[1] || !!results[2];
         }).catch(function() {
             return !!shell.dataset.courseid;
         });
@@ -979,8 +1098,19 @@ define([
      */
     const bindPreferences = function(shell) {
         shell.addEventListener('click', function(event) {
+            const consent = event.target.closest('[data-action="open-consent"]');
+            if (consent) {
+                const row = consent.closest('[data-region="consent-manage"]');
+                if (!row || row.hidden) {
+                    return;
+                }
+                event.preventDefault();
+                openConsent(shell, consent);
+                return;
+            }
             const button = event.target.closest('[data-action="delete-conversation"]');
-            if (!button || button.hidden) {
+            const row = button ? button.closest('[data-region="delete-conversation"]') : null;
+            if (!button || !row || row.hidden) {
                 return;
             }
             event.preventDefault();

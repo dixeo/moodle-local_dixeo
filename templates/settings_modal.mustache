@@ -123,14 +123,40 @@
                         </div>
                     </div>
                 </div>
-                <div class="local-dixeo-settings-status-actions">
-                    <button type="button"
-                            class="btn btn-outline-danger"
-                            data-action="delete-conversation"
-                            hidden>
-                        <i class="fa fa-trash" aria-hidden="true"></i>
-                        <span data-region="delete-conversation-label"></span>
-                    </button>
+                <div class="local-dixeo-settings-preference" data-region="consent-manage" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <div class="local-dixeo-settings-row-label">
+                                {{#str}}consent_title, local_dixeo{{/str}}
+                            </div>
+                            <div class="local-dixeo-settings-row-help" data-region="consent-status"></div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <button type="button" class="btn btn-secondary" data-action="open-consent">
+                                {{#str}}consent_review, local_dixeo{{/str}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="local-dixeo-settings-preference" data-region="delete-conversation" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <div class="local-dixeo-settings-row-label">
+                                {{#str}}preferences_delete_conversation, local_dixeo{{/str}}
+                            </div>
+                            <div class="local-dixeo-settings-row-help">
+                                {{#str}}preferences_delete_conversation_desc, local_dixeo{{/str}}
+                            </div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <button type="button" class="btn btn-outline-danger" data-action="delete-conversation">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                {{#str}}delete, core{{/str}}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="local-dixeo-settings-panel-overlay" data-region="local-dixeo-settings-overlay" hidden>
