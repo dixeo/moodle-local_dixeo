@@ -7,6 +7,8 @@
  *   1. File sync indicator — course-page pill + dropdown (sync_indicator_injector)
  *   2. Content image placeholders — [img-gen] pending/failed + shared shimmer/status
  *      (shimmer also used by filter_dixeo_imageeditor .is-generating overlays)
+ *   3. Course edit form — Dixeo settings button
+ *   4. Terms and privacy lock — course gate and manage page
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -62,11 +64,24 @@ body:has(.block_dixeo_tutor) .dixeo-sync-title-wrapper,
 body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--visible,
 body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--visible,
 body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--inline,
-body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--inline {
+body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--inline,
+body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--footer.dixeo-sync-indicator--placed,
+body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--footer.dixeo-sync-indicator--placed,
+body:has(.block_dixeo_modulegen) .dixeo-sync-indicator.dixeo-sync-indicator--footer.dixeo-sync-indicator--visible,
+body:has(.block_dixeo_tutor) .dixeo-sync-indicator.dixeo-sync-indicator--footer.dixeo-sync-indicator--visible {
     display: inline-flex !important;
 }
 
-/* Ensure parent elements don't clip the dropdown */
+.dixeo-sync-indicator.dixeo-sync-indicator--footer:not(.dixeo-sync-indicator--placed):not(.dixeo-sync-indicator--visible) {
+    display: none;
+}
+
+.dixeo-sync-indicator.dixeo-sync-indicator--footer {
+    position: static;
+    margin: 0.75rem 0;
+}
+
+/* Keep the pill visible when a theme clips the course title. */
 h1:has(.dixeo-sync-indicator),
 h2:has(.dixeo-sync-indicator),
 .page-header-headings:has(.dixeo-sync-indicator),
@@ -74,13 +89,6 @@ h2:has(.dixeo-sync-indicator),
 .page-header-headings,
 #page-header {
     overflow: visible !important;
-}
-
-/* Force dropdown to be visible */
-.dixeo-sync-dropdown.show {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
 }
 
 /* ==========================================================================
@@ -194,153 +202,6 @@ h2:has(.dixeo-sync-indicator),
 }
 
 /* ==========================================================================
-   1. File sync indicator — dropdown panel
-   ========================================================================== */
-
-.dropdown-menu.dixeo-sync-dropdown {
-    min-width: 260px;
-    max-width: 300px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.08);
-    overflow: visible;
-    padding: 0;
-    margin-top: 0.5rem;
-    z-index: 9999 !important;
-    position: absolute !important;
-}
-
-/* When dropdown is open, ensure it's fully visible */
-.dixeo-sync-indicator.show .dixeo-sync-dropdown,
-.dixeo-sync-dropdown.show {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-
-/* Header */
-.dixeo-sync-dropdown__header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.875rem 1rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: #1e293b;
-}
-
-.dixeo-sync-dropdown__header-icon {
-    font-size: 1rem;
-    color: #3b82f6;
-}
-
-/* Status section */
-.dixeo-sync-dropdown__status {
-    padding: 0.875rem 1rem;
-}
-
-.dixeo-sync-dropdown__status-text {
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: #1e293b;
-    margin: 0 0 0.25rem 0;
-}
-
-.dixeo-sync-dropdown__status-meta {
-    font-size: 0.75rem;
-    color: #64748b;
-    margin: 0;
-}
-
-/* Progress bar */
-.dixeo-sync-dropdown__progress {
-    height: 4px;
-    margin-top: 0.625rem;
-    background: #e2e8f0;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.dixeo-sync-dropdown__progress-bar {
-    height: 100%;
-    background: #3b82f6;
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-
-/* Error message */
-.dixeo-sync-dropdown__error {
-    padding: 0.625rem 1rem;
-    background: #fef2f2;
-    color: #991b1b;
-    font-size: 0.75rem;
-    border-top: 1px solid #fecaca;
-}
-
-/* Actions */
-.dixeo-sync-dropdown__actions {
-    padding: 0.375rem;
-    border-top: 1px solid #e2e8f0;
-}
-
-.dixeo-sync-dropdown__action {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    border: none;
-    border-radius: 0.375rem;
-    background: transparent;
-    color: #334155;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    text-align: left;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background-color 0.1s ease;
-}
-
-.dixeo-sync-dropdown__action:hover {
-    background: #f1f5f9;
-    text-decoration: none;
-    color: #1e293b;
-}
-
-.dixeo-sync-dropdown__action--danger {
-    color: #dc2626;
-}
-
-.dixeo-sync-dropdown__action--danger:hover {
-    background: #fef2f2;
-    color: #b91c1c;
-}
-
-.dixeo-sync-dropdown__action-icon {
-    width: 16px;
-    text-align: center;
-    opacity: 0.7;
-}
-
-/* Toggle actions based on enabled state via data attribute */
-#dixeo-sync-indicator[data-enabled="true"] [data-action="enable"],
-#dixeo-sync-indicator[data-enabled="1"] [data-action="enable"] {
-    display: none;
-}
-
-#dixeo-sync-indicator[data-enabled="false"] [data-action="resync"],
-#dixeo-sync-indicator[data-enabled="false"] [data-action="pause"],
-#dixeo-sync-indicator[data-enabled="false"] [data-action="disable"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="resync"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="pause"],
-#dixeo-sync-indicator[data-enabled="0"] [data-action="disable"] {
-    display: none;
-}
-
-/* ==========================================================================
    1. File sync indicator — responsive
    ========================================================================== */
 
@@ -363,10 +224,6 @@ h2:has(.dixeo-sync-indicator),
     .dixeo-sync-btn__count {
         font-size: 0.6875rem;
     }
-
-    .dropdown-menu.dixeo-sync-dropdown {
-        min-width: 240px;
-    }
 }
 
 /* Touch devices - larger targets */
@@ -374,10 +231,6 @@ h2:has(.dixeo-sync-indicator),
     .dixeo-sync-btn {
         min-height: 36px;
         padding: 0.5rem 0.75rem;
-    }
-
-    .dixeo-sync-dropdown__action {
-        min-height: 44px;
     }
 }
 
@@ -495,8 +348,7 @@ h2:has(.dixeo-sync-indicator),
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
-    .dixeo-sync-btn,
-    .dixeo-sync-dropdown__progress-bar {
+    .dixeo-sync-btn {
         transition: none;
     }
 
@@ -757,4 +609,1125 @@ h2:has(.dixeo-sync-indicator),
 .local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-performance-table th,
 .local-dixeo-tutor-usage-report-performance .dixeo-tutor-usage-report-performance-table td {
     vertical-align: middle;
+}
+
+/* ==========================================================================
+   3. Course edit form — Dixeo settings button
+   ========================================================================== */
+
+.local-dixeo-settings-open .felement {
+    justify-content: flex-end;
+}
+
+.path-admin .local-dixeo-settings-open {
+    text-align: right;
+}
+
+.local-dixeo-settings-open .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.local-dixeo-settings-open .local-dixeo-settings-logo {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Settings modal. */
+body .modal-dialog:has(.local-dixeo-settings-modal) {
+    width: calc(100vw - 48px);
+    max-width: 1120px;
+    height: calc(100vh - 48px);
+    max-height: 860px;
+    margin: 24px auto;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-content {
+    height: 100%;
+    border: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #e1e3df;
+    align-items: flex-start;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #1d2125;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .local-dixeo-settings-crumbs {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #4a5057;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-header .close,
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-header [data-action="hide"] {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    opacity: 1;
+    color: #1d2125;
+}
+
+body .modal-dialog:has(.local-dixeo-settings-modal) .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.local-dixeo-settings-modal {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    color: #1d2125;
+    font-size: 15px;
+}
+
+.local-dixeo-settings-modal .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.local-dixeo-settings-toolbar,
+.local-dixeo-settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px 16px;
+    flex: 0 0 auto;
+}
+
+.local-dixeo-settings-toolbar {
+    padding: 12px 24px;
+    background: #f8f8f6;
+    border-bottom: 1px solid #e1e3df;
+}
+
+.local-dixeo-settings-toolbar .form-control {
+    flex: 1 1 260px;
+    max-width: 440px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid #8a8f96;
+    border-radius: 6px;
+    font-size: 15px;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-toolbar [data-action="local-dixeo-settings-customised"] {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid #0676cc;
+    background: #fff;
+    color: #0676cc;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: none;
+}
+
+.local-dixeo-settings-toolbar [data-action="local-dixeo-settings-customised"]::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    border: 2px solid #0676cc;
+    border-radius: 50%;
+}
+
+.local-dixeo-settings-toolbar [data-action="local-dixeo-settings-customised"][aria-pressed="true"] {
+    background: #0676cc;
+    color: #fff;
+}
+
+.local-dixeo-settings-toolbar [data-action="local-dixeo-settings-customised"][aria-pressed="true"]::before {
+    border-color: #fff;
+    background: #fff;
+}
+
+.local-dixeo-settings-count {
+    margin-left: auto;
+    font-size: 14px;
+    color: #4a5057;
+    white-space: nowrap;
+}
+
+.local-dixeo-settings-body {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 24px;
+    min-height: 0;
+    padding: 0 24px;
+    overflow: hidden;
+}
+
+.local-dixeo-settings-category-select,
+label[for="local-dixeo-settings-category"] {
+    display: none;
+}
+
+.local-dixeo-settings-category-pane {
+    flex: 0 0 176px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.local-dixeo-settings-categories {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    overflow: hidden;
+    padding: 16px 0 12px;
+}
+
+.local-dixeo-settings-category-list {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.local-dixeo-settings-categories .local-dixeo-settings-status,
+.local-dixeo-settings-category-list .btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #1d2125;
+    font-size: 15px;
+    font-weight: 400;
+    text-align: left;
+    box-shadow: none;
+    white-space: nowrap;
+}
+
+.local-dixeo-settings-status > span:first-child,
+.local-dixeo-settings-category-list .btn > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.local-dixeo-settings-category-list .btn:not([data-category="all"]):not([data-category="preferences"]) > span:first-child {
+    text-transform: capitalize;
+}
+
+.local-dixeo-settings-status.btn-primary,
+.local-dixeo-settings-status[aria-pressed="true"],
+.local-dixeo-settings-category-list .btn.btn-primary,
+.local-dixeo-settings-category-list .btn[aria-pressed="true"] {
+    background: #0676cc;
+    border-color: #0676cc;
+    color: #fff;
+}
+
+.local-dixeo-settings-status[hidden],
+.local-dixeo-settings-status[hidden] + .local-dixeo-settings-category-divider,
+.local-dixeo-settings-category-list .btn[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-category-count {
+    margin-left: 0.5rem;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.local-dixeo-settings-category-divider {
+    width: 100%;
+    margin: 8px 0 4px;
+    border: 0;
+    border-top: 1px solid #e1e3df;
+}
+
+.local-dixeo-settings-grouping {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: auto;
+    padding: 12px 0 16px;
+    border-top: 1px solid #e1e3df;
+}
+
+.local-dixeo-settings-grouping-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-grouping-tabs {
+    display: flex;
+}
+
+.local-dixeo-settings-grouping-tabs .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+    margin-left: -1px;
+    padding: 0 4px;
+    border: 1px solid #0676cc;
+    border-radius: 0;
+    background: #fff;
+    color: #0676cc;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: none;
+}
+
+.local-dixeo-settings-grouping-tabs .btn:first-child {
+    margin-left: 0;
+    border-radius: 6px 0 0 6px;
+}
+
+.local-dixeo-settings-grouping-tabs .btn:last-child {
+    border-radius: 0 6px 6px 0;
+}
+
+.local-dixeo-settings-grouping-tabs .btn.btn-primary,
+.local-dixeo-settings-grouping-tabs .btn[aria-pressed="true"] {
+    background: #0676cc;
+    color: #fff;
+}
+
+.local-dixeo-settings-panel {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.local-dixeo-settings-panel-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    background: #fff;
+    text-align: center;
+}
+
+.local-dixeo-settings-panel-overlay[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-panel-overlay-icon {
+    font-size: 32px;
+    color: #0676cc;
+}
+
+.local-dixeo-settings-panel-overlay-label {
+    margin: 0;
+    max-width: 28rem;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-modal select.local-dixeo-settings-control[multiple] {
+    height: auto;
+    white-space: normal;
+}
+
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-toolbar,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-grouping,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-status,
+.local-dixeo-settings-modal[data-preferencesonly="1"] .local-dixeo-settings-category-divider,
+.local-dixeo-settings-modal[data-preferencesonly="1"] [data-region="local-dixeo-settings-unsaved"],
+.local-dixeo-settings-modal[data-preferencesonly="1"] [data-action="local-dixeo-settings-save"] {
+    display: none;
+}
+
+.local-dixeo-settings-panel-overlay[data-mode="saving"] [data-region="overlay-icon"] {
+    display: none;
+}
+
+.local-dixeo-settings-locked .local-dixeo-settings-toolbar,
+.local-dixeo-settings-locked .local-dixeo-settings-category-pane,
+.local-dixeo-settings-locked .local-dixeo-settings-footer .btn,
+.modal.local-dixeo-settings-locked .modal-header [data-action="hide"] {
+    pointer-events: none;
+}
+
+.local-dixeo-settings-list {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.local-dixeo-settings-list[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-status-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-top: 16px;
+}
+
+.local-dixeo-settings-status-panel[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-preferences-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-top: 16px;
+}
+
+.local-dixeo-settings-preferences-panel[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-preference[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-preference .local-dixeo-settings-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
+    border-top: 0;
+}
+
+.local-dixeo-settings-preference .local-dixeo-settings-row-label {
+    margin: 0;
+}
+
+.local-dixeo-settings-preference .local-dixeo-settings-row-value .btn {
+    align-self: flex-start;
+}
+
+.local-dixeo-settings-modal .local-dixeo-settings-preference select.form-select.local-dixeo-settings-control {
+    appearance: none;
+    height: 44px;
+    padding: 7px 28px 7px 8px;
+    line-height: 20px;
+    background-color: #fff;
+    background-image: url([[pix:local_dixeo|select_chevron]]);
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 8px;
+}
+
+.local-dixeo-settings-status-card {
+    max-width: 420px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.local-dixeo-settings-status-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+    font-size: 14px;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-status-header .fa {
+    color: #0676cc;
+}
+
+.local-dixeo-settings-status-body {
+    padding: 16px;
+}
+
+.local-dixeo-settings-status-text {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-status-meta {
+    margin: 0;
+    font-size: 12px;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-status-meta[hidden],
+.local-dixeo-settings-status-progress[hidden],
+.local-dixeo-settings-status-error[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-status-progress {
+    height: 4px;
+    margin-top: 10px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.local-dixeo-settings-status-progress-bar {
+    height: 100%;
+    background: #0676cc;
+    border-radius: 2px;
+}
+
+.local-dixeo-settings-status-error {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+.local-dixeo-settings-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.local-dixeo-settings-status-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.local-dixeo-settings-status-panel:not([data-canmanagesync="1"]) .local-dixeo-settings-status-actions {
+    display: none;
+}
+
+.local-dixeo-settings-status-panel[data-enabled="1"] [data-action="enable"],
+.local-dixeo-settings-status-panel[data-enabled="0"] [data-action="resync"],
+.local-dixeo-settings-status-panel[data-enabled="0"] [data-action="pause"],
+.local-dixeo-settings-status-panel[data-enabled="0"] [data-action="disable"] {
+    display: none;
+}
+
+.local-dixeo-settings-table {
+    width: 100%;
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-table {
+    min-width: 520px;
+}
+
+.local-dixeo-settings-list[data-advanced="1"] .local-dixeo-settings-table {
+    min-width: 760px;
+}
+
+.local-dixeo-settings-head,
+.local-dixeo-settings-row {
+    display: grid;
+    column-gap: 12px;
+    align-items: start;
+}
+
+.local-dixeo-settings-row[hidden],
+.local-dixeo-settings-table[hidden],
+.local-dixeo-settings-empty[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-head,
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
+}
+
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="1"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="1"] .local-dixeo-settings-row {
+    grid-template-columns: minmax(210px, 1.5fr) minmax(104px, 0.8fr) minmax(104px, 0.8fr) minmax(200px, 1.4fr);
+}
+
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="0"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="1"][data-show-dixeo="0"] .local-dixeo-settings-row,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="0"][data-show-dixeo="1"] .local-dixeo-settings-head,
+.local-dixeo-settings-list[data-advanced="1"][data-show-site="0"][data-show-dixeo="1"] .local-dixeo-settings-row {
+    grid-template-columns: minmax(210px, 1.5fr) minmax(104px, 0.8fr) minmax(220px, 1.4fr);
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) [data-layer],
+.local-dixeo-settings-list[data-show-site="0"] [data-layer="site"],
+.local-dixeo-settings-list[data-show-dixeo="0"] [data-layer="dixeo"] {
+    display: none;
+}
+
+.local-dixeo-settings-advanced[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    padding: 16px 0 10px;
+    border-bottom: 1px solid #d3d6d2;
+}
+
+.local-dixeo-settings-head-name,
+.local-dixeo-settings-head-parent,
+.local-dixeo-settings-head-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-head-title {
+    color: #0676cc;
+}
+
+.local-dixeo-settings-head-current {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.local-dixeo-settings-advanced {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    min-height: 32px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-advanced input {
+    appearance: none;
+    width: 32px;
+    height: 18px;
+    margin: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #9aa0a6;
+    position: relative;
+    cursor: pointer;
+}
+
+.local-dixeo-settings-advanced input::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.local-dixeo-settings-advanced input:checked {
+    background: #0676cc;
+}
+
+.local-dixeo-settings-advanced input:checked::after {
+    left: 16px;
+}
+
+.local-dixeo-settings-modal h3.local-dixeo-settings-group-title {
+    margin: 36px 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 28px;
+    color: #1d2125;
+    text-transform: capitalize;
+}
+
+.local-dixeo-settings-head + .local-dixeo-settings-group h3.local-dixeo-settings-group-title,
+.local-dixeo-settings-head + .local-dixeo-settings-subgroup h4.local-dixeo-settings-subgroup-title {
+    margin-top: 16px;
+}
+
+.local-dixeo-settings-modal h4.local-dixeo-settings-subgroup-title {
+    margin: 28px 0 4px;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 24px;
+    color: #4a5057;
+    text-transform: capitalize;
+}
+
+.local-dixeo-settings-group + .local-dixeo-settings-subgroup h4.local-dixeo-settings-subgroup-title {
+    margin-top: 8px;
+}
+
+.local-dixeo-settings-row {
+    padding: 12px 0;
+    border-top: 1px solid #e6e7e3;
+}
+
+.local-dixeo-settings-row-name,
+.local-dixeo-settings-row-value,
+.local-dixeo-settings-parent {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.local-dixeo-settings-row-label {
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.local-dixeo-settings-row-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.local-dixeo-settings-spacer,
+.local-dixeo-settings-caption {
+    height: 20px;
+    flex: 0 0 20px;
+}
+
+.local-dixeo-settings-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.local-dixeo-settings-icons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.local-dixeo-settings-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #e3e6e1;
+    color: #4a5057;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.local-dixeo-settings-badge-own {
+    background: #0676cc;
+    color: #fff;
+}
+
+.local-dixeo-settings-list:not([data-advanced="1"]) .local-dixeo-settings-row-shortname {
+    display: none;
+}
+
+.local-dixeo-settings-row-shortname {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    word-break: break-all;
+    color: #0676cc;
+}
+
+.local-dixeo-settings-row-help {
+    font-size: 13px;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-parent .btn,
+.local-dixeo-settings-row-value .local-dixeo-settings-control {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 6px;
+    box-shadow: none;
+    text-align: left;
+    white-space: pre-wrap;
+}
+
+.local-dixeo-settings-modal textarea.local-dixeo-settings-control {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    padding: 10px;
+}
+
+.local-dixeo-settings-parent-text {
+    min-height: 5.5rem;
+}
+
+.local-dixeo-settings-control:disabled,
+.local-dixeo-settings-parent .btn:disabled {
+    opacity: 1;
+    cursor: default;
+}
+
+.local-dixeo-settings-control.btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.local-dixeo-settings-switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: #d3d6d2;
+}
+
+.local-dixeo-settings-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.local-dixeo-settings-control[aria-pressed="true"] .local-dixeo-settings-switch {
+    background: #9aa0a6;
+}
+
+.local-dixeo-settings-control[aria-pressed="true"] .local-dixeo-settings-switch::after {
+    left: 16px;
+}
+
+.local-dixeo-settings-control.local-dixeo-settings-supplied[aria-pressed="true"] .local-dixeo-settings-switch {
+    background: #0676cc;
+}
+
+.local-dixeo-settings-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #0676cc;
+    box-shadow: none;
+}
+
+.local-dixeo-settings-icon[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-lock {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.local-dixeo-settings-lock .icon {
+    margin: 0;
+    font-size: 16px;
+    color: #9a6b2f;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-readonly,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-readonly,
+.local-dixeo-settings-modal .form-select.local-dixeo-settings-readonly {
+    opacity: 1;
+    border: 2px solid #9a6b2f;
+    background-color: #fbf6ef;
+    color: #1d2125;
+    cursor: default;
+}
+
+.local-dixeo-settings-modal select.form-select.local-dixeo-settings-readonly {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 44px;
+    padding: 7px 28px 7px 8px;
+    line-height: 20px;
+    background-image: url([[pix:local_dixeo|select_chevron]]);
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 8px;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-supplied,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-supplied,
+.local-dixeo-settings-modal .form-select.local-dixeo-settings-supplied {
+    opacity: 1;
+    border: 2px solid #0676cc;
+    background: #fff;
+    color: #1d2125;
+    font-weight: 500;
+}
+
+.local-dixeo-settings-modal .btn.local-dixeo-settings-inherited,
+.local-dixeo-settings-modal .form-control.local-dixeo-settings-inherited,
+.local-dixeo-settings-modal .form-select.local-dixeo-settings-inherited {
+    opacity: 1;
+    border: 1px solid #d3d6d2;
+    background: #fafaf9;
+    color: #6b7280;
+}
+
+.local-dixeo-settings-empty {
+    margin-top: 16px;
+    padding: 24px;
+    border: 1px solid #d3d6d2;
+    border-radius: 8px;
+    color: #4a5057;
+}
+
+@media (max-width: 767.98px) {
+    .local-dixeo-settings-body {
+        flex-direction: column;
+    }
+
+    .local-dixeo-settings-category-pane {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+
+    .local-dixeo-settings-categories {
+        display: none;
+    }
+
+    .local-dixeo-settings-grouping {
+        margin-top: 0;
+    }
+
+    label[for="local-dixeo-settings-category"] {
+        display: inline;
+    }
+
+    .local-dixeo-settings-category-select {
+        display: block;
+        width: 100%;
+    }
+}
+
+.local-dixeo-settings-footer {
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-top: 1px solid #e1e3df;
+    background: #fff;
+}
+
+.local-dixeo-settings-footer [data-region="local-dixeo-settings-unsaved"] {
+    font-size: 14px;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-cancel"],
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-save"] {
+    min-height: 44px;
+    padding: 0 20px;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-cancel"] {
+    margin-left: auto;
+    border: 1px solid #8a8f96;
+    background: #fff;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-save"],
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-save"]:disabled,
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-save"]:hover {
+    border: 1px solid #0676cc;
+    background-color: #0676cc;
+    color: #fff;
+    font-weight: 600;
+    opacity: 1;
+}
+
+.local-dixeo-settings-footer [data-action="local-dixeo-settings-save"]:disabled {
+    opacity: 0.45;
+}
+
+/* ==========================================================================
+   4. Terms and privacy lock
+   ========================================================================== */
+
+body.local-dixeo-consent-locked {
+    overflow: hidden;
+}
+
+.local-dixeo-consent-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.local-dixeo-consent-dialog {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 42rem;
+    max-height: 90vh;
+    overflow: hidden;
+    background: #fff;
+    color: #1d2125;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.local-dixeo-consent-title {
+    margin: 0;
+    padding: 1.25rem 1.5rem 0.5rem;
+    font-size: 1.35rem;
+}
+
+.local-dixeo-consent-body {
+    overflow: auto;
+    padding: 0.5rem 1.5rem 1rem;
+}
+
+.local-dixeo-consent-section + .local-dixeo-consent-section {
+    margin-top: 1.25rem;
+}
+
+.local-dixeo-consent-section h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+}
+
+.local-dixeo-consent-section p,
+.local-dixeo-consent-dataprotection {
+    margin: 0 0 0.75rem;
+}
+
+.local-dixeo-consent-section ul {
+    margin: 0 0 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.local-dixeo-consent-form {
+    flex-shrink: 0;
+    padding: 1rem 1.5rem 1.25rem;
+    border-top: 1px solid #dee2e6;
+    background: #fff;
+}
+
+.local-dixeo-consent-check {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+}
+
+.local-dixeo-consent-check input {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.2rem;
+    flex: 0 0 auto;
+}
+
+.local-dixeo-consent-check:has(input:disabled) {
+    cursor: not-allowed;
+}
+
+.local-dixeo-consent-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.local-dixeo-consent-actions .btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.local-dixeo-consent-manage-body {
+    margin: 1rem 0;
+    max-height: 28rem;
+    overflow: auto;
+    padding-right: 0.5rem;
+}
+
+.local-dixeo-consent-manage-form {
+    margin-top: 1.25rem;
+}
+
+@media (max-width: 576px) {
+    .local-dixeo-consent-actions {
+        flex-direction: column;
+    }
+
+    .local-dixeo-consent-actions .btn {
+        width: 100%;
+    }
 }

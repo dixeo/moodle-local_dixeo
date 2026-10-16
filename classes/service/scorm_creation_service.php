@@ -80,7 +80,8 @@ class scorm_creation_service {
             throw new moodle_exception('scorm_package_invalid', 'block_dixeo_modulegen');
         }
 
-        $cfgscorm = get_config('scorm');
+        $cfgscorm = \local_dixeo\external\service_factory::get_settings_config()
+            ->moodle_plugin_config(self::MODULE_NAME, \context_course::instance($courseid));
         $transaction = $DB->start_delegated_transaction();
         try {
             $cm = new stdClass();

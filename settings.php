@@ -29,6 +29,12 @@ if ($hassiteconfig) {
     // Create settings page.
     $settings = new admin_settingpage('local_dixeo', get_string('pluginname', 'local_dixeo'));
 
+    // Opens the Dixeo-layer settings modal. This page keeps its own stored admin controls.
+    \local_dixeo\admin_setting_modal_open::add($settings, 'local_dixeo');
+
+    // Master switch. This page stays available so the site can be turned back on.
+    $settings->add(new \local_dixeo\admin_setting_enabled());
+
     // API Configuration section.
     $settings->add(new admin_setting_heading(
         'local_dixeo/api_config',
@@ -62,59 +68,69 @@ if ($hassiteconfig) {
         PARAM_ALPHANUMEXT
     ));
 
-    // Image generation section.
-    $settings->add(new admin_setting_heading(
-        'local_dixeo/image_generation',
-        get_string('image_generation', 'local_dixeo'),
-        get_string('image_generation_desc', 'local_dixeo')
-    ));
+    // File sync and image generation are Dixeo features, so both sections are omitted while Dixeo is off.
+    if (\local_dixeo\external\service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+        // New-course file sync default. Existing courses keep their own value.
+        $settings->add(new admin_setting_heading(
+            'local_dixeo/file_synchronization',
+            get_string('file_synchronization', 'local_dixeo'),
+            ''
+        ));
+        $settings->add(new \local_dixeo\admin_setting_filesync_enabled_default());
 
-    $settings->add(new admin_setting_configcheckbox(
-        'local_dixeo/image_generation_enabled',
-        get_string('image_generation_enabled', 'local_dixeo'),
-        get_string('image_generation_enabled_desc', 'local_dixeo'),
-        1
-    ));
+        $settings->add(new admin_setting_heading(
+            'local_dixeo/image_generation',
+            get_string('image_generation', 'local_dixeo'),
+            get_string('image_generation_desc', 'local_dixeo')
+        ));
 
-    $imagemodechoices = [
-        'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
-        'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
-        'generate_edit' => get_string('image_generation_mode_generate_edit', 'local_dixeo'),
-    ];
+        $settings->add(new admin_setting_configcheckbox(
+            'local_dixeo/image_generation_enabled',
+            get_string('image_generation_enabled', 'local_dixeo'),
+            get_string('image_generation_enabled_desc', 'local_dixeo'),
+            1
+        ));
 
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_course_mode',
-        get_string('image_generation_course_mode', 'local_dixeo'),
-        get_string('image_generation_course_mode_desc', 'local_dixeo'),
-        'generate_edit',
-        $imagemodechoices
-    ));
+        $imagemodechoices = [
+            'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
+            'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
+            'generate_edit' => get_string('image_generation_mode_generate_edit', 'local_dixeo'),
+        ];
 
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_section_mode',
-        get_string('image_generation_section_mode', 'local_dixeo'),
-        get_string('image_generation_section_mode_desc', 'local_dixeo'),
-        'generate_edit',
-        $imagemodechoices
-    ));
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_course_mode',
+            get_string('image_generation_course_mode', 'local_dixeo'),
+            get_string('image_generation_course_mode_desc', 'local_dixeo'),
+            'generate_edit',
+            $imagemodechoices
+        ));
 
-    $contentmodechoices = [
-        'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
-        'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
-    ];
-    if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
-        $contentmodechoices['generate_edit'] = get_string('image_generation_mode_generate_edit', 'local_dixeo');
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_section_mode',
+            get_string('image_generation_section_mode', 'local_dixeo'),
+            get_string('image_generation_section_mode_desc', 'local_dixeo'),
+            'generate_edit',
+            $imagemodechoices
+        ));
+
+        $contentmodechoices = [
+            'disabled' => get_string('image_generation_mode_disabled', 'local_dixeo'),
+            'generate' => get_string('image_generation_mode_generate', 'local_dixeo'),
+        ];
+        if (\local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')) {
+            $contentmodechoices['generate_edit'] = get_string('image_generation_mode_generate_edit', 'local_dixeo');
+        }
+
+        $settings->add(new admin_setting_configselect(
+            'local_dixeo/image_generation_content_mode',
+            get_string('image_generation_content_mode', 'local_dixeo'),
+            get_string('image_generation_content_mode_desc', 'local_dixeo'),
+            \local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')
+                ? 'generate_edit'
+                : 'generate',
+            $contentmodechoices
+        ));
     }
-
-    $settings->add(new admin_setting_configselect(
-        'local_dixeo/image_generation_content_mode',
-        get_string('image_generation_content_mode', 'local_dixeo'),
-        get_string('image_generation_content_mode_desc', 'local_dixeo'),
-        \local_dixeo\service\plugin_installation_service::is_component_installed('filter_dixeo_imageeditor')
-            ? 'generate_edit'
-            : 'generate',
-        $contentmodechoices
-    ));
 
     // Credit Balance Display section.
     $settings->add(new admin_setting_heading(
@@ -181,9 +197,4 @@ if ($hassiteconfig) {
             'restorecourse'
         );
     }
-}
-
-global $PAGE;
-if (!empty($PAGE->pagetype) && $PAGE->pagetype === 'admin-setting-local_dixeo') {
-    $PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
 }

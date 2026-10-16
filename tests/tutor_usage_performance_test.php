@@ -32,6 +32,22 @@ use local_dixeo\service\tutor_usage_report_service;
  */
 final class tutor_usage_performance_test extends \advanced_testcase {
     /**
+     * Usage fixtures record events without an analytics choice.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+        tutor_usage_recorder::allow_without_consent_for_fixtures(true);
+    }
+
+    /**
+     * Restore the analytics consent check for later tests.
+     */
+    public function tearDown(): void {
+        tutor_usage_recorder::allow_without_consent_for_fixtures(false);
+        parent::tearDown();
+    }
+
+    /**
      * Create a course with an assign activity and enrolled students/teacher.
      *
      * @param int $studentcount Number of students.

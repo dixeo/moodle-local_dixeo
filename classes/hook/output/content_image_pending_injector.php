@@ -25,6 +25,7 @@
 namespace local_dixeo\hook\output;
 
 use core\hook\output\before_standard_top_of_body_html_generation;
+use local_dixeo\external\service_factory;
 
 /**
  * Loads AMD that wraps pending/failed content images and injects status labels.
@@ -45,6 +46,10 @@ class content_image_pending_injector {
 
         // Course and activity pages (site home excluded).
         if (!isset($COURSE->id) || $COURSE->id <= 1) {
+            return;
+        }
+
+        if (!service_factory::get_settings_config()->enabled_for(\context_course::instance($COURSE->id))) {
             return;
         }
 

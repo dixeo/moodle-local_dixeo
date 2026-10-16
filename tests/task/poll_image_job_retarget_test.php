@@ -40,8 +40,10 @@ final class poll_image_job_retarget_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $module = new location(3, 'mod_page', 'content', 0, '/', 'dixeo-gen-ph.png', 2);
-        $draft = new location(3, 'local_dixeo_editor', 'draft_page', 99, '/', 'dixeo-gen-ph.png', 2);
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $module = new location(3, 'mod_page', 'content', 0, '/', 'dixeo-gen-ph.png', $courseid);
+        $draft = new location(3, 'local_dixeo_editor', 'draft_page', 99, '/', 'dixeo-gen-ph.png', $courseid);
 
         $job = job_repository::upsert_job(array_merge($module->to_record_fields(), [
             'placeholderid' => 'ph-retarget',

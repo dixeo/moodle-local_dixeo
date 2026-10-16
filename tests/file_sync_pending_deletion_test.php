@@ -82,6 +82,14 @@ final class file_sync_pending_deletion_test extends \advanced_testcase {
         $this->assertFalse($status->enabled);
         $this->assertSame('none', $status->status);
         $this->assertNull($status->errormessage);
+        $this->assertSame(
+            '0',
+            service_factory::get_settings_config()->get(
+                'local_dixeo',
+                'filesync_enabled',
+                \context_course::instance($course->id)
+            )->get_value()
+        );
     }
 
     public function test_disable_sync_delete_failure_keeps_pending_deletion(): void {

@@ -195,8 +195,8 @@ class h5p_packaging_service {
     /**
      * Build the stdClass passed to h5pactivity_add_instance with sensible defaults.
      *
-     * Defaults are merged from the module's admin-configured platform defaults so any
-     * site-level configuration is respected.
+     * Defaults come from the module's Moodle admin config. A catalogue override replaces
+     * a matching name.
      *
      * @param int $courseid The course ID.
      * @param int $cmid The course module ID just created.
@@ -205,7 +205,8 @@ class h5p_packaging_service {
      * @return stdClass The instance data.
      */
     private function prepare_instance_data(int $courseid, int $cmid, string $name, string $intro): stdClass {
-        $platformdefaults = (array) (get_config(self::MODULE_NAME) ?: []);
+        $platformdefaults = (array) \local_dixeo\external\service_factory::get_settings_config()
+            ->moodle_plugin_config(self::MODULE_NAME, \context_course::instance($courseid));
         $activitydefaults = module_activity_defaults_registry::get_instance_completion_defaults(self::MODULE_NAME);
 
         $factory = new \core_h5p\factory();

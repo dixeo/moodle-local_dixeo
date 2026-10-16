@@ -127,19 +127,18 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
         [$jobservice, $jobid] = $this->mock_completed_page_job_service((int) $course->id, (int) $teacher->id);
         service_factory::set_test_job_service($jobservice);
 
-        $syncmock = $this->createMock(file_sync_service::class);
-        $syncmock->expects($this->never())->method('enable_and_queue_sync_after_module_creation');
-        service_factory::set_test_file_sync_service($syncmock);
+        $repository = new course_ai_repository();
+        service_factory::set_test_file_sync_service(new file_sync_service($repository));
 
         $result = create_module_from_job::execute($jobid, (int) $course->id);
         $this->resetDebugging();
 
         $this->assertTrue($result['success']);
         $this->assertGreaterThan(0, (int) $result['cmid']);
-        $this->assertNull((new course_ai_repository())->get_by_courseid($course->id));
+        $this->assertNull($repository->get_by_courseid($course->id));
     }
 
-    public function test_create_module_queues_sync_when_syncfiles_allowed(): void {
+    public function test_create_module_does_not_enable_sync_when_syncfiles_allowed(): void {
         global $DB;
 
         $this->resetAfterTest(true);
@@ -163,9 +162,7 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
         $this->resetDebugging();
 
         $this->assertTrue($result['success']);
-        $record = $repository->get_by_courseid($course->id);
-        $this->assertNotNull($record);
-        $this->assertSame(1, (int) $record->enabled);
+        $this->assertNull($repository->get_by_courseid($course->id));
     }
 
     /**

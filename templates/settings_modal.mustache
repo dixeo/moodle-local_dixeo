@@ -1,0 +1,181 @@
+{{!
+    @template local_dixeo/settings_modal
+
+    Shell for the Dixeo settings modal. The list region is empty until rows are added.
+
+    Example context (json):
+    {}
+}}
+<div class="local-dixeo-settings-modal" data-grouping="feature" data-category="all">
+    <div class="local-dixeo-settings-toolbar">
+        <label class="visually-hidden" for="local-dixeo-settings-search">
+            {{#str}}settings_modal_search, local_dixeo{{/str}}
+        </label>
+        <input type="search"
+               class="form-control"
+               id="local-dixeo-settings-search"
+               placeholder="{{#str}}settings_modal_search_placeholder, local_dixeo{{/str}}">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-action="local-dixeo-settings-customised"
+                aria-pressed="false">
+            {{#str}}settings_modal_customised, local_dixeo{{/str}}
+        </button>
+        <span class="local-dixeo-settings-count" data-region="local-dixeo-settings-count">
+            {{#str}}settings_modal_count, local_dixeo, 0{{/str}}
+        </span>
+    </div>
+    <div class="local-dixeo-settings-body">
+        <div class="local-dixeo-settings-category-pane">
+            <label class="visually-hidden" for="local-dixeo-settings-category">
+                {{#str}}settings_modal_categories, local_dixeo{{/str}}
+            </label>
+            <select id="local-dixeo-settings-category" class="form-select local-dixeo-settings-category-select">
+                <option value="all" selected>{{#str}}settings_modal_all_features, local_dixeo{{/str}}</option>
+            </select>
+            <nav class="local-dixeo-settings-categories" aria-label="{{#str}}settings_modal_categories, local_dixeo{{/str}}">
+                <button type="button"
+                        class="btn btn-outline-secondary local-dixeo-settings-status"
+                        data-action="local-dixeo-settings-status"
+                        aria-pressed="false"
+                        hidden>
+                    <span>{{#str}}settings_modal_status, local_dixeo{{/str}}</span>
+                </button>
+                <hr class="local-dixeo-settings-category-divider">
+                <div class="local-dixeo-settings-category-list" data-region="local-dixeo-settings-category-list"></div>
+            </nav>
+            <div class="local-dixeo-settings-grouping">
+                <div class="local-dixeo-settings-grouping-label">{{#str}}settings_grouping, local_dixeo{{/str}}</div>
+                <div class="local-dixeo-settings-grouping-tabs" role="group" aria-label="{{#str}}settings_grouping, local_dixeo{{/str}}">
+                    <button type="button" class="btn" data-grouping="feature" aria-pressed="true">
+                        {{#str}}settings_group_feature, local_dixeo{{/str}}
+                    </button>
+                    <button type="button" class="btn" data-grouping="plugin" aria-pressed="false">
+                        {{#str}}settings_group_plugin, local_dixeo{{/str}}
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="local-dixeo-settings-panel">
+            <div class="local-dixeo-settings-list" data-region="local-dixeo-settings-list"></div>
+            <div class="local-dixeo-settings-status-panel"
+                 data-region="local-dixeo-settings-status"
+                 data-enabled="0"
+                 data-canmanagesync="0"
+                 hidden>
+                <div class="local-dixeo-settings-status-card">
+                    <div class="local-dixeo-settings-status-header">
+                        <i class="fa fa-cloud" aria-hidden="true"></i>
+                        {{#str}}filesync_title, local_dixeo{{/str}}
+                    </div>
+                    <div class="local-dixeo-settings-status-body">
+                        <p class="local-dixeo-settings-status-text" data-region="status-message"></p>
+                        <p class="local-dixeo-settings-status-meta" data-region="last-sync" hidden></p>
+                        <div class="local-dixeo-settings-status-progress" data-region="progress" hidden>
+                            <div class="local-dixeo-settings-status-progress-bar"
+                                 data-region="progress-bar"
+                                 role="progressbar"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"
+                                 aria-valuenow="0"></div>
+                        </div>
+                        <p class="local-dixeo-settings-status-meta" data-region="progress-text" hidden></p>
+                        <div class="local-dixeo-settings-status-error" data-region="error-message" hidden></div>
+                        <div class="local-dixeo-settings-status-actions">
+                            <button type="button" class="btn btn-primary" data-action="resync">
+                                <i class="fa fa-refresh" aria-hidden="true"></i>
+                                {{#str}}filesync_resync, local_dixeo{{/str}}
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-action="pause">
+                                <i class="fa fa-pause" aria-hidden="true"></i>
+                                {{#str}}filesync_pause, local_dixeo{{/str}}
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" data-action="disable">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                {{#str}}filesync_disable_remove, local_dixeo{{/str}}
+                            </button>
+                            <button type="button" class="btn btn-primary" data-action="enable">
+                                <i class="fa fa-play" aria-hidden="true"></i>
+                                {{#str}}filesync_enable, local_dixeo{{/str}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="local-dixeo-settings-preferences-panel"
+                 data-region="local-dixeo-settings-preferences"
+                 hidden>
+                <div class="local-dixeo-settings-preference" data-region="generation-language" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <label class="local-dixeo-settings-row-label" for="local-dixeo-generation-language">
+                                {{#str}}generation_language, local_dixeo{{/str}}
+                            </label>
+                            <div class="local-dixeo-settings-row-help">
+                                {{#str}}generation_language_desc, local_dixeo{{/str}}
+                            </div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <select id="local-dixeo-generation-language"
+                                    class="form-select local-dixeo-settings-control local-dixeo-settings-supplied"
+                                    data-preference="generation_language"></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="local-dixeo-settings-preference" data-region="consent-manage" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <div class="local-dixeo-settings-row-label">
+                                {{#str}}consent_title, local_dixeo{{/str}}
+                            </div>
+                            <div class="local-dixeo-settings-row-help" data-region="consent-status"></div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <button type="button" class="btn btn-secondary" data-action="open-consent">
+                                {{#str}}consent_review, local_dixeo{{/str}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="local-dixeo-settings-preference" data-region="delete-conversation" hidden>
+                    <div class="local-dixeo-settings-row">
+                        <div class="local-dixeo-settings-row-name">
+                            <div class="local-dixeo-settings-row-label">
+                                {{#str}}preferences_delete_conversation, local_dixeo{{/str}}
+                            </div>
+                            <div class="local-dixeo-settings-row-help">
+                                {{#str}}preferences_delete_conversation_desc, local_dixeo{{/str}}
+                            </div>
+                        </div>
+                        <div class="local-dixeo-settings-row-value">
+                            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+                            <button type="button" class="btn btn-outline-danger" data-action="delete-conversation">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                {{#str}}delete, core{{/str}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="local-dixeo-settings-panel-overlay" data-region="local-dixeo-settings-overlay" hidden>
+                <i class="fa fa-spinner fa-spin local-dixeo-settings-panel-overlay-icon"
+                   data-region="overlay-icon"
+                   aria-hidden="true"></i>
+                <p class="local-dixeo-settings-panel-overlay-label" data-region="overlay-label" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+    <div class="local-dixeo-settings-footer">
+        <span data-region="local-dixeo-settings-unsaved">
+            {{#str}}settings_modal_unsaved_none, local_dixeo{{/str}}
+        </span>
+        <button type="button" class="btn btn-secondary" data-action="local-dixeo-settings-cancel">
+            {{#str}}cancel, core{{/str}}
+        </button>
+        <button type="button" class="btn btn-primary" data-action="local-dixeo-settings-save" disabled>
+            {{#str}}savechanges, core{{/str}}
+        </button>
+    </div>
+</div>

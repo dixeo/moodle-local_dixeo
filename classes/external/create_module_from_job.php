@@ -98,7 +98,7 @@ class create_module_from_job extends external_api {
             'intro' => $intro,
         ]);
 
-        $coursecontext = self::validate_course_capability($params['courseid'], true);
+        self::validate_course_capability($params['courseid'], true);
 
         require_once($CFG->dirroot . '/local/dixeo/lib.php');
         if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
@@ -179,11 +179,9 @@ class create_module_from_job extends external_api {
             $completionsync = new course_completion_sync_service();
             $completionsync->sync_activity_criteria_from_modules((int) $params['courseid']);
 
-            // Enable file sync on successful AI module creation when the actor holds syncfiles.
-            if (has_capability('local/dixeo:syncfiles', $coursecontext)) {
-                service_factory::get_file_sync_service()
-                    ->enable_and_queue_sync_after_module_creation((int) $params['courseid']);
-            }
+            // Refresh the index when this course already has file sync on.
+            service_factory::get_file_sync_service()
+                ->enable_and_queue_sync_after_module_creation((int) $params['courseid']);
 
             return response_factory::module_creation_result(true, $cmid);
         } catch (api_exception $e) {

@@ -34,7 +34,7 @@ class designer_lti_enrol_service {
      * @return string|false Tool UUID for LTI Advantage, or false if enrol_lti disabled or failure.
      */
     public function add_lti_enrol_instance(int $courseid, array $fields): string|false {
-        global $CFG, $DB;
+        global $DB;
 
         if (!enrol_is_enabled('lti')) {
             return false;
@@ -61,30 +61,33 @@ class designer_lti_enrol_service {
             $membersyncmode = \enrol_lti\helper::MEMBER_SYNC_ENROL_AND_UNENROL;
         }
 
-        $maildisplay = (int) get_config('enrol_lti', 'emaildisplay');
+        $coursecontext = \context_course::instance($course->id);
+        $settings = \local_dixeo\external\service_factory::get_settings_config();
+        $maildisplay = (int) $settings->get_moodle('enrol_lti', 'emaildisplay', $coursecontext);
         if (!in_array($maildisplay, [0, 1, 2], true)) {
-            $maildisplay = isset($CFG->defaultpreference_maildisplay) ? (int) $CFG->defaultpreference_maildisplay : 0;
+            $fallback = (int) $settings->get_moodle('', 'defaultpreference_maildisplay', $coursecontext);
+            $maildisplay = $fallback;
         }
 
         // Language follows the course when available; otherwise fallback to enrol_lti default.
         $lang = !empty($course->lang) ? clean_param((string) $course->lang, PARAM_LANG) : '';
         if ($lang === '') {
-            $lang = clean_param((string) get_config('enrol_lti', 'lang'), PARAM_LANG);
+            $lang = clean_param($settings->get_moodle('enrol_lti', 'lang', $coursecontext), PARAM_LANG);
         }
         if ($lang === '') {
-            $lang = (string) $CFG->lang;
+            $lang = $settings->get_moodle('', 'lang', $coursecontext);
         }
 
-        $timezone = get_config('enrol_lti', 'timezone');
-        $timezone = ($timezone === false || $timezone === null || $timezone === '') ? 99 : $timezone;
-        $institution = clean_param((string) get_config('enrol_lti', 'institution'), PARAM_TEXT);
-        $city = clean_param((string) get_config('enrol_lti', 'city'), PARAM_TEXT);
-        if ($city === '' && !empty($CFG->defaultcity)) {
-            $city = clean_param((string) $CFG->defaultcity, PARAM_TEXT);
+        $timezone = $settings->get_moodle('enrol_lti', 'timezone', $coursecontext);
+        $timezone = $timezone === '' ? 99 : $timezone;
+        $institution = clean_param($settings->get_moodle('enrol_lti', 'institution', $coursecontext), PARAM_TEXT);
+        $city = clean_param($settings->get_moodle('enrol_lti', 'city', $coursecontext), PARAM_TEXT);
+        if ($city === '') {
+            $city = clean_param($settings->get_moodle('', 'defaultcity', $coursecontext), PARAM_TEXT);
         }
-        $country = clean_param((string) get_config('enrol_lti', 'country'), PARAM_ALPHA);
-        if ($country === '' && !empty($CFG->country)) {
-            $country = clean_param((string) $CFG->country, PARAM_ALPHA);
+        $country = clean_param($settings->get_moodle('enrol_lti', 'country', $coursecontext), PARAM_ALPHA);
+        if ($country === '') {
+            $country = clean_param($settings->get_moodle('', 'country', $coursecontext), PARAM_ALPHA);
         }
 
         $ltitool = (object) [

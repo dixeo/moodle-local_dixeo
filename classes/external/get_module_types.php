@@ -89,6 +89,7 @@ class get_module_types extends external_api {
         $context = \context_system::instance();
         self::validate_context($context);
         require_capability('local/dixeo:create', $context);
+        service_factory::get_settings_config()->require_enabled($context);
         $PAGE->set_context($context);
     }
 

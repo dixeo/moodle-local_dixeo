@@ -858,7 +858,7 @@ class tutor_usage_report_service {
 
         foreach ($aggregates as $key => $metrics) {
             $row = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids, $linkparams);
-            if ($level === self::LEVEL_USER && $this->should_hide_zero_usage_excluded_activity($row)) {
+            if ($level === self::LEVEL_USER && $this->should_hide_zero_usage_excluded_activity($row, $courseid)) {
                 continue;
             }
             $rows[] = $row;
@@ -1633,13 +1633,14 @@ class tutor_usage_report_service {
     /**
      * Hide user-level activity rows with no messages when the module type is tutor-excluded.
      *
-     * Uses block_dixeo_tutor | excludedmodules. Reads the setting directly so report pages
-     * do not load the block class (that requires block_base, which is not loaded until a block is shown).
+     * Uses the tutor excludedmodules setting, including a course override when the report
+     * is for one course. The settings reader does not load the block class.
      *
      * @param array $row Formatted summary row.
+     * @param int $courseid Course id, or 0 for the Dixeo value.
      * @return bool
      */
-    protected function should_hide_zero_usage_excluded_activity(array $row): bool {
+    protected function should_hide_zero_usage_excluded_activity(array $row, int $courseid): bool {
         if ((int) ($row['messages'] ?? 0) > 0) {
             return false;
         }
@@ -1649,21 +1650,30 @@ class tutor_usage_report_service {
             return false;
         }
 
-        return in_array($moduletype, $this->get_tutor_excluded_modules(), true);
+        return in_array($moduletype, $this->get_tutor_excluded_modules($courseid), true);
     }
 
     /**
      * Module types listed in the Dixeo Tutor excludedmodules setting.
      *
+     * @param int $courseid Course whose override applies. Zero reads the Dixeo value.
      * @return string[]
      */
-    protected function get_tutor_excluded_modules(): array {
-        $setting = get_config('block_dixeo_tutor', 'excludedmodules');
-        if ($setting === false || $setting === '') {
-            return ['quiz', 'simplequiz2'];
+    protected function get_tutor_excluded_modules(int $courseid = 0): array {
+        $context = $courseid > SITEID
+            ? \context_course::instance($courseid)
+            : \context_system::instance();
+        $setting = \local_dixeo\external\service_factory::get_settings_config()
+            ->get('block_dixeo_tutor', 'excludedmodules', $context)
+            ->get_value();
+        $modules = [];
+        foreach (explode(',', $setting) as $module) {
+            $module = trim($module);
+            if ($module !== '') {
+                $modules[] = $module;
+            }
         }
-
-        return array_map('trim', explode(',', (string) $setting));
+        return $modules;
     }
 
     /**

@@ -17,8 +17,8 @@
 /**
  * Hook callback for injecting the sync indicator into pages.
  *
- * Injects the file sync status indicator into course pages for users
- * with the appropriate capability.
+ * Injects the file sync pill into course pages for users with the appropriate capability.
+ * The pill opens the Dixeo settings modal on the Status tab.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -28,22 +28,62 @@
 
 namespace local_dixeo\hook\output;
 
+use core\hook\output\before_footer_html_generation;
 use core\hook\output\before_standard_top_of_body_html_generation;
+use local_dixeo\admin_setting_modal_open;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\file_sync_policy;
-use local_dixeo\service\file_sync_service;
 
 /**
  * Callback class for injecting sync indicator.
  */
 class sync_indicator_injector {
     /**
-     * Inject the sync indicator into the page output.
+     * Inject the pill beside the course title when that is where this course shows it.
      *
      * @param before_standard_top_of_body_html_generation $hook The hook instance.
      * @return void
      */
     public static function callback(before_standard_top_of_body_html_generation $hook): void {
+        self::inject($hook, 'coursetitle');
+    }
+
+    /**
+     * Inject the pill in the page footer when that is where this course shows it.
+     *
+     * @param before_footer_html_generation $hook The hook instance.
+     * @return void
+     */
+    public static function footer(before_footer_html_generation $hook): void {
+        self::prepare_admin_settings_modal();
+        self::inject($hook, 'footer');
+    }
+
+    /**
+     * Load the settings modal on Dixeo plugin admin pages.
+     *
+     * @return void
+     */
+    private static function prepare_admin_settings_modal(): void {
+        global $PAGE;
+
+        if (!admin_setting_modal_open::applies_to_current_page()) {
+            return;
+        }
+        $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
+    }
+
+    /**
+     * Inject the pill for one placement. Hidden courses get no pill. The other placement is skipped.
+     *
+     * @param before_standard_top_of_body_html_generation|before_footer_html_generation $hook The hook instance.
+     * @param string $placement coursetitle or footer.
+     * @return void
+     */
+    private static function inject(
+        before_standard_top_of_body_html_generation|before_footer_html_generation $hook,
+        string $placement
+    ): void {
         global $COURSE, $PAGE, $OUTPUT;
 
         // Skip iframe/popup layouts (e.g. H5P embed) — would duplicate the indicator inside the frame.
@@ -56,8 +96,18 @@ class sync_indicator_injector {
             return;
         }
 
-        // Check capability (view indicator with generate; manage actions need syncfiles).
         $context = \context_course::instance($COURSE->id);
+        $config = service_factory::get_settings_config();
+        if (!$config->enabled_for($context)) {
+            return;
+        }
+
+        $configured = $config->get('local_dixeo', 'filesync_pill', $context)->get_value();
+        if ($configured === 'hidden' || $configured !== $placement) {
+            return;
+        }
+
+        // Check capability (view indicator with generate; manage actions need syncfiles).
         if (!has_capability('local/dixeo:generate', $context) && !has_capability('local/dixeo:syncfiles', $context)) {
             return;
         }
@@ -74,6 +124,9 @@ class sync_indicator_injector {
 
         // Prepare template context.
         $templatecontext = self::prepare_template_context($COURSE->id, $status, $canmanagesync);
+        $templatecontext['contextid'] = $context->id;
+        $templatecontext['coursename'] = $COURSE->fullname;
+        $templatecontext['footer'] = $placement === 'footer';
 
         // Render the indicator.
         $html = $OUTPUT->render_from_template('local_dixeo/sync_indicator', $templatecontext);
@@ -81,14 +134,15 @@ class sync_indicator_injector {
         // Add the HTML to the page.
         $hook->add_html($html);
 
-        // Include the JavaScript module.
+        // The pill keeps polling. The settings modal opens on the Status tab.
+        $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
         $PAGE->requires->js_call_amd('local_dixeo/sync_indicator', 'init', [
             $COURSE->id,
             $status->status,
             $status->enabled,
             $status->filestotal,
             $status->filescompleted,
-            $canmanagesync,
+            $placement,
         ]);
     }
 
@@ -110,21 +164,8 @@ class sync_indicator_injector {
             'canmanagesync' => $canmanagesync,
             'statusclass' => $statusclass,
             'tooltip' => self::get_tooltip($status),
-            'statusmessage' => self::get_status_message($status),
-            'showprogress' => $status->status === 'syncing' && $status->progresspercent !== null,
-            'progresspercent' => $status->progresspercent,
-            'filestotal' => $status->filestotal,
-            'filescompleted' => $status->filescompleted,
             'badgelabel' => self::format_badge_label($status->status, $status->filescompleted, $status->filestotal),
         ];
-
-        if ($status->lastsynccompleted) {
-            $context['lastsync'] = userdate($status->lastsynccompleted, get_string('strftimedatetimeshort', 'core_langconfig'));
-        }
-
-        if ($status->errormessage && $status->status === 'error') {
-            $context['errormessage'] = $status->errormessage;
-        }
 
         return $context;
     }
@@ -132,7 +173,7 @@ class sync_indicator_injector {
     /**
      * Format the badge label shown on the closed pill.
      *
-     * Hidden when synchronized — the count is shown inside the dropdown.
+     * Hidden when synchronized, and when the course has no files to count.
      *
      * @param string|null $statusvalue Current sync status.
      * @param int|null $filescompleted Files synced so far.
@@ -176,35 +217,5 @@ class sync_indicator_injector {
             'paused' => get_string('filesync_status_paused', 'local_dixeo'),
             default => get_string('filesync_status_none', 'local_dixeo'),
         };
-    }
-
-    /**
-     * Get the status message for the dropdown.
-     *
-     * @param \stdClass $status The status object.
-     * @return string The status message.
-     */
-    private static function get_status_message(\stdClass $status): string {
-        if (!$status->enabled) {
-            return get_string('filesync_status_disabled', 'local_dixeo');
-        }
-
-        if ($status->status === 'synchronized' && $status->filestotal !== null) {
-            return get_string('filesync_files_count', 'local_dixeo', $status->filestotal);
-        }
-
-        if ($status->status === 'syncing' && $status->progresspercent !== null) {
-            return get_string('filesync_progress', 'local_dixeo', $status->progresspercent);
-        }
-
-        if ($status->status === 'outdated') {
-            return get_string('filesync_status_outdated', 'local_dixeo');
-        }
-
-        if ($status->status === 'error') {
-            return get_string('filesync_status_error', 'local_dixeo');
-        }
-
-        return self::get_tooltip($status);
     }
 }
