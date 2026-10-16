@@ -29,6 +29,15 @@ class tutor_usage_recorder {
     /** @var string Event table. */
     public const TABLE_EVENT = 'local_dixeo_tutor_usage_event';
 
+    /**
+     * Fixture switch so usage-report tests can write events without an analytics choice.
+     *
+     * Production callers leave this false. The switch does nothing outside PHPUnit.
+     *
+     * @var bool
+     */
+    private static bool $allowwithoutconsent = false;
+
     /** @var string Message event type. */
     public const EVENT_MESSAGE = 'message';
 
@@ -139,6 +148,9 @@ class tutor_usage_recorder {
         if ($userid < 1 || $courseid < 1) {
             return 0;
         }
+        if (!self::$allowwithoutconsent && !(new consent_service())->processing_current($userid)) {
+            return 0;
+        }
 
         $eventtype = $this->normalize_eventtype($eventtype);
         $mode = tutor_message::normalize_mode($mode);
@@ -159,6 +171,18 @@ class tutor_usage_recorder {
         }
 
         return $id;
+    }
+
+    /**
+     * Allow usage-report fixtures to record events without analytics consent.
+     *
+     * @param bool $allow True to skip the consent check inside this process.
+     */
+    public static function allow_without_consent_for_fixtures(bool $allow): void {
+        if (!defined('PHPUNIT_TEST') || !PHPUNIT_TEST) {
+            return;
+        }
+        self::$allowwithoutconsent = $allow;
     }
 
     /**
