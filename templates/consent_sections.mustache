@@ -1,0 +1,26 @@
+{{!
+    @template local_dixeo/consent_sections
+
+    Three sections of the Dixeo terms and privacy text.
+
+    Context variables required:
+    * sections - List of heading, id, and blocks (paragraph or list)
+}}
+{{#sections}}
+<section class="local-dixeo-consent-section" id="{{id}}">
+    <h3>{{heading}}</h3>
+    {{#blocks}}
+        {{#paragraph}}<p>{{paragraph}}</p>{{/paragraph}}
+        {{#list}}
+        <ul>
+            {{#items}}<li>{{text}}</li>{{/items}}
+        </ul>
+        {{/list}}
+    {{/blocks}}
+</section>
+{{/sections}}
+{{#hasdataprotection}}
+<p class="local-dixeo-consent-dataprotection">
+    <a href="{{dataprotectionurl}}">{{dataprotectionlabel}}</a>
+</p>
+{{/hasdataprotection}}

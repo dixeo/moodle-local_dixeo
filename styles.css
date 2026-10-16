@@ -8,6 +8,7 @@
  *   2. Content image placeholders — [img-gen] pending/failed + shared shimmer/status
  *      (shimmer also used by filter_dixeo_imageeditor .is-generating overlays)
  *   3. Course edit form — Dixeo settings button
+ *   4. Terms and privacy lock — course gate and manage page
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
@@ -1046,6 +1047,10 @@ label[for="local-dixeo-settings-category"] {
     margin: 0;
 }
 
+.local-dixeo-settings-preference .local-dixeo-settings-row-value .btn {
+    align-self: flex-start;
+}
+
 .local-dixeo-settings-modal .local-dixeo-settings-preference select.form-select.local-dixeo-settings-control {
     appearance: none;
     height: 44px;
@@ -1604,4 +1609,124 @@ label[for="local-dixeo-settings-category"] {
 
 .local-dixeo-settings-footer [data-action="local-dixeo-settings-save"]:disabled {
     opacity: 0.45;
+}
+
+/* ==========================================================================
+   4. Terms and privacy lock
+   ========================================================================== */
+
+body.local-dixeo-consent-locked {
+    overflow: hidden;
+}
+
+.local-dixeo-consent-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.local-dixeo-consent-dialog {
+    display: flex;
+    flex-direction: column;
+    width: min(42rem, 100%);
+    max-height: min(90vh, 48rem);
+    overflow: hidden;
+    background: #fff;
+    color: #1d2125;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.local-dixeo-consent-title {
+    margin: 0;
+    padding: 1.25rem 1.5rem 0.5rem;
+    font-size: 1.35rem;
+}
+
+.local-dixeo-consent-body {
+    overflow: auto;
+    padding: 0.5rem 1.5rem 1rem;
+}
+
+.local-dixeo-consent-section + .local-dixeo-consent-section {
+    margin-top: 1.25rem;
+}
+
+.local-dixeo-consent-section h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+}
+
+.local-dixeo-consent-section p,
+.local-dixeo-consent-dataprotection {
+    margin: 0 0 0.75rem;
+}
+
+.local-dixeo-consent-section ul {
+    margin: 0 0 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.local-dixeo-consent-form {
+    flex-shrink: 0;
+    padding: 1rem 1.5rem 1.25rem;
+    border-top: 1px solid #dee2e6;
+    background: #fff;
+}
+
+.local-dixeo-consent-check {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+}
+
+.local-dixeo-consent-check input {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.2rem;
+    flex: 0 0 auto;
+}
+
+.local-dixeo-consent-check:has(input:disabled) {
+    cursor: not-allowed;
+}
+
+.local-dixeo-consent-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.local-dixeo-consent-actions .btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.local-dixeo-consent-manage-body {
+    margin: 1rem 0;
+    max-height: 28rem;
+    overflow: auto;
+    padding-right: 0.5rem;
+}
+
+.local-dixeo-consent-manage-form {
+    margin-top: 1.25rem;
+}
+
+@media (max-width: 576px) {
+    .local-dixeo-consent-actions {
+        flex-direction: column;
+    }
+
+    .local-dixeo-consent-actions .btn {
+        width: 100%;
+    }
 }

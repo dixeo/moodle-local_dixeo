@@ -55,4 +55,14 @@ $callbacks = [
         'hook' => \core_course\hook\after_form_submission::class,
         'callback' => [\local_dixeo\hook\course_edit_form::class, 'submission'],
     ],
+    [
+        'hook' => \core\hook\output\before_http_headers::class,
+        'callback' => [\local_dixeo\hook\output\consent_gate::class, 'lock_body'],
+        'priority' => 900,
+    ],
+    [
+        'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
+        'callback' => [\local_dixeo\hook\output\consent_gate::class, 'callback'],
+        'priority' => 900,
+    ],
 ];
