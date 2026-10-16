@@ -559,6 +559,36 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101403, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026101502) {
+        $document = new xmldb_table('local_dixeo_consent_document');
+        $document->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $document->add_field('lang', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, null);
+        $document->add_field('version', XMLDB_TYPE_CHAR, '32', null, XMLDB_NOTNULL, null, null);
+        $document->add_field('documenthash', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, null);
+        $document->add_field('documenttext', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+        $document->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $document->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $document->add_index('idx_consent_document_hash', XMLDB_INDEX_UNIQUE, ['documenthash']);
+        if (!$dbman->table_exists($document)) {
+            $dbman->create_table($document);
+        }
+
+        $table = new xmldb_table('local_dixeo_consent');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('documentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('action', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('fk_documentid', XMLDB_KEY_FOREIGN, ['documentid'], 'local_dixeo_consent_document', ['id']);
+        $table->add_index('idx_consent_user', XMLDB_INDEX_NOTUNIQUE, ['userid', 'timecreated']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026101502, 'local', 'dixeo');
+    }
+
     return true;
 }
 

@@ -218,5 +218,37 @@
         <INDEX NAME="idx_context_component_name" UNIQUE="true" FIELDS="contextid, component, name" COMMENT="One value per setting at a context"/>
       </INDEXES>
     </TABLE>
+    <TABLE NAME="local_dixeo_consent_document" COMMENT="One stored notice per hash. A language can have several rows when the text changes.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="lang" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false" COMMENT="Language of this notice"/>
+        <FIELD NAME="version" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="Document version of this notice"/>
+        <FIELD NAME="documenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the version, language, and text"/>
+        <FIELD NAME="documenttext" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Full notice text"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When this notice was first stored"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_consent_document_hash" UNIQUE="true" FIELDS="documenthash" COMMENT="One row per notice text"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_consent" COMMENT="One Terms of Use acceptance or withdrawal per user action">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="User who acted"/>
+        <FIELD NAME="documentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Notice shown when the user acted"/>
+        <FIELD NAME="action" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="granted or withdrawn"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When the user acted"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="fk_documentid" TYPE="foreign" FIELDS="documentid" REFTABLE="local_dixeo_consent_document" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_consent_user" UNIQUE="false" FIELDS="userid, timecreated" COMMENT="Latest decision for a user"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>
