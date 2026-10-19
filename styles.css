@@ -854,6 +854,46 @@ label[for="local-dixeo-settings-category"] {
     text-transform: capitalize;
 }
 
+.local-dixeo-settings-subcategories {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 14px 4px;
+    padding: 6px;
+    border-left: 3px solid #b9d4ea;
+    border-radius: 0;
+    background: #f4f9fd;
+}
+
+.local-dixeo-settings-subcategories:not(:has(.btn:not([hidden]))) {
+    display: none;
+}
+
+.local-dixeo-settings-category-list .local-dixeo-settings-subcategories .btn {
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: 0;
+    background: transparent;
+    color: #24577a;
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 500;
+}
+
+.local-dixeo-settings-category-list .local-dixeo-settings-subcategories .btn.btn-primary,
+.local-dixeo-settings-category-list .local-dixeo-settings-subcategories .btn[aria-pressed="true"] {
+    background: #0676cc;
+    border-color: #0676cc;
+    color: #fff;
+    font-style: normal;
+}
+
+.local-dixeo-settings-category-list .btn.local-dixeo-settings-category-open:not([aria-pressed="true"]) {
+    background: #e1eef9;
+    color: #0676cc;
+    font-weight: 600;
+}
+
 .local-dixeo-settings-status.btn-primary,
 .local-dixeo-settings-status[aria-pressed="true"],
 .local-dixeo-settings-category-list .btn.btn-primary,

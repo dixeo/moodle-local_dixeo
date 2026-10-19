@@ -48,11 +48,18 @@ final class resolver_test extends \advanced_testcase {
     }
 
     /**
-     * There is no activity chain. Activity does not sit under the course.
+     * Activity inherits site, then Dixeo, then course, then the assignment snapshot.
      */
-    public function test_activity_level_has_no_chain(): void {
-        $this->expectException(\coding_exception::class);
-        resolver::chain('activity');
+    public function test_activity_chain_is_site_then_dixeo_then_course_then_activity(): void {
+        $this->assertSame(
+            [
+                resolver::LAYER_SITE,
+                resolver::LAYER_DIXEO,
+                resolver::LAYER_COURSE,
+                resolver::LAYER_ACTIVITY,
+            ],
+            resolver::chain(resolver::LAYER_ACTIVITY)
+        );
     }
 
     /**

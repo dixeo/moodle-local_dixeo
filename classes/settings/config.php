@@ -26,6 +26,8 @@ namespace local_dixeo\settings;
  * setting, which stays stored including Off. A recorded course value is a snapshot: unset stays
  * empty and does not inherit Dixeo, and a value equal to Dixeo stays stored. A course-only setting
  * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
+ * A bool that locks the course when its parent is off reads as Off for every course while the
+ * Dixeo layer is Off, and a course write of On is ignored until the Dixeo layer is On.
  * {@see self::enabled_for()} is the master switch: Dixeo off is off in every context.
  * Callers do not query the table. {@see self::get_moodle()} is the read path for a Moodle admin
  * setting: a catalogue entry that overrides it supplies the effective value, and otherwise the
@@ -56,6 +58,9 @@ final class config {
     public function get(string $component, string $name, \context $context): resolved_value {
         $definition = $this->definition($component, $name);
         $level = $this->level_for($definition, $context);
+        if ($level === resolver::LAYER_COURSE && $this->course_locked_off($definition)) {
+            return new resolved_value('0', resolver::LAYER_DIXEO);
+        }
         if ($definition->records_course_value() && $level === resolver::LAYER_COURSE) {
             $own = $this->own_value($definition, $context, $level);
             return new resolved_value($own ?? '', resolver::LAYER_COURSE);
@@ -155,6 +160,25 @@ final class config {
         if ($definition->get_type() === 'select' && !in_array($value, $definition->get_options(), true)) {
             throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
         }
+        if ($definition->get_type() === 'number' && !preg_match('/^(0|[1-9]\d*)$/', $value)) {
+            throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
+        }
+        $min = $definition->get_min();
+        $max = $definition->get_max();
+        if ($min !== null && $max !== null && ((int) $value < $min || (int) $value > $max)) {
+            throw new \moodle_exception('settings_number_range', 'local_dixeo', '', (object) [
+                'min' => $min,
+                'max' => $max,
+            ]);
+        }
+        if (
+            $level === resolver::LAYER_COURSE
+            && $value === '1'
+            && $definition->locks_course_when_parent_off()
+            && $this->course_locked_off($definition)
+        ) {
+            return;
+        }
         if ($definition->retains_value() && $definition->get_type() === 'bool' && $value !== '0' && $value !== '1') {
             throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" does not allow \"{$value}\".");
         }
@@ -228,6 +252,13 @@ final class config {
         if ($context->contextlevel == CONTEXT_COURSE) {
             rebuild_course_cache((int) $context->instanceid, true);
             return;
+        }
+        if ($context->contextlevel == CONTEXT_MODULE) {
+            $coursecontext = $context->get_course_context(false);
+            if ($coursecontext instanceof \context) {
+                rebuild_course_cache((int) $coursecontext->instanceid, true);
+                return;
+            }
         }
         rebuild_course_cache(0, true);
     }
@@ -311,7 +342,10 @@ final class config {
         if ($context->contextlevel == CONTEXT_COURSE) {
             return resolver::LAYER_COURSE;
         }
-        throw new \coding_exception('Dixeo settings layers are only available for the system or a course.');
+        if ($context->contextlevel == CONTEXT_MODULE) {
+            return resolver::LAYER_ACTIVITY;
+        }
+        throw new \coding_exception('Dixeo settings layers are only available for the system, a course, or an activity.');
     }
 
     /**
@@ -345,7 +379,7 @@ final class config {
             ];
         }
 
-        return $this->with_choice_fields($definition, $level, [
+        return $this->present_row($definition, $context, $level, $this->with_choice_fields($definition, $level, [
             'component' => $definition->get_component(),
             'name' => $definition->get_key(),
             'shortname' => $definition->get_shortname(),
@@ -358,7 +392,7 @@ final class config {
             'value' => $effective['value'],
             'source' => $effective['source'],
             'layers' => $layers,
-        ]);
+        ]));
     }
 
     /**
@@ -381,33 +415,42 @@ final class config {
             $options[] = $value;
         }
 
-        return $this->with_choice_fields($definition, resolver::LAYER_COURSE, [
-            'component' => $definition->get_component(),
-            'name' => $definition->get_key(),
-            'shortname' => $definition->get_shortname(),
-            'type' => $definition->get_type(),
-            'feature' => $definition->get_feature(),
-            'plugingroup' => $definition->get_plugingroup(),
-            'help' => $definition->get_help(),
-            'options' => $options,
-            'coremissing' => false,
-            'value' => $value,
-            'source' => resolver::LAYER_COURSE,
-            'layers' => [
+        return $this->present_row(
+            $definition,
+            $context,
+            resolver::LAYER_COURSE,
+            $this->with_choice_fields(
+                $definition,
+                resolver::LAYER_COURSE,
                 [
-                    'level' => resolver::LAYER_DIXEO,
-                    'value' => $parent,
-                    'stored' => $dixeo,
-                    'customised' => $dixeo !== null,
-                ],
-                [
-                    'level' => resolver::LAYER_COURSE,
+                    'component' => $definition->get_component(),
+                    'name' => $definition->get_key(),
+                    'shortname' => $definition->get_shortname(),
+                    'type' => $definition->get_type(),
+                    'feature' => $definition->get_feature(),
+                    'plugingroup' => $definition->get_plugingroup(),
+                    'help' => $definition->get_help(),
+                    'options' => $options,
+                    'coremissing' => false,
                     'value' => $value,
-                    'stored' => $own,
-                    'customised' => $own !== null,
-                ],
-            ],
-        ]);
+                    'source' => resolver::LAYER_COURSE,
+                    'layers' => [
+                        [
+                            'level' => resolver::LAYER_DIXEO,
+                            'value' => $parent,
+                            'stored' => $dixeo,
+                            'customised' => $dixeo !== null,
+                        ],
+                        [
+                            'level' => resolver::LAYER_COURSE,
+                            'value' => $value,
+                            'stored' => $own,
+                            'customised' => $own !== null,
+                        ],
+                    ],
+                ]
+            )
+        );
     }
 
     /**
@@ -482,33 +525,86 @@ final class config {
         $parent = $this->retained_parent_value($definition);
         $matches = $value === $parent;
 
-        return $this->with_choice_fields($definition, resolver::LAYER_COURSE, [
-            'component' => $definition->get_component(),
-            'name' => $definition->get_key(),
-            'shortname' => $definition->get_shortname(),
-            'type' => $definition->get_type(),
-            'feature' => $definition->get_feature(),
-            'plugingroup' => $definition->get_plugingroup(),
-            'help' => $definition->get_help(),
-            'options' => $definition->get_options(),
-            'coremissing' => false,
-            'value' => $value,
-            'source' => $matches ? resolver::LAYER_DIXEO : resolver::LAYER_COURSE,
-            'layers' => [
+        return $this->present_row(
+            $definition,
+            $context,
+            resolver::LAYER_COURSE,
+            $this->with_choice_fields(
+                $definition,
+                resolver::LAYER_COURSE,
                 [
-                    'level' => resolver::LAYER_DIXEO,
-                    'value' => $parent,
-                    'stored' => null,
-                    'customised' => false,
-                ],
-                [
-                    'level' => resolver::LAYER_COURSE,
+                    'component' => $definition->get_component(),
+                    'name' => $definition->get_key(),
+                    'shortname' => $definition->get_shortname(),
+                    'type' => $definition->get_type(),
+                    'feature' => $definition->get_feature(),
+                    'plugingroup' => $definition->get_plugingroup(),
+                    'help' => $definition->get_help(),
+                    'options' => $definition->get_options(),
+                    'coremissing' => false,
                     'value' => $value,
-                    'stored' => $own,
-                    'customised' => $own !== null && !$matches,
-                ],
-            ],
-        ]);
+                    'source' => $matches ? resolver::LAYER_DIXEO : resolver::LAYER_COURSE,
+                    'layers' => [
+                        [
+                            'level' => resolver::LAYER_DIXEO,
+                            'value' => $parent,
+                            'stored' => null,
+                            'customised' => false,
+                        ],
+                        [
+                            'level' => resolver::LAYER_COURSE,
+                            'value' => $value,
+                            'stored' => $own,
+                            'customised' => $own !== null && !$matches,
+                        ],
+                    ],
+                ]
+            )
+        );
+    }
+
+    /**
+     * Add catalogue flags, and force a locked course switch Off while Dixeo is Off.
+     *
+     * @param definition $definition Catalogue entry.
+     * @param \context $context System or course context.
+     * @param string $level Open level.
+     * @param array $row Row from {@see self::with_choice_fields()}.
+     * @return array
+     */
+    private function present_row(definition $definition, \context $context, string $level, array $row): array {
+        $row['parentofflocks'] = $definition->locks_course_when_parent_off();
+        $row['requires'] = $definition->get_requires() ?? '';
+        $row['sub'] = $definition->get_sub();
+        if ($level !== resolver::LAYER_COURSE || !$this->course_locked_off($definition)) {
+            return $row;
+        }
+
+        $row['value'] = '0';
+        $row['source'] = resolver::LAYER_DIXEO;
+        $row['readonly'] = true;
+        foreach ($row['layers'] as $index => $layer) {
+            if ($layer['level'] !== resolver::LAYER_COURSE) {
+                continue;
+            }
+            $row['layers'][$index]['value'] = '0';
+            $row['layers'][$index]['customised'] = false;
+        }
+        return $row;
+    }
+
+    /**
+     * True when this bool is Off at the Dixeo layer and the course is not allowed to turn it On.
+     *
+     * @param definition $definition Catalogue entry.
+     * @return bool
+     */
+    private function course_locked_off(definition $definition): bool {
+        if (!$definition->locks_course_when_parent_off()) {
+            return false;
+        }
+        $parent = $this->get($definition->get_component(), $definition->get_key(), \context_system::instance());
+        return $parent->get_value() !== '1';
     }
 
     /**
@@ -571,8 +667,14 @@ final class config {
         if (in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
             $chain[] = resolver::LAYER_DIXEO;
         }
-        if ($level === resolver::LAYER_COURSE) {
+        if (
+            in_array(resolver::LAYER_COURSE, $definition->get_levels(), true)
+            && ($level === resolver::LAYER_COURSE || $level === resolver::LAYER_ACTIVITY)
+        ) {
             $chain[] = resolver::LAYER_COURSE;
+        }
+        if ($level === resolver::LAYER_ACTIVITY) {
+            $chain[] = resolver::LAYER_ACTIVITY;
         }
         return $chain;
     }
@@ -605,6 +707,8 @@ final class config {
             $level = resolver::LAYER_DIXEO;
         } else if ($context->contextlevel == CONTEXT_COURSE) {
             $level = resolver::LAYER_COURSE;
+        } else if ($context->contextlevel == CONTEXT_MODULE) {
+            $level = resolver::LAYER_ACTIVITY;
         }
         if ($level === null || !in_array($level, $definition->get_levels(), true)) {
             throw new \coding_exception(
@@ -649,6 +753,15 @@ final class config {
         }
         if ($level === resolver::LAYER_COURSE) {
             $stored[resolver::LAYER_COURSE] = $this->read_course($definition, $context);
+        }
+        if ($level === resolver::LAYER_ACTIVITY) {
+            if (in_array(resolver::LAYER_COURSE, $definition->get_levels(), true)) {
+                $coursecontext = $context->get_course_context(false);
+                if ($coursecontext instanceof \context) {
+                    $stored[resolver::LAYER_COURSE] = $this->read_course($definition, $coursecontext);
+                }
+            }
+            $stored[resolver::LAYER_ACTIVITY] = $this->read_course($definition, $context);
         }
         return $stored;
     }

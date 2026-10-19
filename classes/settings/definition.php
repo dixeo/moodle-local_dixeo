@@ -52,6 +52,11 @@ final class definition {
      * @param array $labels Select option id to display label. Empty when the modal loads labels from language strings.
      * @param string[] $readonlylevels Levels the settings manager shows but does not save.
      * @param bool $record True when a course value is a stored snapshot. An unset course stays empty and does not inherit Dixeo.
+     * @param bool $parentofflocks True when Dixeo Off forces the course value Off and the course control cannot turn it On.
+     * @param string|null $requires Catalogue key, in this component, that this setting depends on. The row stays editable.
+     * @param string $sub Subcategory id within the feature and plugin group. Empty when the group has none.
+     * @param int|null $min Inclusive lower bound for a number, or null when the number is unbounded.
+     * @param int|null $max Inclusive upper bound for a number, or null when the number is unbounded.
      */
     public function __construct(
         /** @var string Storage key, unique within the component. */
@@ -88,6 +93,16 @@ final class definition {
         private array $readonlylevels = [],
         /** @var bool True when a course value is a stored snapshot that does not inherit Dixeo. */
         private bool $record = false,
+        /** @var bool True when Dixeo Off forces the course value Off and the course control cannot turn it On. */
+        private bool $parentofflocks = false,
+        /** @var string|null Catalogue key, in this component, that this setting depends on. */
+        private ?string $requires = null,
+        /** @var string Subcategory id within the feature and plugin group. Empty when the group has none. */
+        private string $sub = '',
+        /** @var int|null Inclusive lower bound for a number. */
+        private ?int $min = null,
+        /** @var int|null Inclusive upper bound for a number. */
+        private ?int $max = null,
     ) {
     }
 
@@ -172,6 +187,32 @@ final class definition {
         if ($record && $retain) {
             throw new \coding_exception("Dixeo setting \"{$key}\" cannot both retain and record a course value.");
         }
+        $parentofflocks = false;
+        if (array_key_exists('parentofflocks', $raw)) {
+            if (!is_bool($raw['parentofflocks'])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare parentofflocks as a boolean.");
+            }
+            $parentofflocks = $raw['parentofflocks'];
+        }
+        if ($parentofflocks && ($type !== 'bool' || !in_array('dixeo', $levels, true) || !in_array('course', $levels, true))) {
+            throw new \coding_exception(
+                "Dixeo setting \"{$key}\" can lock the course only for a bool at the Dixeo and course levels."
+            );
+        }
+        $requires = null;
+        if (array_key_exists('requires', $raw)) {
+            if (!is_string($raw['requires']) || $raw['requires'] === '' || $raw['requires'] === $key) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare requires as another catalogue key.");
+            }
+            $requires = $raw['requires'];
+        }
+        $sub = '';
+        if (array_key_exists('sub', $raw)) {
+            if (!is_string($raw['sub']) || !preg_match('/^[a-z][a-z0-9_]*$/', $raw['sub'])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare sub as a subcategory id.");
+            }
+            $sub = $raw['sub'];
+        }
 
         return new self(
             $key,
@@ -191,7 +232,48 @@ final class definition {
             $labels,
             $readonlylevels,
             $record,
+            $parentofflocks,
+            $requires,
+            $sub,
+            ...self::require_number_range($key, $type, $default, $raw),
         );
+    }
+
+    /**
+     * Inclusive bounds for a number. Other types leave them unset.
+     *
+     * @param string $key Catalogue key, used in the error.
+     * @param string $type Control type.
+     * @param string $default Shipped default.
+     * @param array $raw Catalogue row.
+     * @return array{0: int|null, 1: int|null}
+     */
+    private static function require_number_range(string $key, string $type, string $default, array $raw): array {
+        $hasmin = array_key_exists('min', $raw);
+        $hasmax = array_key_exists('max', $raw);
+        if (!$hasmin && !$hasmax) {
+            return [null, null];
+        }
+        if (
+            $type !== 'number'
+            || !$hasmin
+            || !$hasmax
+            || !is_int($raw['min'])
+            || !is_int($raw['max'])
+            || $raw['min'] > $raw['max']
+        ) {
+            throw new \coding_exception(
+                "Dixeo setting \"{$key}\" must declare min and max as integers, with min no greater than max, on a number."
+            );
+        }
+        if (!preg_match('/^(0|[1-9]\d*)$/', $default)) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" default is outside {$raw['min']}–{$raw['max']}.");
+        }
+        $number = (int) $default;
+        if ($number < $raw['min'] || $number > $raw['max']) {
+            throw new \coding_exception("Dixeo setting \"{$key}\" default is outside {$raw['min']}–{$raw['max']}.");
+        }
+        return [$raw['min'], $raw['max']];
     }
 
     /**
@@ -397,6 +479,15 @@ final class definition {
     }
 
     /**
+     * Subcategory id within the feature and plugin group.
+     *
+     * @return string Empty when the group has no subcategories.
+     */
+    public function get_sub(): string {
+        return $this->sub;
+    }
+
+    /**
      * Plugin-group id.
      *
      * @return string
@@ -498,5 +589,41 @@ final class definition {
      */
     public function records_course_value(): bool {
         return $this->record;
+    }
+
+    /**
+     * True when Dixeo Off forces the course Off and the course control cannot store On.
+     *
+     * @return bool
+     */
+    public function locks_course_when_parent_off(): bool {
+        return $this->parentofflocks;
+    }
+
+    /**
+     * Catalogue key that must be On before this row can be edited, or null when it stands alone.
+     *
+     * @return string|null
+     */
+    public function get_requires(): ?string {
+        return $this->requires;
+    }
+
+    /**
+     * Inclusive lower bound for a number, or null when the number is unbounded.
+     *
+     * @return int|null
+     */
+    public function get_min(): ?int {
+        return $this->min;
+    }
+
+    /**
+     * Inclusive upper bound for a number, or null when the number is unbounded.
+     *
+     * @return int|null
+     */
+    public function get_max(): ?int {
+        return $this->max;
     }
 }

@@ -82,6 +82,12 @@ class get_settings extends external_api {
                     'type' => new external_value(PARAM_ALPHA, 'Control type'),
                     'feature' => new external_value(PARAM_ALPHANUMEXT, 'Feature group'),
                     'plugingroup' => new external_value(PARAM_ALPHANUMEXT, 'Plugin group'),
+                    'sub' => new external_value(
+                        PARAM_ALPHANUMEXT,
+                        'Subcategory within the feature and plugin group',
+                        VALUE_DEFAULT,
+                        ''
+                    ),
                     'help' => new external_value(PARAM_ALPHANUMEXT, 'Help string key'),
                     'options' => new external_multiple_structure(
                         new external_value(PARAM_ALPHANUMEXT, 'Allowed value for a select'),
@@ -101,6 +107,18 @@ class get_settings extends external_api {
                         'True when the open level cannot change this setting',
                         VALUE_DEFAULT,
                         false
+                    ),
+                    'parentofflocks' => new external_value(
+                        PARAM_BOOL,
+                        'True when Dixeo Off keeps the course Off',
+                        VALUE_DEFAULT,
+                        false
+                    ),
+                    'requires' => new external_value(
+                        PARAM_ALPHANUMEXT,
+                        'Catalogue key that must be On before this row can be edited',
+                        VALUE_DEFAULT,
+                        ''
                     ),
                     'coremissing' => new external_value(PARAM_BOOL, 'True when a declared core target cannot be resolved'),
                     'defaultvalue' => new external_value(

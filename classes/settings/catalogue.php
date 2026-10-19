@@ -81,6 +81,37 @@ final class catalogue {
             }
             $definitions[$key] = $definition;
         }
+        self::assert_requires($definitions);
         return $definitions;
+    }
+
+    /**
+     * A requires key names another setting in the same component, and the chain does not loop.
+     *
+     * @param definition[] $definitions Catalogue keyed by setting key.
+     */
+    private static function assert_requires(array $definitions): void {
+        foreach ($definitions as $definition) {
+            $requires = $definition->get_requires();
+            if ($requires === null) {
+                continue;
+            }
+            $parent = $definitions[$requires] ?? null;
+            if ($parent === null || $parent->get_component() !== $definition->get_component()) {
+                throw new \coding_exception(
+                    "Dixeo setting \"{$definition->get_key()}\" requires \"{$requires}\", which is not in this component."
+                );
+            }
+            $seen = [$definition->get_key() => true];
+            $cursor = $parent;
+            while ($cursor->get_requires() !== null) {
+                $next = $cursor->get_requires();
+                if (isset($seen[$next])) {
+                    throw new \coding_exception("Dixeo setting \"{$definition->get_key()}\" has a requires cycle.");
+                }
+                $seen[$next] = true;
+                $cursor = $definitions[$next];
+            }
+        }
     }
 }

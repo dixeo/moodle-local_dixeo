@@ -19,7 +19,7 @@ namespace local_dixeo\settings;
 /**
  * Parent chain for a Dixeo or course setting.
  *
- * The full chain is site, then Dixeo, then course. Activity is not a parent of course.
+ * The full chain is site, then Dixeo, then course, then activity. Activity is not a parent of course.
  * The site step is present only when $stored contains a site value: the live core Moodle
  * config this setting overrides. A Dixeo plugin setting omits that step, and its unset
  * value is the catalogue default supplied by the Dixeo layer. A value equal to its parent
@@ -39,10 +39,13 @@ final class resolver {
     /** @var string Course override stored for the course context. */
     public const LAYER_COURSE = 'course';
 
+    /** @var string Assignment snapshot stored for the module context. */
+    public const LAYER_ACTIVITY = 'activity';
+
     /**
      * Layers from the site default through $level.
      *
-     * @param string $level {@see self::LAYER_DIXEO} or {@see self::LAYER_COURSE}.
+     * @param string $level Dixeo, course, or activity.
      * @return string[]
      */
     public static function chain(string $level): array {
@@ -51,6 +54,9 @@ final class resolver {
         }
         if ($level === self::LAYER_COURSE) {
             return [self::LAYER_SITE, self::LAYER_DIXEO, self::LAYER_COURSE];
+        }
+        if ($level === self::LAYER_ACTIVITY) {
+            return [self::LAYER_SITE, self::LAYER_DIXEO, self::LAYER_COURSE, self::LAYER_ACTIVITY];
         }
         throw new \coding_exception("Dixeo settings have no chain for level \"{$level}\".");
     }
@@ -105,6 +111,10 @@ final class resolver {
         if ($level === self::LAYER_COURSE) {
             $parent = self::effective(self::LAYER_DIXEO, $stored, $fallback);
             return $value !== $parent['value'];
+        }
+        if ($level === self::LAYER_ACTIVITY) {
+            // A saved assignment keeps its copy, including a value equal to the Dixeo default.
+            return true;
         }
         throw new \coding_exception("Dixeo settings have no chain for level \"{$level}\".");
     }

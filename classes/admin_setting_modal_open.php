@@ -112,10 +112,6 @@ class admin_setting_modal_open {
             return false;
         }
         $section = (string) $PAGE->url->get_param('section');
-        if (in_array($section, self::admin_sections(), true)) {
-            return true;
-        }
-        $path = $PAGE->url->get_path();
-        return is_string($path) && str_ends_with($path, '/plagiarism/dixeo/settings.php');
+        return in_array($section, self::admin_sections(), true);
     }
 }

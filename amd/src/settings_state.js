@@ -141,13 +141,13 @@ define([], function() {
     };
 
     /**
-     * True when the modal is open at the Dixeo layer. A course row includes a course layer.
+     * True when the modal is open at the Dixeo layer. A course or activity row has that layer.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @returns {boolean}
      */
     const atDixeoLevel = function(setting) {
-        return !layerAt(setting, 'course');
+        return !layerAt(setting, 'course') && !layerAt(setting, 'activity');
     };
 
     /**
@@ -401,10 +401,11 @@ define([], function() {
     };
 
     /**
-     * All matches every row. A feature or plugin value matches that group. Preferences matches none.
+     * All matches every row. A feature or plugin value matches that group.
+     * A slash after the id matches one subcategory. Preferences matches none.
      *
      * @param {Object} entry Row from {@link entryFor}.
-     * @param {string} category all, preferences, feature:id, or plugin:id.
+     * @param {string} category all, preferences, feature:id, plugin:id, or either with /sub.
      * @returns {boolean}
      */
     const categoryMatches = function(entry, category) {
@@ -415,17 +416,29 @@ define([], function() {
         if (value === 'preferences') {
             return false;
         }
-        if (value.indexOf('feature:') === 0) {
-            return entry.setting.feature === value.substring('feature:'.length);
-        }
+        let kind = '';
         if (value.indexOf('plugin:') === 0) {
-            return entry.setting.plugingroup === value.substring('plugin:'.length);
+            kind = 'plugin';
+        } else if (value.indexOf('feature:') === 0) {
+            kind = 'feature';
         }
-        return false;
+        if (!kind) {
+            return false;
+        }
+        const body = value.substring(kind.length + 1);
+        const slash = body.indexOf('/');
+        const id = slash < 0 ? body : body.substring(0, slash);
+        const sub = slash < 0 ? '' : body.substring(slash + 1);
+        const group = kind === 'plugin' ? entry.setting.plugingroup : entry.setting.feature;
+        if (group !== id) {
+            return false;
+        }
+        return sub === '' || (entry.setting.sub || '') === sub;
     };
 
     /**
      * Category buttons for the current grouping. Empty groups stay hidden unless selected.
+     * A group with subcategories lists them only while that group is selected.
      * Preferences is always last and has no settings.
      *
      * @param {Object} entries Map of row entries.
@@ -453,14 +466,28 @@ define([], function() {
             preferences: false,
         }];
         const seen = {};
+        const subsOf = {};
         Object.keys(entries).forEach(function(key) {
             const setting = entries[key].setting;
             const id = mode === 'plugin' ? setting.plugingroup : setting.feature;
-            if (id) {
-                seen[id] = true;
+            if (!id) {
+                return;
+            }
+            seen[id] = true;
+            const sub = setting.sub || '';
+            if (!sub) {
+                return;
+            }
+            subsOf[id] = subsOf[id] || [];
+            if (subsOf[id].indexOf(sub) < 0) {
+                subsOf[id].push(sub);
             }
         });
         const names = labels.names || {};
+        const parentOf = function(value) {
+            const slash = value.indexOf('/');
+            return slash < 0 ? value : value.substring(0, slash);
+        };
         // Dixeo is the first group after All. Every other group stays alphabetical.
         const pinned = mode === 'plugin' ? 'dixeo_core' : 'dixeo';
         Object.keys(seen).sort(function(left, right) {
@@ -473,11 +500,28 @@ define([], function() {
             return left.localeCompare(right);
         }).forEach(function(id) {
             const value = mode + ':' + id;
+            const subIds = subsOf[id] || [];
+            const expanded = parentOf(selected) === value && subIds.length > 0;
+            const subs = expanded ? subIds.map(function(subid) {
+                const subvalue = value + '/' + subid;
+                return {
+                    value: subvalue,
+                    label: names[subid] || subid,
+                    count: countFor(subvalue),
+                    preferences: false,
+                    subcategory: true,
+                };
+            }).filter(function(subitem) {
+                return subitem.count > 0 || subitem.value === selected;
+            }) : [];
             items.push({
                 value: value,
                 label: names[id] || id,
                 count: countFor(value),
                 preferences: false,
+                hassubs: subIds.length > 0,
+                open: subs.length > 0,
+                subs: subs,
             });
         });
         items.push({
@@ -527,6 +571,7 @@ define([], function() {
             name: setting.name,
             feature: setting.feature || '',
             plugingroup: setting.plugingroup || '',
+            sub: setting.sub || '',
             label: label,
             help: help,
             badge: view.badge,
@@ -534,7 +579,7 @@ define([], function() {
             shortname: setting.shortname,
             shortnameurl: shortnameUrl(setting, wwwroot),
             isbool: setting.type === 'bool',
-            istext: setting.type === 'text',
+            istext: setting.type === 'text' || setting.type === 'number',
             istextarea: setting.type === 'textarea',
             isselect: setting.type === 'select',
             ismultiselect: setting.type === 'multiselect',
@@ -562,6 +607,33 @@ define([], function() {
         };
     };
 
+    /**
+     * True when the catalogue marks the row read-only, or Dixeo Off locks the course switch.
+     *
+     * A required switch being Off does not lock the row. The default can be saved for later.
+     *
+     * @param {Object} entries Map of row entries. An empty map locks nothing.
+     * @param {Object} entry Row from {@link entryFor}.
+     * @returns {boolean}
+     */
+    const isDependencyLocked = function(entries, entry) {
+        if (!entries || !entry || !entry.setting) {
+            return false;
+        }
+        const setting = entry.setting;
+        if (setting.readonly === true || setting.readonly === 1) {
+            return true;
+        }
+        const locks = setting.parentofflocks === true || setting.parentofflocks === 1;
+        if (locks && layerAt(setting, 'course')) {
+            const dixeo = layerRaw(setting, 'dixeo');
+            if (dixeo !== '1') {
+                return true;
+            }
+        }
+        return false;
+    };
+
     return {
         shortnameUrl: shortnameUrl,
         rowView: rowView,
@@ -573,5 +645,6 @@ define([], function() {
         searchText: searchText,
         matches: matches,
         categoryItems: categoryItems,
+        isDependencyLocked: isDependencyLocked,
     };
 });

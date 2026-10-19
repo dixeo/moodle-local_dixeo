@@ -80,7 +80,7 @@ define([
         leaveStatus(shell);
         const statusButton = shell.querySelector('[data-action="local-dixeo-settings-status"]');
         if (statusButton) {
-            statusButton.hidden = !shell.dataset.courseid;
+            statusButton.hidden = !shell.dataset.courseid || !!shell.dataset.activityname;
             setPressed(statusButton, false);
         }
     };
@@ -1210,13 +1210,19 @@ define([
         if (!session || !table) {
             return;
         }
+        const active = document.activeElement;
+        if (active && table.contains(active) && active.closest('.local-dixeo-settings-row')) {
+            return;
+        }
         table.querySelectorAll('.local-dixeo-settings-group, .local-dixeo-settings-subgroup').forEach(function(heading) {
             heading.remove();
         });
         const rows = Array.from(table.querySelectorAll('.local-dixeo-settings-row'));
         const grouping = shell.dataset.grouping === 'plugin' ? 'plugin' : 'feature';
-        const allselected = selectedCategory(shell) === 'all';
-        const show = grouping === 'plugin' || allselected;
+        const selected = selectedCategory(shell);
+        const allselected = selected === 'all';
+        const parentselected = selected.indexOf('/') < 0 && selected !== 'all' && selected !== 'preferences';
+        const show = grouping === 'plugin' || allselected || (grouping === 'feature' && parentselected);
         const byOrder = function(left, right) {
             return Number(left.dataset.order) - Number(right.dataset.order);
         };
@@ -1229,6 +1235,36 @@ define([
             }
             return left.localeCompare(right);
         };
+        const names = session.categoryNames || {};
+        const labelFor = function(id) {
+            return names[id] || id;
+        };
+        const insertSubheading = function(row, sub, current) {
+            if (!sub || sub === current) {
+                return current;
+            }
+            insertGroupTitle(
+                table,
+                row,
+                'local-dixeo-settings-subgroup',
+                'local-dixeo-settings-subgroup-title',
+                'h4',
+                labelFor(sub)
+            );
+            return sub;
+        };
+        if (grouping === 'feature' && parentselected) {
+            rows.sort(byOrder);
+            let currentsub = null;
+            rows.forEach(function(row) {
+                table.appendChild(row);
+                if (row.hidden) {
+                    return;
+                }
+                currentsub = insertSubheading(row, row.dataset.sub || '', currentsub);
+            });
+            return;
+        }
         if (!show) {
             rows.sort(byOrder);
             rows.forEach(function(row) {
@@ -1236,10 +1272,6 @@ define([
             });
             return;
         }
-        const names = session.categoryNames || {};
-        const labelFor = function(id) {
-            return names[id] || id;
-        };
         rows.sort(function(left, right) {
             if (grouping === 'plugin') {
                 const leftplugin = left.dataset.plugingroup || '';
@@ -1257,17 +1289,20 @@ define([
         });
         let currentplugin = null;
         let currentfeature = null;
+        let currentsub = null;
         rows.forEach(function(row) {
             table.appendChild(row);
             if (row.hidden) {
                 return;
             }
             const feature = row.dataset.feature || '';
+            const sub = row.dataset.sub || '';
             if (grouping === 'plugin') {
                 const plugin = row.dataset.plugingroup || '';
                 if (plugin && plugin !== currentplugin) {
                     currentplugin = plugin;
                     currentfeature = null;
+                    currentsub = null;
                     if (allselected) {
                         insertGroupTitle(
                             table,
@@ -1281,6 +1316,7 @@ define([
                 }
                 if (feature && feature !== currentfeature) {
                     currentfeature = feature;
+                    currentsub = null;
                     insertGroupTitle(
                         table,
                         row,
@@ -1290,20 +1326,22 @@ define([
                         labelFor(feature)
                     );
                 }
+                currentsub = insertSubheading(row, sub, currentsub);
                 return;
             }
-            if (!feature || feature === currentfeature) {
-                return;
+            if (feature && feature !== currentfeature) {
+                currentfeature = feature;
+                currentsub = null;
+                insertGroupTitle(
+                    table,
+                    row,
+                    'local-dixeo-settings-group',
+                    'local-dixeo-settings-group-title',
+                    'h3',
+                    labelFor(feature)
+                );
             }
-            currentfeature = feature;
-            insertGroupTitle(
-                table,
-                row,
-                'local-dixeo-settings-group',
-                'local-dixeo-settings-group-title',
-                'h3',
-                labelFor(feature)
-            );
+            currentsub = insertSubheading(row, sub, currentsub);
         });
     };
 
@@ -1421,25 +1459,30 @@ define([
         paintingCategories = true;
         list.replaceChildren();
         select.replaceChildren();
-        if (shell.dataset.courseid) {
+        if (shell.dataset.courseid && !shell.dataset.activityname) {
             const statusOption = document.createElement('option');
             statusOption.value = 'status';
             statusOption.textContent = statusLabel(shell);
             select.appendChild(statusOption);
         }
-        items.forEach(function(item) {
-            if (item.preferences) {
-                const divider = document.createElement('hr');
-                divider.className = 'local-dixeo-settings-category-divider';
-                list.appendChild(divider);
-            }
+        const appendCategory = function(item, subcategory, container) {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'btn btn-outline-secondary';
+            if (subcategory) {
+                button.classList.add('local-dixeo-settings-subcategory');
+            }
             button.dataset.category = item.value;
             button.hidden = !!item.hidden;
+            const current = selectedCategory(shell);
+            if (item.open && item.value !== current) {
+                button.classList.add('local-dixeo-settings-category-open');
+            }
             const name = document.createElement('span');
             name.textContent = item.label;
+            if (item.hassubs) {
+                button.setAttribute('aria-expanded', item.open ? 'true' : 'false');
+            }
             button.appendChild(name);
             if (!item.preferences) {
                 const count = document.createElement('span');
@@ -1447,15 +1490,39 @@ define([
                 count.textContent = String(item.count);
                 button.appendChild(count);
             }
-            setPressed(button, shell.dataset.panel !== 'status' && item.value === selectedCategory(shell));
-            list.appendChild(button);
+            const pressed = shell.dataset.panel !== 'status' && item.value === current;
+            setPressed(button, pressed);
+            (container || list).appendChild(button);
 
             const option = document.createElement('option');
             option.value = item.value;
-            option.textContent = item.preferences ? item.label : item.label + ' (' + item.count + ')';
+            const prefix = subcategory ? '  ' : '';
+            option.textContent = item.preferences ? item.label : prefix + item.label + ' (' + item.count + ')';
             option.hidden = !!item.hidden;
             option.disabled = !!item.hidden;
             select.appendChild(option);
+        };
+        items.forEach(function(item) {
+            if (item.preferences) {
+                const divider = document.createElement('hr');
+                divider.className = 'local-dixeo-settings-category-divider';
+                list.appendChild(divider);
+            }
+            appendCategory(item, false);
+            const subs = item.subs || [];
+            if (!subs.length) {
+                return;
+            }
+            const group = document.createElement('div');
+            group.className = 'local-dixeo-settings-subcategories';
+            group.setAttribute('role', 'group');
+            if (item.label) {
+                group.setAttribute('aria-label', item.label);
+            }
+            list.appendChild(group);
+            subs.forEach(function(subitem) {
+                appendCategory(subitem, true, group);
+            });
         });
         const selected = shell.dataset.panel === 'status' ? 'status' : selectedCategory(shell);
         if ([...select.options].some(function(option) {
@@ -1603,6 +1670,13 @@ define([
         requests.push({key: 'settings_category_imagegeneration', component: 'local_dixeo'});
         requests.push({key: 'settings_category_designer', component: 'local_dixeo'});
         requests.push({key: 'settings_category_dixeo_designer', component: 'local_dixeo'});
+        requests.push({key: 'settings_category_assignment', component: 'plagiarism_dixeo'});
+        requests.push({key: 'settings_subcategory_feedback', component: 'plagiarism_dixeo'});
+        requests.push({key: 'settings_subcategory_authorship', component: 'plagiarism_dixeo'});
+        requests.push({key: 'settings_subcategory_grading', component: 'plagiarism_dixeo'});
+        requests.push({key: 'settings_category_plagiarism_dixeo', component: 'plagiarism_dixeo'});
+        const activityColumnAt = requests.length;
+        requests.push({key: 'settings_column_activity', component: 'local_dixeo'});
         const fixedCount = requests.length;
         settings.forEach(function(setting) {
             requests.push({key: setting.name, component: setting.component});
@@ -1651,6 +1725,12 @@ define([
                 entries[setting.component + '/' + setting.name] = entry;
                 return State.rowView(labelled, strings[labelAt], strings[labelAt + 1], Config.wwwroot, labels);
             });
+            let coursecolumn = '';
+            if (shell.dataset.activityname) {
+                coursecolumn = strings[activityColumnAt];
+            } else if (shell.dataset.courseid) {
+                coursecolumn = strings[3];
+            }
             sessions.set(shell, {
                 labels: labels,
                 entries: entries,
@@ -1669,6 +1749,11 @@ define([
                     imagegeneration: strings[extraAt + 10],
                     designer: strings[extraAt + 11],
                     'dixeo_designer': strings[extraAt + 12],
+                    assignment: strings[extraAt + 13],
+                    feedback: strings[extraAt + 14],
+                    authorship: strings[extraAt + 15],
+                    grading: strings[extraAt + 16],
+                    'plagiarism_dixeo': strings[extraAt + 17],
                 },
                 contextid: contextid,
                 preferenceDrafts: {},
@@ -1677,7 +1762,7 @@ define([
             const context = {
                 rows: rows,
                 emptytext: strings[extraAt + 1],
-                coursecolumn: shell.dataset.courseid ? strings[3] : '',
+                coursecolumn: coursecolumn,
                 sitecolumn: strings[4],
                 dixeocolumn: strings[5],
                 advanced: strings[6],
@@ -1696,7 +1781,32 @@ define([
                 });
             }
             Templates.runTemplateJS(rendered.js);
+            applyDependencyLocks(shell);
             return null;
+        });
+    };
+
+    /**
+     * Disable a row the catalogue marks read-only, or whose Dixeo value locks the course Off.
+     *
+     * @param {HTMLElement} shell
+     */
+    const applyDependencyLocks = function(shell) {
+        const session = sessions.get(shell);
+        if (!session || !session.entries) {
+            return;
+        }
+        shell.querySelectorAll('.local-dixeo-settings-row').forEach(function(row) {
+            const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
+            if (!entry) {
+                return;
+            }
+            const locked = State.isDependencyLocked(session.entries, entry);
+            row.querySelectorAll(
+                '[data-action="local-dixeo-settings-value"], [data-action="local-dixeo-settings-parent"]'
+            ).forEach(function(control) {
+                control.disabled = locked;
+            });
         });
     };
 
@@ -1860,9 +1970,15 @@ define([
                 Array.prototype.forEach.call(control.options, function(option) {
                     option.selected = selected.indexOf(option.value) !== -1;
                 });
-            } else if (control.tagName === 'TEXTAREA' || control.tagName === 'SELECT') {
+            } else if (control.tagName === 'TEXTAREA' || control.tagName === 'INPUT' || control.tagName === 'SELECT') {
                 if (control.value !== entry.draft) {
+                    const start = control.selectionStart;
+                    const end = control.selectionEnd;
                     control.value = entry.draft;
+                    if (document.activeElement === control && start !== null && control.setSelectionRange) {
+                        const next = Math.min(start, control.value.length);
+                        control.setSelectionRange(next, Math.min(end, control.value.length));
+                    }
                 }
             } else {
                 const valueLabel = control.querySelector('.local-dixeo-settings-control-label');
@@ -1949,12 +2065,24 @@ define([
         if (draft === null || draft === entry.draft) {
             return;
         }
+        const control = row.querySelector('[data-action="local-dixeo-settings-value"]');
+        const editing = control && document.activeElement === control;
+        const start = editing && control.selectionStart !== null ? control.selectionStart : null;
+        const end = editing && control.selectionEnd !== null ? control.selectionEnd : null;
         entry.draft = draft;
         const session = sessions.get(shell);
         clearSaveError(shell);
         paintRow(row, entry, session.labels);
         publishDirty(shell);
         applyFilter(shell);
+        applyDependencyLocks(shell);
+        if (editing && document.activeElement !== control) {
+            control.focus();
+            if (start !== null && control.setSelectionRange) {
+                const next = Math.min(start, control.value.length);
+                control.setSelectionRange(next, end === null ? next : Math.min(end, control.value.length));
+            }
+        }
     };
 
     /**
@@ -2033,7 +2161,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry || entry.setting.readonly) {
+            if (!entry || State.isDependencyLocked(session.entries, entry)) {
                 return;
             }
             const action = actionEl.dataset.action;
@@ -2063,7 +2191,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry || entry.setting.readonly) {
+            if (!entry || State.isDependencyLocked(session.entries, entry)) {
                 return;
             }
             commitDraft(shell, row, entry, control.value);
@@ -2079,7 +2207,7 @@ define([
                 return;
             }
             const entry = session.entries[row.dataset.component + '/' + row.dataset.name];
-            if (!entry || entry.setting.readonly) {
+            if (!entry || State.isDependencyLocked(session.entries, entry)) {
                 return;
             }
             commitDraft(shell, row, entry, selectValue(control, entry));
@@ -2279,9 +2407,20 @@ define([
      * @returns {Promise}
      */
     const open = function(button) {
-        const name = courseName(button);
+        const typedActivity = document.getElementById('id_name');
+        let activity = '';
+        if (button.dataset.activityName) {
+            activity = (typedActivity && typedActivity.value) ? typedActivity.value : button.dataset.activityName;
+        }
+        const name = activity ? (button.dataset.courseName || '') : courseName(button);
         const requests = [{key: 'settings_modal_title', component: 'local_dixeo'}];
-        if (name !== '') {
+        if (activity) {
+            requests.push({
+                key: 'settings_modal_breadcrumb_activity',
+                component: 'local_dixeo',
+                param: {course: name, activity: activity},
+            });
+        } else if (name !== '') {
             requests.push({key: 'settings_modal_breadcrumb', component: 'local_dixeo', param: name});
         }
         const stringsReady = Str.get_strings(requests);
@@ -2335,6 +2474,9 @@ define([
                 shell.dataset.courseid = button.dataset.courseid;
                 shell.dataset.canmanagesync = button.dataset.canmanagesync === '1' ? '1' : '0';
             }
+            if (activity) {
+                shell.dataset.activityname = activity;
+            }
             bindClose(createdModal, shell);
             bindAdvanced(shell);
             bindDraft(shell);
@@ -2346,7 +2488,7 @@ define([
                 return showPreferencesOnly(shell);
             }
             const initial = button.dataset.initial || '';
-            const openOnStatus = initial === 'status' || (!!button.dataset.courseid && initial === '');
+            const openOnStatus = !activity && (initial === 'status' || (!!button.dataset.courseid && initial === ''));
             const openCategory = !openOnStatus && initial && initial !== 'status' ? initial : '';
             return loadSettings(shell, button.dataset.contextid, openOnStatus, openCategory);
         });
