@@ -56,30 +56,25 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
-     * File synchronization and image generation are omitted while Dixeo is off and return when it is on.
+     * File synchronization and image generation are edited in the Dixeo settings modal.
      */
-    public function test_image_generation_section_follows_the_dixeo_switch(): void {
+    public function test_file_sync_and_image_generation_are_absent_from_the_admin_page(): void {
         $config = \local_dixeo\external\service_factory::get_settings_config();
         $system = \context_system::instance();
 
-        $config->set('local_dixeo', 'enabled', $system, '0');
-        $off = $this->settings_page();
-        $this->assertTrue(isset($off->settings->local_dixeoenabled));
-        $this->assertTrue(isset($off->settings->local_dixeoapi_url));
-        $this->assertFalse(isset($off->settings->local_dixeofile_synchronization));
-        $this->assertFalse(isset($off->settings->local_dixeofilesync_enabled_default));
-        $this->assertFalse(isset($off->settings->local_dixeoimage_generation));
-        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_enabled));
-        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_course_mode));
-        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_section_mode));
-        $this->assertFalse(isset($off->settings->local_dixeoimage_generation_content_mode));
-
-        $config->set('local_dixeo', 'enabled', $system, '1');
-        $on = $this->settings_page();
-        $this->assertTrue(isset($on->settings->local_dixeofile_synchronization));
-        $this->assertTrue(isset($on->settings->local_dixeofilesync_enabled_default));
-        $this->assertTrue(isset($on->settings->local_dixeoimage_generation));
-        $this->assertTrue(isset($on->settings->local_dixeoimage_generation_content_mode));
+        foreach (['0', '1'] as $enabled) {
+            $config->set('local_dixeo', 'enabled', $system, $enabled);
+            $page = $this->settings_page();
+            $this->assertTrue(isset($page->settings->local_dixeoenabled));
+            $this->assertTrue(isset($page->settings->local_dixeoapi_url));
+            $this->assertFalse(isset($page->settings->local_dixeofile_synchronization));
+            $this->assertFalse(isset($page->settings->local_dixeofilesync_enabled_default));
+            $this->assertFalse(isset($page->settings->local_dixeoimage_generation));
+            $this->assertFalse(isset($page->settings->local_dixeoimage_generation_enabled));
+            $this->assertFalse(isset($page->settings->local_dixeoimage_generation_course_mode));
+            $this->assertFalse(isset($page->settings->local_dixeoimage_generation_section_mode));
+            $this->assertFalse(isset($page->settings->local_dixeoimage_generation_content_mode));
+        }
     }
 
     /**
@@ -114,34 +109,25 @@ final class admin_setting_enabled_test extends \advanced_testcase {
     }
 
     /**
-     * Every other Dixeo plugin admin page has the same button.
+     * The assistant admin page opens the Dixeo-layer modal. Tutor and Course Designer do not have one.
      */
     public function test_other_plugin_pages_open_the_dixeo_layer_modal(): void {
         global $CFG;
         require_once($CFG->libdir . '/adminlib.php');
         $root = \admin_get_root(true, true);
-        $sections = [
-            'blocksettingdixeo_tutor' => 'block_dixeo_tutorsettings_modal_open',
-            'blocksettingdixeo_designer' => 'block_dixeo_designersettings_modal_open',
-            'local_dixeo_assistant' => 'local_dixeo_assistantsettings_modal_open',
-        ];
-        $checked = 0;
-        foreach ($sections as $section => $settingname) {
-            $page = $root->locate($section);
-            if (!$page instanceof \admin_settingpage) {
-                continue;
-            }
-            $checked++;
-            $this->assertTrue(isset($page->settings->$settingname), $section);
-            $html = $page->settings->$settingname->output_html('');
-            $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html, $section);
-            $this->assertStringContainsString(
-                'data-contextid="' . \context_system::instance()->id . '"',
-                $html,
-                $section
-            );
-        }
-        $this->assertGreaterThan(0, $checked);
+
+        $page = $root->locate('local_dixeo_assistant');
+        $this->assertInstanceOf(\admin_settingpage::class, $page);
+        $this->assertTrue(isset($page->settings->local_dixeo_assistantsettings_modal_open));
+        $html = $page->settings->local_dixeo_assistantsettings_modal_open->output_html('');
+        $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html);
+        $this->assertStringContainsString(
+            'data-contextid="' . \context_system::instance()->id . '"',
+            $html
+        );
+
+        $this->assertNull($root->locate('blocksettingdixeo_tutor'));
+        $this->assertNull($root->locate('blocksettingdixeo_designer'));
     }
 
     /**

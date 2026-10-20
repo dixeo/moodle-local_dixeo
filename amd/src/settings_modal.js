@@ -1675,6 +1675,9 @@ define([
         requests.push({key: 'settings_subcategory_authorship', component: 'plagiarism_dixeo'});
         requests.push({key: 'settings_subcategory_grading', component: 'plagiarism_dixeo'});
         requests.push({key: 'settings_category_plagiarism_dixeo', component: 'plagiarism_dixeo'});
+        requests.push({key: 'certificate_settings', component: 'block_dixeo_designer'});
+        requests.push({key: 'lti_publication', component: 'block_dixeo_designer'});
+        requests.push({key: 'self_enrol_heading', component: 'block_dixeo_designer'});
         const activityColumnAt = requests.length;
         requests.push({key: 'settings_column_activity', component: 'local_dixeo'});
         const fixedCount = requests.length;
@@ -1754,6 +1757,9 @@ define([
                     authorship: strings[extraAt + 15],
                     grading: strings[extraAt + 16],
                     'plagiarism_dixeo': strings[extraAt + 17],
+                    certificate: strings[extraAt + 18],
+                    lti: strings[extraAt + 19],
+                    selfenrol: strings[extraAt + 20],
                 },
                 contextid: contextid,
                 preferenceDrafts: {},

@@ -203,9 +203,11 @@ final class catalogue_test extends \advanced_testcase {
         $this->assertSame(['dixeo'], $configure->get_levels());
         $this->assertSame('bool', $configure->get_type());
         $this->assertSame('0', $configure->get_default());
+        $this->assertSame('selfenrol', $configure->get_sub());
         $generatekey = $settings['self_enrol_generate_key'];
         $this->assertSame(['dixeo'], $generatekey->get_levels());
         $this->assertSame('1', $generatekey->get_default());
+        $this->assertSame('selfenrol', $generatekey->get_sub());
 
         $template = $settings['coursetemplate'];
         $this->assertSame(['dixeo', 'course'], $template->get_levels());
@@ -231,6 +233,8 @@ final class catalogue_test extends \advanced_testcase {
             $this->assertArrayHasKey('certificate_generation', $settings);
             $this->assertSame(['dixeo'], $settings['certificate_generation']->get_levels());
             $this->assertSame('0', $settings['certificate_generation']->get_default());
+            $this->assertSame('certificate', $settings['certificate_generation']->get_sub());
+            $this->assertSame('bool', $settings['certificate_generation']->get_type());
             $this->assertSame(['dixeo'], $settings['certificate_template']->get_levels());
             $this->assertSame('select', $settings['certificate_template']->get_type());
             $location = $settings['certificate_location'];
@@ -246,12 +250,41 @@ final class catalogue_test extends \advanced_testcase {
         $designerkeys = [
             'categoryname',
             'coursetemplate',
-            'self_enrol_configure',
-            'self_enrol_generate_key',
         ];
         if ($certificates) {
             $designerkeys = array_merge($designerkeys, $certificatekeys);
         }
+        $ltikeys = [
+            'lti_publication_enabled',
+            'lti_maxenrolled',
+            'lti_membersync',
+            'lti_membersyncmode',
+        ];
+        if (class_exists(\enrol_lti\helper::class)) {
+            $designerkeys = array_merge($designerkeys, $ltikeys);
+            $this->assertSame('bool', $settings['lti_publication_enabled']->get_type());
+            $this->assertSame('0', $settings['lti_publication_enabled']->get_default());
+            $this->assertSame('lti', $settings['lti_publication_enabled']->get_sub());
+            $this->assertSame('number', $settings['lti_maxenrolled']->get_type());
+            $this->assertSame('0', $settings['lti_maxenrolled']->get_default());
+            $this->assertSame(['0', '1'], $settings['lti_membersync']->get_options());
+            $this->assertSame(
+                [
+                    (string) \enrol_lti\helper::MEMBER_SYNC_ENROL_AND_UNENROL,
+                    (string) \enrol_lti\helper::MEMBER_SYNC_ENROL_NEW,
+                    (string) \enrol_lti\helper::MEMBER_SYNC_UNENROL_MISSING,
+                ],
+                $settings['lti_membersyncmode']->get_options()
+            );
+        } else {
+            foreach ($ltikeys as $key) {
+                $this->assertArrayNotHasKey($key, $settings);
+            }
+        }
+        $designerkeys = array_merge($designerkeys, [
+            'self_enrol_configure',
+            'self_enrol_generate_key',
+        ]);
         foreach ($designerkeys as $key) {
             $setting = $settings[$key];
             $this->assertFalse($setting->has_core());
@@ -260,6 +293,29 @@ final class catalogue_test extends \advanced_testcase {
         }
         $this->assertTrue(get_string_manager()->string_exists('settings_category_designer', 'local_dixeo'));
         $this->assertTrue(get_string_manager()->string_exists('settings_category_dixeo_designer', 'local_dixeo'));
+
+        $order = [];
+        foreach ($settings as $key => $setting) {
+            if ($setting->get_component() === 'block_dixeo_designer') {
+                $order[] = $key;
+            }
+        }
+        $this->assertSame($designerkeys, $order);
+    }
+
+    /**
+     * Tutor for new courses is the first Tutor setting.
+     */
+    public function test_tutor_for_new_courses_is_first(): void {
+        $order = [];
+        foreach (catalogue::load() as $key => $setting) {
+            if ($setting->get_feature() !== 'tutor') {
+                continue;
+            }
+            $order[] = $key;
+        }
+
+        $this->assertSame('tutor_enabled_default', $order[0]);
     }
 
     /**

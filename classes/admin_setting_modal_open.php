@@ -39,8 +39,6 @@ class admin_setting_modal_open {
     public static function admin_sections(): array {
         return [
             'local_dixeo',
-            'blocksettingdixeo_tutor',
-            'blocksettingdixeo_designer',
             'local_dixeo_assistant',
         ];
     }
