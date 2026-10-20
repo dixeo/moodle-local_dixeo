@@ -27,6 +27,7 @@ namespace local_dixeo\external;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
+use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use local_dixeo\external\traits\capability_check;
@@ -81,6 +82,7 @@ class get_file_sync_status extends external_api {
             'errormessage' => $status->errormessage ?? '',
             'lastsyncstarted' => $status->lastsyncstarted ?? 0,
             'lastsynccompleted' => $status->lastsynccompleted ?? 0,
+            'files' => $service->list_status_files($params['courseid'], (string) $status->status),
         ];
     }
 
@@ -99,6 +101,17 @@ class get_file_sync_status extends external_api {
             'errormessage' => new external_value(PARAM_RAW, 'Error message if status is error', VALUE_OPTIONAL),
             'lastsyncstarted' => new external_value(PARAM_INT, 'Timestamp of last sync start', VALUE_OPTIONAL),
             'lastsynccompleted' => new external_value(PARAM_INT, 'Timestamp of last successful sync', VALUE_OPTIONAL),
+            'files' => new external_multiple_structure(
+                new external_single_structure([
+                    'filename' => new external_value(PARAM_TEXT, 'File name'),
+                    'state' => new external_value(PARAM_ALPHA, 'synced or problem'),
+                    'reason' => new external_value(
+                        PARAM_ALPHANUMEXT,
+                        'toolarge, unmanaged, error, or empty when the file is synced',
+                        VALUE_OPTIONAL
+                    ),
+                ])
+            ),
         ]);
     }
 }

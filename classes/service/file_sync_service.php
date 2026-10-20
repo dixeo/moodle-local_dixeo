@@ -546,6 +546,79 @@ class file_sync_service {
     }
 
     /**
+     * Per-file rows for the status tab.
+     *
+     * Resource and folder files are classified locally. A remote file list is
+     * applied when the API returns one. The remote error text is never copied
+     * onto the row: a failed remote file uses the generic reason "error".
+     *
+     * While a sync is in progress, a managed file that the remote list has not
+     * confirmed is omitted. Files that are too large, empty, or an unmanaged
+     * type stay visible as problems.
+     *
+     * @param int $courseid The course ID.
+     * @param string|null $syncstatus Course sync status. Read from the local row when omitted.
+     * @return array[] Each row has filename, state (synced|problem), and reason.
+     */
+    public function list_status_files(int $courseid, ?string $syncstatus = null): array {
+        if ($syncstatus === null) {
+            $syncstatus = (string) $this->get_status($courseid)->status;
+        }
+
+        return $this->classify_sync_files(
+            $this->collect_status_file_descriptors($courseid),
+            $this->fetch_remote_file_list($courseid),
+            $syncstatus
+        );
+    }
+
+    /**
+     * Classify local files, then overlay a remote file list when its shape is recognised.
+     *
+     * $remotefiles may be a list, a hydra:member collection, or a member collection.
+     * Filename is read from fileName or filename. An unusable payload is ignored.
+     *
+     * @param array $localfiles Rows with filename and size.
+     * @param array|null $remotefiles Decoded GET /v1/files body, or null when the API was not called.
+     * @param string $syncstatus Course sync status.
+     * @return array[]
+     */
+    public function classify_sync_files(array $localfiles, ?array $remotefiles, string $syncstatus): array {
+        $remote = $this->index_remote_files($remotefiles);
+        $rows = [];
+        foreach ($localfiles as $index => $file) {
+            if (!is_array($file)) {
+                continue;
+            }
+            $filename = (string) ($file['filename'] ?? '');
+            if ($filename === '') {
+                continue;
+            }
+            $row = $this->classify_one_status_file($filename, (int) ($file['size'] ?? 0), $remote, $syncstatus);
+            if ($row === null) {
+                continue;
+            }
+            $row['sort'] = $index;
+            $rows[] = $row;
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            $byname = strcasecmp($a['filename'], $b['filename']);
+            if ($byname !== 0) {
+                return $byname;
+            }
+            return $a['sort'] <=> $b['sort'];
+        });
+
+        $sorted = [];
+        foreach ($rows as $row) {
+            unset($row['sort']);
+            $sorted[] = $row;
+        }
+        return $sorted;
+    }
+
+    /**
      * Trigger an immediate file sync for a course.
      *
      * Collects all syncable files from the course and uploads them to the API
@@ -1143,6 +1216,187 @@ class file_sync_service {
     }
 
     /**
+     * Remote file list, or null when the API is not configured or the call fails.
+     *
+     * @param int $courseid The course ID.
+     * @return array|null
+     */
+    private function fetch_remote_file_list(int $courseid): ?array {
+        if (!$this->client->is_configured()) {
+            return null;
+        }
+
+        try {
+            $response = $this->client->list_files((string) $courseid);
+        } catch (api_exception $e) {
+            return null;
+        }
+
+        return is_array($response) ? $response : null;
+    }
+
+    /**
+     * Index remote files by filename.
+     *
+     * Null means the payload was missing or not a file list. An empty array
+     * means the API returned no files.
+     *
+     * @param array|null $response Decoded file-list payload.
+     * @return array|null Filename to remote entry.
+     */
+    private function index_remote_files(?array $response): ?array {
+        $entries = $this->remote_file_entries($response);
+        if ($entries === null) {
+            return null;
+        }
+
+        $indexed = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $filename = '';
+            if (isset($entry['fileName']) && is_string($entry['fileName'])) {
+                $filename = $entry['fileName'];
+            } else if (isset($entry['filename']) && is_string($entry['filename'])) {
+                $filename = $entry['filename'];
+            }
+            if ($filename === '') {
+                continue;
+            }
+            if (!isset($indexed[$filename]) || $this->remote_entry_failed($entry)) {
+                $indexed[$filename] = $entry;
+            }
+        }
+        return $indexed;
+    }
+
+    /**
+     * File entries from a bare list or a member collection.
+     *
+     * @param array|null $response Decoded file-list payload.
+     * @return array|null Null when the shape is not a file list.
+     */
+    private function remote_file_entries(?array $response): ?array {
+        if ($response === null) {
+            return null;
+        }
+        if (array_is_list($response)) {
+            return $response;
+        }
+        foreach (['hydra:member', 'member'] as $key) {
+            if (isset($response[$key]) && is_array($response[$key]) && array_is_list($response[$key])) {
+                return $response[$key];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether a remote file entry reports a failure.
+     *
+     * The message text is not used. Production may omit it, and the new API
+     * may replace it with a generic sentence.
+     *
+     * @param array $entry One remote file.
+     * @return bool
+     */
+    private function remote_entry_failed(array $entry): bool {
+        $status = strtolower((string) ($entry['status'] ?? ''));
+        if ($status === 'error' || $status === 'failed') {
+            return true;
+        }
+        return isset($entry['errorMessage']) && is_string($entry['errorMessage']) && $entry['errorMessage'] !== '';
+    }
+
+    /**
+     * Whether a remote file entry is known to be indexed.
+     *
+     * @param array $entry One remote file.
+     * @return bool
+     */
+    private function remote_entry_synced(array $entry): bool {
+        if ($this->remote_entry_failed($entry)) {
+            return false;
+        }
+        $status = strtolower((string) ($entry['status'] ?? ''));
+        return in_array($status, ['uploaded', 'completed', 'synchronized'], true);
+    }
+
+    /**
+     * One status-tab row, or null while an unconfirmed file is still syncing.
+     *
+     * @param string $filename File name.
+     * @param int $size Size in bytes.
+     * @param array|null $remote Remote files indexed by filename, or null when unavailable.
+     * @param string $syncstatus Course sync status.
+     * @return array|null
+     */
+    private function classify_one_status_file(string $filename, int $size, ?array $remote, string $syncstatus): ?array {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $supported = in_array($extension, self::SUPPORTED_EXTENSIONS, true);
+        if ($supported && $size > self::MAX_FILE_SIZE) {
+            return [
+                'filename' => $filename,
+                'state' => 'problem',
+                'reason' => 'toolarge',
+            ];
+        }
+        if (!$supported || $size <= 0) {
+            return [
+                'filename' => $filename,
+                'state' => 'problem',
+                'reason' => 'unmanaged',
+            ];
+        }
+
+        $entry = is_array($remote) ? ($remote[$filename] ?? null) : null;
+        if (is_array($entry) && $this->remote_entry_failed($entry)) {
+            return [
+                'filename' => $filename,
+                'state' => 'problem',
+                'reason' => 'error',
+            ];
+        }
+        if ($syncstatus === 'syncing' && !(is_array($entry) && $this->remote_entry_synced($entry))) {
+            return null;
+        }
+
+        return [
+            'filename' => $filename,
+            'state' => 'synced',
+            'reason' => '',
+        ];
+    }
+
+    /**
+     * Filename and size of every visible resource and folder file.
+     *
+     * @param int $courseid The course ID.
+     * @return array[]
+     */
+    private function collect_status_file_descriptors(int $courseid): array {
+        $modinfo = get_fast_modinfo($courseid);
+        $fs = get_file_storage();
+        $files = [];
+
+        foreach ($modinfo->get_cms() as $cm) {
+            if (!in_array($cm->modname, self::FILE_MODULE_TYPES, true) || !$cm->visible) {
+                continue;
+            }
+            $context = \context_module::instance($cm->id);
+            foreach ($this->list_module_files($cm->modname, $context, $fs) as $file) {
+                $files[] = [
+                    'filename' => $file->get_filename(),
+                    'size' => (int) $file->get_filesize(),
+                ];
+            }
+        }
+
+        return $files;
+    }
+
+    /**
      * Match the operational enabled flag to the stored course setting.
      *
      * On creates the operational row. Off updates an existing row and does not create one,
@@ -1295,30 +1549,39 @@ class file_sync_service {
      */
     private function get_module_files(string $modname, \context_module $context, \file_storage $fs): array {
         $files = [];
-
-        // Component and filearea depend on module type.
-        $component = 'mod_' . $modname;
-
-        // Get files based on module type.
-        if ($modname === 'resource') {
-            $areafiles = $fs->get_area_files($context->id, $component, 'content', 0, 'sortorder', false);
-        } else if ($modname === 'folder') {
-            $areafiles = $fs->get_area_files($context->id, $component, 'content', 0, 'sortorder', false);
-        } else {
-            return $files;
-        }
-
-        foreach ($areafiles as $file) {
-            if ($file->is_directory()) {
-                continue;
-            }
-
+        foreach ($this->list_module_files($modname, $context, $fs) as $file) {
             $extension = strtolower(pathinfo($file->get_filename(), PATHINFO_EXTENSION));
             if (in_array($extension, self::SUPPORTED_EXTENSIONS, true)) {
                 $files[] = $file;
             }
         }
+        return $files;
+    }
 
+    /**
+     * Every non-directory file in a resource or folder.
+     *
+     * Includes types and sizes the sync does not upload. Callers that build
+     * an upload payload still filter through {@see self::get_module_files()}.
+     *
+     * @param string $modname The module type (resource, folder).
+     * @param \context_module $context The module context.
+     * @param \file_storage $fs The file storage instance.
+     * @return \stored_file[]
+     */
+    private function list_module_files(string $modname, \context_module $context, \file_storage $fs): array {
+        if ($modname !== 'resource' && $modname !== 'folder') {
+            return [];
+        }
+
+        $areafiles = $fs->get_area_files($context->id, 'mod_' . $modname, 'content', 0, 'sortorder', false);
+        $files = [];
+        foreach ($areafiles as $file) {
+            if ($file->is_directory()) {
+                continue;
+            }
+            $files[] = $file;
+        }
         return $files;
     }
 }
