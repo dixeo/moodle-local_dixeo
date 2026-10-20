@@ -128,4 +128,61 @@ $functions = [
         'capabilities' => '',
         'readonlysession' => true,
     ],
+
+    // Read catalogue settings for the Dixeo or course level.
+    'local_dixeo_get_settings' => [
+        'classname' => 'local_dixeo\external\get_settings',
+        'description' => 'Read Dixeo settings for a system or course context',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
+
+    // Save catalogue settings for the Dixeo or course level.
+    'local_dixeo_save_settings' => [
+        'classname' => 'local_dixeo\external\save_settings',
+        'description' => 'Save Dixeo settings for a system or course context',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => '',
+    ],
+
+    // Read the current user's Dixeo preferences.
+    'local_dixeo_get_preferences' => [
+        'classname' => 'local_dixeo\external\get_preferences',
+        'description' => 'Read the current user Dixeo preferences',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
+
+    // Store the current user's Dixeo preferences.
+    'local_dixeo_set_preferences' => [
+        'classname' => 'local_dixeo\external\set_preferences',
+        'description' => 'Store the current user Dixeo preferences',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => '',
+    ],
+
+    // Review text and current status for the My preferences row.
+    'local_dixeo_get_consent_manage' => [
+        'classname' => 'local_dixeo\external\get_consent_manage',
+        'description' => 'Read the current user terms and privacy review',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => '',
+        'readonlysession' => true,
+    ],
+
+    // Grant or withdraw analytics consent, or withdraw Terms of Use acceptance.
+    'local_dixeo_save_consent' => [
+        'classname' => 'local_dixeo\external\save_consent',
+        'description' => 'Save the current user terms or analytics choice',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => '',
+    ],
 ];

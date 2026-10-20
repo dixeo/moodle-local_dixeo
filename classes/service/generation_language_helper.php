@@ -29,14 +29,27 @@ namespace local_dixeo\service;
  * Helpers for tutor generation language selection.
  */
 class generation_language_helper {
+    /** @var string User preference for quiz and lesson generation language. */
+    public const PREFERENCE = 'local_dixeo_generation_language';
+
     /**
-     * Default generation language for a user (explicit preference or current UI language).
+     * Generation language for a user.
+     *
+     * A stored preference wins when that language is still installed. Otherwise the
+     * user's interface language is used.
      *
      * @param int $userid
      * @return string Moodle language code.
      */
     public static function default_for_user(int $userid): string {
         $translations = get_string_manager()->get_list_of_translations();
+        if ($userid > 0) {
+            $stored = get_user_preferences(self::PREFERENCE, null, $userid);
+            if (is_string($stored) && $stored !== '' && isset($translations[$stored])) {
+                return $stored;
+            }
+        }
+
         $user = \core_user::get_user($userid, 'id,lang', IGNORE_MISSING);
         if ($user && !empty($user->lang) && $user->lang !== 'auto' && isset($translations[$user->lang])) {
             return $user->lang;
@@ -48,6 +61,23 @@ class generation_language_helper {
         }
 
         return array_key_first($translations) ?: 'en';
+    }
+
+    /**
+     * Store the generation language for a user.
+     *
+     * @param int $userid
+     * @param string $language Installed Moodle language code.
+     * @return string Stored language code.
+     */
+    public static function store_for_user(int $userid, string $language): string {
+        $translations = get_string_manager()->get_list_of_translations();
+        $language = clean_param(trim($language), PARAM_LANG);
+        if ($language === '' || !isset($translations[$language])) {
+            throw new \invalid_parameter_exception('language');
+        }
+        set_user_preference(self::PREFERENCE, $language, $userid);
+        return $language;
     }
 
     /**
@@ -112,7 +142,7 @@ class generation_language_helper {
     }
 
     /**
-     * Build Mustache/AJAX language options for setup panels.
+     * Build language options for the generation language preference.
      *
      * @param int $userid
      * @return array{defaultlanguage: string, languages: array<int, array{code: string, name: string, selected: bool}>}

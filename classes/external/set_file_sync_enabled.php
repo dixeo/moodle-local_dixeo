@@ -80,6 +80,9 @@ class set_file_sync_enabled extends external_api {
                 $service->disable_sync($params['courseid'], $USER->id, $params['removefiles']);
             }
 
+            service_factory::get_settings_config()->clear_applied_cache(
+                \context_course::instance($params['courseid'])
+            );
             $status = $service->get_status($params['courseid']);
 
             return [

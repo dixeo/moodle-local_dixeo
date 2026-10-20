@@ -43,6 +43,7 @@ use local_dixeo\service\manual_upload_service;
 use local_dixeo\service\practice_quiz_service;
 use local_dixeo\service\teach_lesson_service;
 use local_dixeo\service\tutor_service;
+use local_dixeo\settings\config as settings_config;
 
 /**
  * Factory class for creating service instances.
@@ -292,6 +293,15 @@ class service_factory {
         }
 
         return new client();
+    }
+
+    /**
+     * Get the Dixeo settings config helper.
+     *
+     * @return settings_config
+     */
+    public static function get_settings_config(): settings_config {
+        return new settings_config();
     }
 
     /**

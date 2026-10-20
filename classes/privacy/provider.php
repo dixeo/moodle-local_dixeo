@@ -33,6 +33,7 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
+use local_dixeo\service\generation_language_helper;
 
 /**
  * Privacy provider for course AI sync records and Dixeo API transfers.
@@ -48,7 +49,8 @@ use local_dixeo\external\service_factory;
 class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
-    \core_privacy\local\request\plugin\provider {
+    \core_privacy\local\request\plugin\provider,
+    \core_privacy\local\request\user_preference_provider {
     /** @var string Course AI sync configuration table. */
     public const TABLE_COURSE_AI = 'local_dixeo_course_ai';
 
@@ -73,6 +75,12 @@ class provider implements
     /** @var string Tutor usage open session table. */
     public const TABLE_TUTOR_USAGE_OPEN = 'local_dixeo_tutor_usage_open';
 
+    /** @var string Terms acceptance records. */
+    public const TABLE_CONSENT = 'local_dixeo_consent';
+
+    /** @var string Stored notice text, one row per hash. */
+    public const TABLE_CONSENT_DOCUMENT = 'local_dixeo_consent_document';
+
     /**
      * Describe metadata stored or transmitted by this plugin.
      *
@@ -80,6 +88,11 @@ class provider implements
      * @return collection The updated collection.
      */
     public static function get_metadata(collection $collection): collection {
+        $collection->add_user_preference(
+            generation_language_helper::PREFERENCE,
+            'privacy:metadata:preference:generation_language'
+        );
+
         $collection->add_database_table(
             self::TABLE_COURSE_AI,
             [
@@ -207,6 +220,17 @@ class provider implements
             'privacy:metadata:tutor_usage_open'
         );
 
+        $collection->add_database_table(
+            self::TABLE_CONSENT,
+            [
+                'userid' => 'privacy:metadata:consent:userid',
+                'documentid' => 'privacy:metadata:consent:documentid',
+                'action' => 'privacy:metadata:consent:action',
+                'timecreated' => 'privacy:metadata:consent:timecreated',
+            ],
+            'privacy:metadata:consent'
+        );
+
         $collection->add_external_location_link(
             'dixeo_api',
             [
@@ -261,6 +285,14 @@ class provider implements
         }
 
         if ($DB->record_exists(self::TABLE_TUTOR_USAGE_EVENT, ['userid' => $userid])) {
+            \context_system::instance(0, MUST_EXIST, false);
+            $contextlist->add_from_sql(
+                'SELECT id FROM {context} WHERE contextlevel = :contextlevel AND instanceid = 0',
+                ['contextlevel' => CONTEXT_SYSTEM]
+            );
+        }
+
+        if ($DB->record_exists(self::TABLE_CONSENT, ['userid' => $userid])) {
             \context_system::instance(0, MUST_EXIST, false);
             $contextlist->add_from_sql(
                 'SELECT id FROM {context} WHERE contextlevel = :contextlevel AND instanceid = 0',
@@ -342,6 +374,7 @@ class provider implements
                 self::export_user_jobs($context, $userid, 0);
                 self::export_user_credit_usage($context, $userid, 0);
                 self::export_user_tutor_usage($context, $userid, 0);
+                self::export_user_consent($context, $userid);
                 continue;
             }
 
@@ -564,6 +597,45 @@ class provider implements
     }
 
     /**
+     * Export terms acceptance and analytics consent rows for one user.
+     *
+     * @param \context $context System context.
+     * @param int $userid User id.
+     */
+    private static function export_user_consent(\context $context, int $userid): void {
+        global $DB;
+
+        $rows = $DB->get_records_sql(
+            "SELECT c.id, c.action, c.timecreated, d.version, d.lang, d.documenthash, d.documenttext
+               FROM {" . self::TABLE_CONSENT . "} c
+               JOIN {" . self::TABLE_CONSENT_DOCUMENT . "} d ON d.id = c.documentid
+              WHERE c.userid = :userid
+           ORDER BY c.timecreated ASC, c.id ASC",
+            ['userid' => $userid]
+        );
+        if (!$rows) {
+            return;
+        }
+
+        $exported = [];
+        foreach ($rows as $row) {
+            $exported[] = (object) [
+                'action' => (string) $row->action,
+                'version' => (string) $row->version,
+                'lang' => (string) $row->lang,
+                'documenttext' => (string) $row->documenttext,
+                'documenthash' => (string) $row->documenthash,
+                'timecreated' => transform::datetime((int) $row->timecreated),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:consent', 'local_dixeo')],
+            (object) ['records' => $exported]
+        );
+    }
+
+    /**
      * Delete all plugin data for a course context (the entire sync configuration row).
      *
      * @param \context $context The context.
@@ -572,6 +644,7 @@ class provider implements
         global $DB;
 
         if ($context->contextlevel === CONTEXT_SYSTEM) {
+            $DB->delete_records(self::TABLE_CONSENT);
             $DB->delete_records(self::TABLE_JOBS, ['courseid' => 0]);
             $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => 0]);
             $DB->delete_records(self::TABLE_TUTOR_USAGE_EVENT, ['courseid' => 0]);
@@ -641,6 +714,7 @@ class provider implements
 
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
+                $DB->delete_records(self::TABLE_CONSENT, ['userid' => $userid]);
                 $DB->delete_records(self::TABLE_JOBS, [
                     'userid' => $userid,
                     'courseid' => 0,
@@ -759,6 +833,13 @@ class provider implements
                   WHERE j.courseid = 0 AND j.userid > 0",
                 []
             );
+            $userlist->add_from_sql(
+                'userid',
+                "SELECT c.userid AS userid
+                   FROM {" . self::TABLE_CONSENT . "} c
+                  WHERE c.userid > 0",
+                []
+            );
             return;
         }
 
@@ -834,6 +915,11 @@ class provider implements
             }
 
             [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+            $DB->delete_records_select(
+                self::TABLE_CONSENT,
+                "userid {$insql}",
+                $params
+            );
             $DB->delete_records_select(
                 self::TABLE_JOBS,
                 "courseid = 0 AND userid {$insql}",
@@ -975,6 +1061,24 @@ class provider implements
         );
 
         return null;
+    }
+
+    /**
+     * Export the generation language preference.
+     *
+     * @param int $userid
+     */
+    public static function export_user_preferences(int $userid): void {
+        $language = get_user_preferences(generation_language_helper::PREFERENCE, null, $userid);
+        if (!is_string($language) || $language === '') {
+            return;
+        }
+        writer::export_user_preference(
+            'local_dixeo',
+            generation_language_helper::PREFERENCE,
+            $language,
+            get_string('privacy:metadata:preference:generation_language', 'local_dixeo')
+        );
     }
 
     /**

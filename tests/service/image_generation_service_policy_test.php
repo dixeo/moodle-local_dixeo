@@ -356,4 +356,27 @@ final class image_generation_service_policy_test extends \advanced_testcase {
             'Brighten the image'
         );
     }
+
+    /**
+     * A course mode override blocks the job even when the Dixeo mode allows it.
+     */
+    public function test_submit_course_image_job_rejected_when_course_overrides_mode_to_disabled(): void {
+        $this->setAdminUser();
+        $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_GENERATE_EDIT);
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Override course']);
+        \local_dixeo\external\service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'image_generation_course_mode',
+            \context_course::instance((int) $course->id),
+            policy::MODE_DISABLED,
+            false
+        );
+
+        $this->expectException(\moodle_exception::class);
+        $this->make_service_with_mock_jobs($jobmock)->submit_course_image_job((int) $course->id);
+    }
 }

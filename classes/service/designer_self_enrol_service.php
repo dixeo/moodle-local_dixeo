@@ -45,7 +45,7 @@ class designer_self_enrol_service {
         }
 
         $course = get_course($courseid);
-        $password = $this->resolve_enrolment_password($plugin, $generateenrolmentkey);
+        $password = $this->resolve_enrolment_password($generateenrolmentkey, $courseid);
 
         $selfinstance = null;
         foreach (enrol_get_instances($courseid, false) as $instance) {
@@ -77,17 +77,20 @@ class designer_self_enrol_service {
     /**
      * Resolve the enrolment key for a new self-enrol instance.
      *
-     * @param \enrol_plugin $plugin enrol_self plugin instance
      * @param bool $generateenrolmentkey
+     * @param int $courseid Course whose Dixeo override applies.
      * @return string Enrolment key (plain), max 50 chars for enrol_self.
      */
-    private function resolve_enrolment_password(\enrol_plugin $plugin, bool $generateenrolmentkey): string {
-        $needkey = $generateenrolmentkey || (bool) $plugin->get_config('requirepassword');
+    private function resolve_enrolment_password(bool $generateenrolmentkey, int $courseid): string {
+        $settings = \local_dixeo\external\service_factory::get_settings_config();
+        $context = \context_course::instance($courseid);
+        $needkey = $generateenrolmentkey
+            || $settings->get_moodle('enrol_self', 'requirepassword', $context) === '1';
         if (!$needkey) {
             return '';
         }
 
-        if ($plugin->get_config('usepasswordpolicy')) {
+        if ($settings->get_moodle('enrol_self', 'usepasswordpolicy', $context) === '1') {
             return generate_password(20);
         }
 

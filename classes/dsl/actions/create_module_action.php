@@ -246,6 +246,11 @@ class create_module_action {
                 $this->set_quiz_pass_grade($courseid, (int) $instanceid);
             }
 
+            if ($modulename === 'assign') {
+                \local_dixeo\external\service_factory::get_settings_config()
+                    ->copy_activity_defaults(\context_module::instance($cmid));
+            }
+
             // Run module-specific post-creation hooks if available.
             $this->run_after_hook($modulename, $cmid, $moduledata);
 
@@ -330,7 +335,7 @@ class create_module_action {
      * Prepare module data for the add_instance function.
      *
      * Merges data in priority order (later overrides earlier):
-     * 1. Platform defaults from get_config()
+     * 1. Platform defaults from the Dixeo settings reader
      * 2. Module-specific quirks (field name remappings)
      * 3. Activity instance completion defaults for the module type
      * 4. DSL-provided fields, minus the reserved fields the interpreter owns
@@ -343,7 +348,7 @@ class create_module_action {
      */
     protected function prepare_module_data(array $fields, int $courseid, int $cmid, string $modulename): \stdClass {
         // Get platform defaults for this module type.
-        $platformdefaults = $this->get_platform_defaults($modulename);
+        $platformdefaults = $this->get_platform_defaults($modulename, $courseid);
 
         // Get module-specific quirks (field name remappings, etc.).
         $quirks = $this->get_module_field_quirks($modulename);
@@ -390,19 +395,24 @@ class create_module_action {
     /**
      * Get platform default values for a module type.
      *
-     * Retrieves admin-configured defaults from Moodle's config table.
+     * A catalogue entry that overrides one of these Moodle settings replaces that name.
      *
      * @param string $modulename The module type name.
+     * @param int $courseid Course the activity is added to.
      * @return array The platform default values as an associative array.
      */
-    protected function get_platform_defaults(string $modulename): array {
-        $config = get_config($modulename);
-
-        if (empty($config) || !is_object($config)) {
+    protected function get_platform_defaults(string $modulename, int $courseid): array {
+        $context = $courseid > SITEID
+            ? \context_course::instance($courseid)
+            : \context_system::instance();
+        $config = \local_dixeo\external\service_factory::get_settings_config()
+            ->moodle_plugin_config($modulename, $context);
+        $values = (array) $config;
+        if ($values === []) {
             return [];
         }
 
-        return (array) $config;
+        return $values;
     }
 
     /**

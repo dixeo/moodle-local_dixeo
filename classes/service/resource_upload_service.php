@@ -75,7 +75,8 @@ class resource_upload_service {
             throw new moodle_exception('manual_upload_error_missing', 'block_dixeo_modulegen');
         }
 
-        $config = get_config('resource');
+        $config = \local_dixeo\external\service_factory::get_settings_config()
+            ->moodle_plugin_config(self::MODULE_NAME, \context_course::instance($courseid));
         $transaction = $DB->start_delegated_transaction();
         try {
             $cm = new stdClass();

@@ -45,6 +45,75 @@ $string['cachedef_coursetemplates'] = 'Modèles de structure de cours mis en cac
 $string['cachedef_installedplugintypes'] = 'Types de plugins d\'activité installés mis en cache pour la génération Dixeo';
 $string['cachedef_moduletypes'] = 'Types de modules mis en cache depuis l\'API Dixeo';
 $string['configure_api'] = 'Configurer l\'API';
+$string['consent_close'] = 'Fermer';
+$string['consent_continue'] = 'Continuer';
+$string['consent_error_terms_required'] = 'Cochez les deux cases avant de continuer.';
+$string['consent_error_version'] = 'Ces conditions ont été mises à jour. Lisez la version actuelle, puis continuez.';
+$string['consent_exit'] = 'Quitter';
+$string['consent_manage'] = 'Conditions et confidentialité Dixeo';
+$string['consent_manage_intro'] = 'Relisez les conditions d\'utilisation et la notice de confidentialité, ou révoquez votre acceptation.';
+$string['consent_privacy_body'] = 'Cette notice explique comment vos données personnelles sont utilisées lorsque Dixeo est activé, conformément aux articles 13 et 14 du RGPD. La lire ne constitue pas, à elle seule, un consentement.
+
+Qui est responsable. {$a->sitename}, l\'organisation qui exploite ce site, est le responsable du traitement : elle décide pourquoi et comment vos données personnelles sont utilisées. Contact : {$a->contact}. Dixeo, qui fournit les plugins et les services d\'IA, est le sous-traitant. Ce site envoie des données à l\'API Dixeo à l\'adresse {$a->apiurl} afin que Dixeo puisse fournir les fonctions décrites dans les conditions d\'utilisation. Les copies distantes sont conservées selon le contrat entre {$a->sitename} et Dixeo. Ce site ne peut pas supprimer ces copies distantes par les outils de confidentialité de Moodle. Pour toute question sur les services de Dixeo, contactez contact@dixeo.com.
+
+Données que ce site stocke ou envoie, telles que déclarées à l\'API de confidentialité de Moodle :
+
+- Votre identifiant d\'utilisateur Moodle, envoyé avec les demandes que vous lancez
+- Les messages que vous écrivez au tuteur, les instructions et le texte visible de la page, afin que le tuteur puisse répondre dans le contexte de la page
+- Les titres et résumés de cours, de sections et d\'activités ; les invites ; les images sources ; et les fichiers du cours, y compris le texte extrait des paquets SCORM, téléversés pour la génération, la modification d\'images ou la synchronisation des fichiers
+- Les noms, descriptions et définitions de structure des modèles de cours stockés sur l\'API Dixeo
+- Les identifiants de travaux, les types d\'opération, les montants de crédits, et le cours ou l\'activité auquel chaque travail est rattaché
+- Les invites d\'image et l\'état des travaux. Les enregistrements locaux de travaux d\'image sont supprimés 7 jours après la fin du travail
+- La langue que vous choisissez pour les tests et les leçons générés par le tuteur
+- L\'identifiant d\'utilisateur et l\'heure enregistrés lorsqu\'une personne active ou désactive la synchronisation des fichiers d\'un cours
+
+Base juridique. Le tutorat, la génération, les images, la synchronisation des fichiers, le suivi des crédits et les analyses d\'utilisation du tuteur sont nécessaires à l\'exécution des conditions d\'utilisation (article 6, paragraphe 1, point b). La conservation des enregistrements opérationnels pour la sécurité, l\'assistance et le suivi des crédits relève de l\'intérêt légitime de {$a->sitename} (article 6, paragraphe 1, point f).
+
+Destinataires. Vos données sont partagées avec l\'API Dixeo et, pour les rapports de crédits, avec le personnel que ce site a autorisé. Les rapports d\'utilisation du tuteur ne sont visibles que par le personnel autorisé.
+
+Transferts internationaux. Les données sont envoyées à l\'API Dixeo indiquée ci-dessus. Tout transfert hors de votre pays, et les garanties qui s\'y appliquent, sont prévus dans le contrat entre {$a->sitename} et Dixeo. Ce site ne peut ni voir ni décrire le mécanisme de transfert lui-même.
+
+Conservation. Les enregistrements locaux de travaux d\'image sont conservés 7 jours après la fin du travail. Les autres enregistrements locaux sont conservés tant que votre compte existe et sont retirés lorsque vos données personnelles sont supprimées dans Moodle. La conservation distante suit le contrat entre {$a->sitename} et Dixeo.
+
+Vos droits. Vous pouvez demander à {$a->sitename} l\'accès, la rectification, l\'effacement, la limitation ou une copie portable de vos données, et vous pouvez vous opposer à un traitement fondé sur l\'intérêt légitime. Vous pouvez aussi introduire une réclamation auprès d\'une autorité de contrôle. Si ce site dispose des outils de confidentialité de Moodle, utilisez-les pour contacter le délégué à la protection des données.
+
+Acceptation des conditions. Vous acceptez les conditions d\'utilisation pour ouvrir un cours où Dixeo est activé. Les analyses d\'utilisation du tuteur seront enregistrées. Si vous n\'acceptez pas, choisissez Quitter.
+
+Usage de l\'IA. Dixeo utilise l\'IA pour rédiger les réponses du tuteur, le contenu du cours et les images. Lorsqu\'un enseignant l\'active, elle produit aussi des suggestions de relecture ou de notation de devoirs pour les personnes du cours. Toute note que {$a->sitename} considère comme définitive est contrôlée par l\'enseignant et par les règles d\'évaluation propres à ce site.
+
+Vos données ne sont pas utilisées à des fins de prospection.';
+$string['consent_privacy_contact_admin'] = 'l\'administrateur du site';
+$string['consent_privacy_dataprotection'] = 'Ouvrir vos demandes de confidentialité';
+$string['consent_privacy_heading'] = 'Notice de confidentialité';
+$string['consent_processing_body'] = 'Dixeo enregistre des analyses d\'utilisation du tuteur : le nombre de messages, de tests d\'entraînement et de leçons que vous créez, le mode du tuteur, le cours, l\'activité et l\'heure. Le texte de vos messages n\'est pas stocké dans ces enregistrements. Le personnel autorisé peut consulter ces chiffres dans les rapports d\'utilisation du tuteur.';
+$string['consent_processing_checkbox'] = 'Mon utilisation du tuteur (nombre de messages, modes, cours, activités et horodatages, sans le texte des messages) sera enregistrée pour des analyses et des rapports d\'utilisation.';
+$string['consent_processing_heading'] = 'Analyses d\'utilisation';
+$string['consent_review'] = 'Consulter';
+$string['consent_save_processing'] = 'Enregistrer';
+$string['consent_saved_processing'] = 'Votre choix d\'analyse a été enregistré.';
+$string['consent_status_accepted'] = 'Vous avez accepté les conditions d\'utilisation (version {$a->version}) le {$a->time}. Les analyses d\'utilisation du tuteur seront enregistrées (version {$a->processingversion}) depuis le {$a->processingtime}.';
+$string['consent_status_processing_off'] = 'Les analyses d\'utilisation du tuteur ne sont pas enregistrées.';
+$string['consent_status_processing_on'] = 'Les analyses d\'utilisation du tuteur seront enregistrées (version {$a->version}) depuis le {$a->time}.';
+$string['consent_status_terms_accepted'] = 'Vous avez accepté les conditions d\'utilisation (version {$a->version}) le {$a->time}.';
+$string['consent_status_terms_none'] = 'Vous n\'avez pas accepté les conditions d\'utilisation actuelles. Un cours où Dixeo est activé vous le demandera avant que vous puissiez continuer.';
+$string['consent_terms_body'] = 'Ces conditions sont un contrat entre vous et {$a->sitename}, l\'organisation qui exploite ce site. Elles s\'appliquent chaque fois que vous utilisez Dixeo dans un cours.
+
+Dixeo, fournisseur des plugins et des services d\'IA utilisés sur ce site, propose le tutorat par IA, la génération de contenu, la génération d\'images, la synchronisation des fichiers de cours et le suivi des crédits dans les cours où il est activé. En continuant, vous acceptez d\'utiliser ces fonctions selon ces conditions.
+
+Vous ne devez pas soumettre de contenu illicite ni de contenu que vous n\'avez pas le droit de partager. Le résultat de l\'IA peut être incomplet ou inexact. Vous êtes responsable de l\'usage que vous en faites, y compris des travaux que vous remettez pour le cours.
+
+Dixeo peut être indisponible si le service est suspendu ou si les crédits sont épuisés. La synchronisation des fichiers et les travaux d\'IA dépendent de la disponibilité du service Dixeo.
+
+Si vous n\'acceptez pas, choisissez Quitter. Vous ne pourrez pas entrer dans ce cours tant que Dixeo est activé. Vous pouvez retirer votre acceptation à tout moment dans la configuration Dixeo, sous Mes préférences, et le cours vous la demandera de nouveau. Le retrait ne supprime pas les travaux de cours que vous avez déjà créés.
+
+Version du document {$a->version}.';
+$string['consent_terms_checkbox'] = 'J\'ai lu et j\'accepte les conditions d\'utilisation et je prends connaissance de la notice de confidentialité.';
+$string['consent_terms_heading'] = 'Conditions d\'utilisation';
+$string['consent_title'] = 'Conditions d\'utilisation et notice de confidentialité';
+$string['consent_withdraw_confirm'] = 'La révocation retire votre acceptation des conditions d\'utilisation. Les analyses d\'utilisation du tuteur déjà enregistrées sont supprimées. Un cours où Dixeo est activé vous les demandera de nouveau.';
+$string['consent_withdraw_confirm_title'] = 'Révoquer l\'acceptation ?';
+$string['consent_withdraw_terms'] = 'Révoquer';
+$string['consent_withdrawn_terms'] = 'Votre acceptation des conditions d\'utilisation a été retirée. Un cours Dixeo vous la demandera de nouveau.';
 $string['content_image_failed'] = 'Une erreur s\'est produite';
 $string['content_image_generating'] = 'Génération...';
 $string['contentimagetitlefallback'] = 'Image de contenu';
@@ -84,7 +153,6 @@ $string['credit_moduletype_page'] = 'Page';
 $string['credit_moduletype_quiz'] = 'Test';
 $string['credit_moduletype_simplequiz2'] = 'Quiz simple';
 $string['credit_moduletype_slideshow'] = 'Diaporama';
-$string['credit_report'] = 'Rapport de crédits';
 $string['credit_report_apply_filters'] = 'Appliquer les filtres';
 $string['credit_report_breakdown'] = 'Crédits par module';
 $string['credit_report_column_action'] = 'Action';
@@ -97,8 +165,6 @@ $string['credit_report_filter_action'] = 'Action';
 $string['credit_report_filter_component'] = 'Composant';
 $string['credit_report_filter_course'] = 'Cours';
 $string['credit_report_filter_course_placeholder'] = 'Rechercher des cours…';
-$string['credit_report_filter_credits_max'] = 'Crédits max.';
-$string['credit_report_filter_credits_min'] = 'Crédits min.';
 $string['credit_report_filter_moduletype'] = 'Type d\'activité';
 $string['credit_report_filter_placeholder'] = 'Rechercher ou sélectionner…';
 $string['credit_report_filter_user'] = 'Utilisateur';
@@ -132,14 +198,12 @@ $string['day_sun'] = 'Dim';
 $string['day_thu'] = 'Jeu';
 $string['day_tue'] = 'Mar';
 $string['day_wed'] = 'Mer';
+$string['description'] = 'Description';
 $string['designerstructurevalidate_aggregate_prefix_section'] = 'Section {$a->section}, activité {$a->module} :';
 $string['designerstructurevalidate_aggregate_prefix_section_only'] = 'Section {$a->section} :';
 $string['designerstructurevalidate_course_summary_too_long'] = 'Le résumé du cours est trop long (maximum {$a->max} caractères).';
 $string['designerstructurevalidate_course_title_required'] = 'Le titre du cours est un champ obligatoire.';
 $string['designerstructurevalidate_course_title_too_long'] = 'Le titre du cours doit comporter au maximum {$a->max} caractères.';
-$string['designerstructurevalidate_failed'] = 'Ce cours ne peut pas être créé tant que ces problèmes ne sont pas résolus :
-
-{$a->details}';
 $string['designerstructurevalidate_fill_instructions_too_long'] = 'Les consignes envoyées à l\'IA sont trop longues (maximum {$a->max} caractères).';
 $string['designerstructurevalidate_instructions_api_min'] = 'Les consignes doivent comporter au moins {$a->min} caractères.';
 $string['designerstructurevalidate_invalid_root'] = 'Les données de structure du cours sont invalides.';
@@ -158,9 +222,11 @@ $string['designerstructurevalidate_section_invalid'] = 'La section {$a} de la st
 $string['designerstructurevalidate_section_summary_too_long'] = 'Le résumé de la section est trop long (maximum {$a->max} caractères).';
 $string['designerstructurevalidate_section_title_too_long'] = 'Le titre de la section est trop long (maximum {$a->max} caractères).';
 $string['designerstructurevalidate_sections_not_array'] = 'La liste des sections de la structure du cours est invalide.';
+$string['disabled_block_course'] = 'Ce bloc n\'est pas disponible, car Dixeo a été désactivé pour ce cours.';
+$string['disabled_block_site'] = 'Ce bloc n\'est pas disponible, car Dixeo a été désactivé. Vous pouvez demander à un administrateur de l\'activer.';
 $string['dixeo:contentimageedit'] = 'Modifier des images de contenu intégrées avec l\'IA';
 $string['dixeo:contentimagegenerate'] = 'Générer des images de contenu intégrées avec l\'IA';
-$string['dixeo:create'] = 'Créer des cours avec le Concepteur de Cours Dixeo';
+$string['dixeo:create'] = 'Créer des cours avec le Concepteur de Cours';
 $string['dixeo:edit'] = 'Modifier les modules existants avec l\'IA';
 $string['dixeo:generate'] = 'Générer de nouveaux modules avec l\'IA (page, étiquette, test, glossaire)';
 $string['dixeo:manage'] = 'Gérer les paramètres Dixeo et consulter les rapports';
@@ -177,20 +243,21 @@ $string['dixeo_image_not_eligible'] = 'Cette image ne peut pas être modifiée.'
 $string['dixeo_pluginfile_not_found'] = 'Impossible de lire le fichier image depuis le stockage.';
 $string['dsl_error'] = 'Échec de la création du module : {$a}';
 $string['editorimageorphaned'] = 'Image removed from editor content before completion';
+$string['enabled'] = 'Activer Dixeo';
+$string['enabled_course'] = 'Activer Dixeo';
+$string['enabled_course_help'] = 'Activer ou désactiver les fonctions Dixeo dans ce cours.';
+$string['enabled_help'] = 'Activer ou désactiver les fonctions Dixeo globalement.';
 $string['error:activity_not_available'] = 'Le type d\'activité {$a} n\'est pas installé ou n\'est pas activé.';
 $string['error:api_url_https_required'] = 'L\'URL de l\'API Dixeo doit être une adresse HTTPS absolue (par exemple https://api.dixeo.com).';
 $string['error:authentication'] = 'Échec de l\'authentification. Veuillez vérifier votre clé API.';
-$string['error:connection'] = 'Échec de la connexion à l\'API Dixeo. Veuillez vérifier votre connexion réseau.';
-$string['error:job_failed'] = 'Échec du traitement du travail : {$a}';
+$string['error:dixeo_disabled'] = 'Dixeo est désactivé.';
 $string['error:job_not_found'] = 'Le travail demandé n\'a pas été trouvé.';
 $string['error:notslideshow'] = 'Le module de cours n\'est pas une activité diaporama.';
 $string['error:payment_required'] = 'Crédits insuffisants. Veuillez ajouter des crédits pour continuer.';
 $string['error:rate_limit'] = 'Limite de requêtes dépassée. Veuillez patienter avant d\'effectuer d\'autres requêtes.';
 $string['error:slidenotinslideshow'] = 'La diapositive demandée n\'appartient pas à ce diaporama.';
-$string['error:timeout'] = 'L\'opération a expiré. Vous pouvez vérifier le statut du travail plus tard.';
 $string['error:unexpected'] = 'Une erreur est survenue. Veuillez réessayer ou demander à votre administrateur de consulter les journaux du site.';
 $string['error:upstream_ai'] = 'Erreur du service IA. Veuillez réessayer plus tard.';
-$string['error:validation'] = 'Requête invalide : {$a}';
 $string['error:validation_failed'] = 'La requête est invalide. Vérifiez les valeurs et réessayez.';
 $string['eventcreditreportexported'] = 'Rapport d\'utilisation des crédits exporté';
 $string['eventcreditreportexporteddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a exporté le rapport d\'utilisation des crédits (vue={$a->view}, format={$a->dataformat}, lignes={$a->rowcount}).';
@@ -204,6 +271,8 @@ $string['eventfilesynctriggered'] = 'Synchronisation des fichiers Dixeo du cours
 $string['eventfilesynctriggereddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a déclenché la synchronisation des fichiers Dixeo pour le cours avec l\'id \'{$a->courseid}\'.';
 $string['eventjobcancelled'] = 'Tâche Dixeo annulée';
 $string['eventjobcancelleddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a annulé la tâche Dixeo \'{$a->jobid}\' pour le cours avec l\'id \'{$a->courseid}\'.';
+$string['eventsettingupdated'] = 'Paramètre Dixeo mis à jour';
+$string['eventsettingupdateddesc'] = 'L\'utilisateur avec l\'id \'{$a->userid}\' a mis à jour le paramètre Dixeo \'{$a->component}/{$a->name}\' dans le contexte avec l\'id \'{$a->contextid}\'.';
 $string['eventtutorusagereportexported'] = 'Rapport d\'usage du tuteur exporté';
 $string['eventtutorusagereportexporteddesc'] = 'L\'utilisateur {$a->userid} a exporté le rapport d\'usage du tuteur (niveau : {$a->level}, vue : {$a->view}, format : {$a->dataformat}, lignes : {$a->rowcount}).';
 $string['eventtutorusagereportviewed'] = 'Rapport d\'usage du tuteur consulté';
@@ -211,14 +280,23 @@ $string['eventtutorusagereportvieweddesc'] = 'L\'utilisateur {$a->userid} a cons
 $string['feedback_correct'] = 'Bravo, vous avez trouvé la bonne réponse. Continuez comme ça !';
 $string['feedback_incorrect'] = 'Pas tout à fait cette fois. Revoir le sujet vous aidera à progresser.';
 $string['feedback_partial'] = 'Vous êtes sur la bonne voie. Révisez le sujet et vous y arriverez.';
+$string['file_synchronization'] = 'Synchronisation des fichiers';
 $string['files'] = 'fichiers';
 $string['filesync_disable_remove'] = 'Désactiver et effacer les données de synchronisation';
 $string['filesync_enable'] = 'Activer la synchronisation';
+$string['filesync_enabled'] = 'Synchronisation des fichiers';
+$string['filesync_enabled_default'] = 'Synchronisation des fichiers pour les nouveaux cours';
+$string['filesync_enabled_default_help'] = 'Active la synchronisation des fichiers pour les nouveaux cours (les cours existants ne sont pas affectés). Le Concepteur de Cours doit synchroniser les fichiers pendant la génération du cours ; si ce réglage est désactivé, la synchronisation automatique est mise en pause une fois le cours prêt.';
+$string['filesync_enabled_help'] = 'Activez ou mettez en pause la synchronisation des fichiers de ce cours. La pause conserve les fichiers déjà synchronisés.';
 $string['filesync_failed'] = 'Échec de la synchronisation des fichiers : {$a}';
 $string['filesync_files_count'] = '{$a} fichiers synchronisés';
-$string['filesync_label'] = 'Synchroniser';
 $string['filesync_pause'] = 'Mettre en pause la synchronisation';
 $string['filesync_pending_deletion'] = 'La suppression distante des fichiers de ce cours est encore en attente';
+$string['filesync_pill'] = 'Emplacement de l\'indicateur d\'état';
+$string['filesync_pill_coursetitle'] = 'Titre du cours';
+$string['filesync_pill_footer'] = 'Pied de page';
+$string['filesync_pill_help'] = 'Où l\'indicateur d\'état Dixeo apparaît sur la page du cours.';
+$string['filesync_pill_hidden'] = 'Masqué';
 $string['filesync_progress'] = '{$a} % terminé';
 $string['filesync_resync'] = 'Synchroniser maintenant';
 $string['filesync_status_disabled'] = 'Synchronisation désactivée';
@@ -231,12 +309,20 @@ $string['filesync_status_synchronized'] = 'Fichiers synchronisés';
 $string['filesync_status_syncing'] = 'Synchronisation en cours...';
 $string['filesync_timeout'] = 'La synchronisation des fichiers a expiré avant l\'indexation des fichiers du cours';
 $string['filesync_title'] = 'Synchronisation de fichiers Dixeo';
+$string['generation_language'] = 'Langue de génération';
+$string['generation_language_desc'] = 'Langue des tests et des leçons générés par le tuteur. Elle correspond d\'abord à votre langue préférée.';
 $string['generation_output_language'] = 'LANGUE : Générez tout le contenu destiné aux apprenants (questions, réponses, texte de leçon et titres) en {$a->language}.';
 $string['image_generation'] = 'Génération d\'images';
 $string['image_generation_content_mode'] = 'Images de contenu';
 $string['image_generation_content_mode_desc'] = 'Contrôle les actions d\'image IA pour les images dans le contenu des activités, comme les Pages et les Livres.';
+$string['image_generation_content_mode_disabled'] = 'Désactivé';
+$string['image_generation_content_mode_generate'] = 'Générer';
+$string['image_generation_content_mode_generate_edit'] = 'Générer et modifier';
 $string['image_generation_course_mode'] = 'Images de cours';
 $string['image_generation_course_mode_desc'] = 'Contrôle les actions d\'image IA pour l\'image d\'aperçu du cours.';
+$string['image_generation_course_mode_disabled'] = 'Désactivé';
+$string['image_generation_course_mode_generate'] = 'Générer';
+$string['image_generation_course_mode_generate_edit'] = 'Générer et modifier';
 $string['image_generation_desc'] = 'Contrôle la disponibilité de la génération et de la modification d\'images par IA pour les images de cours et de section.';
 $string['image_generation_enabled'] = 'Activer la génération d\'images';
 $string['image_generation_enabled_desc'] = 'Si désactivé, toutes les demandes de génération ou de modification d\'images sont bloquées.';
@@ -245,10 +331,17 @@ $string['image_generation_mode_generate'] = 'Générer';
 $string['image_generation_mode_generate_edit'] = 'Générer et modifier';
 $string['image_generation_section_mode'] = 'Images de section';
 $string['image_generation_section_mode_desc'] = 'Contrôle les actions d\'image IA pour les images de chapitre ou de section.';
+$string['image_generation_section_mode_disabled'] = 'Désactivé';
+$string['image_generation_section_mode_generate'] = 'Générer';
+$string['image_generation_section_mode_generate_edit'] = 'Générer et modifier';
 $string['last_sync'] = 'Dernière synchronisation';
+$string['learning_intent'] = 'Intention d\'apprentissage';
+$string['learning_intent_help'] = 'L\'intention d\'apprentissage définit un ensemble d\'objectifs d\'apprentissage pour le cours.';
 $string['namespace'] = 'Espace de noms';
 $string['namespace_desc'] = 'Requis uniquement lorsque plusieurs sites Moodle partagent la même clé API. Chaque site doit utiliser un espace de noms différent (ex. « production », « staging », « site1 ») pour garder les données séparées. Laissez « default » si c\'est le seul site utilisant cette clé API.';
 $string['overview'] = 'Aperçu Dixeo';
+$string['pagination'] = 'Navigation des pages';
+$string['period'] = 'Période';
 $string['pluginname'] = 'Dixeo AI';
 $string['practice_quiz_default_title'] = 'Quiz d\'entraînement';
 $string['practice_quiz_difficulty_easy'] = 'facile (rappel de base, concepts simples, adapté aux débutants)';
@@ -270,7 +363,13 @@ Concentrez-vous sur le contexte de cours fourni.';
 $string['practice_quiz_scope_activity_description'] = 'l\'activité « {$a->name} »';
 $string['practice_quiz_scope_course_description'] = 'l\'ensemble du cours « {$a->name} »';
 $string['practice_quiz_scope_section_description'] = 'la section « {$a->name} »';
-$string['privacy:metadata'] = 'Le plugin Dixeo stocke des identifiants opérationnels pour la synchronisation des fichiers de cours et envoie le contenu des cours, les messages du tuteur, le contexte de génération et des identifiants associés à l\'API Dixeo AI. La conservation et la suppression des données chez Dixeo sont contrôlées par ce service externe.';
+$string['preferences_delete_conversation'] = 'Supprimer la conversation du tuteur';
+$string['preferences_delete_conversation_desc'] = 'Cette action supprime uniquement votre conversation avec le tuteur dans le cours actuel. Les conversations des autres cours restent en place.';
+$string['privacy:metadata:consent'] = 'Enregistrements de l\'acceptation des conditions d\'utilisation, avec l\'utilisateur, l\'heure et la notice qui a été affichée.';
+$string['privacy:metadata:consent:action'] = 'Indique si l\'utilisateur a accordé ou retiré son acceptation.';
+$string['privacy:metadata:consent:documentid'] = 'La notice enregistrée à laquelle cette décision se rapporte.';
+$string['privacy:metadata:consent:timecreated'] = 'Moment où l\'utilisateur a accordé ou retiré son choix.';
+$string['privacy:metadata:consent:userid'] = 'Utilisateur auquel l\'enregistrement appartient.';
 $string['privacy:metadata:course_ai'] = 'Configuration et statut de synchronisation des fichiers IA par cours.';
 $string['privacy:metadata:course_ai:courseid'] = 'Le cours auquel appartient cette configuration de synchronisation.';
 $string['privacy:metadata:course_ai:disabledat'] = 'L\'heure de désactivation de la synchronisation des fichiers.';
@@ -337,6 +436,7 @@ $string['privacy:metadata:jobs:namespace'] = 'L\'espace de noms de l\'API Dixeo 
 $string['privacy:metadata:jobs:operation'] = 'Le type d\'opération logique de la tâche.';
 $string['privacy:metadata:jobs:timecreated'] = 'L\'heure de création de la liaison locale de la tâche.';
 $string['privacy:metadata:jobs:userid'] = 'L\'utilisateur qui a lancé la tâche.';
+$string['privacy:metadata:preference:generation_language'] = 'La langue choisie pour les tests et les leçons générés par le tuteur.';
 $string['privacy:metadata:tutor_usage_daily'] = 'Agrégats quotidiens d\'usage du tuteur';
 $string['privacy:metadata:tutor_usage_daily:cmid'] = 'L\'identifiant du module de cours';
 $string['privacy:metadata:tutor_usage_daily:courseid'] = 'L\'identifiant du cours';
@@ -367,6 +467,7 @@ $string['privacy:metadata:tutor_usage_session:messagecount'] = 'Messages dans la
 $string['privacy:metadata:tutor_usage_session:timeend'] = 'Heure de fin de la session';
 $string['privacy:metadata:tutor_usage_session:timestart'] = 'Heure de début de la session';
 $string['privacy:metadata:tutor_usage_session:userid'] = 'L\'identifiant de l\'utilisateur';
+$string['privacy:path:consent'] = 'Choix relatifs aux conditions et à la confidentialité';
 $string['privacy:path:conversation'] = 'Conversation du tuteur';
 $string['privacy:path:course_ai'] = 'Synchronisation IA du cours';
 $string['privacy:path:credit_usage'] = 'Utilisation des crédits';
@@ -374,12 +475,61 @@ $string['privacy:path:image_jobs'] = 'Dixeo image jobs';
 $string['privacy:path:jobs'] = 'Tâches Dixeo AI';
 $string['privacy:path:tutor_usage'] = 'Analyses d\'usage du tuteur';
 $string['recent_transactions'] = 'Historique des transactions';
+$string['settings_badge_customised'] = 'Personnalisé';
+$string['settings_badge_dixeo'] = 'Valeur Dixeo par défaut';
+$string['settings_badge_site'] = 'Valeur par défaut du site';
+$string['settings_button'] = 'Paramètres';
+$string['settings_category'] = 'Dixeo';
+$string['settings_category_designer'] = 'Concepteur de cours';
+$string['settings_category_dixeo_core'] = 'Dixeo';
+$string['settings_category_dixeo_designer'] = 'Concepteur de Cours';
+$string['settings_category_dixeo_tutor'] = 'Tuteur étudiant';
+$string['settings_category_filesync'] = 'Synchronisation des fichiers';
+$string['settings_category_imagegeneration'] = 'Génération d\'images';
+$string['settings_category_tutor'] = 'Tuteur';
+$string['settings_column_activity'] = 'Devoir';
+$string['settings_column_course'] = 'Cours';
+$string['settings_column_dixeo'] = 'Dixeo';
+$string['settings_column_setting'] = 'Paramètre';
+$string['settings_column_site'] = 'Valeur par défaut du site';
+$string['settings_group_feature'] = 'Fonction';
+$string['settings_group_plugin'] = 'Plugin';
+$string['settings_grouping'] = 'Grouper par';
+$string['settings_modal_advanced'] = 'Avancé';
+$string['settings_modal_all_features'] = 'Toutes les fonctions';
+$string['settings_modal_all_plugins'] = 'Tous les plugins';
+$string['settings_modal_breadcrumb'] = 'Site / Dixeo / Cours : {$a}';
+$string['settings_modal_breadcrumb_activity'] = 'Site / Dixeo / Cours : {$a->course} / Devoir : {$a->activity}';
+$string['settings_modal_categories'] = 'Catégories';
+$string['settings_modal_count'] = '{$a} paramètres';
+$string['settings_modal_customised'] = 'Personnalisés uniquement';
+$string['settings_modal_empty'] = 'Effacez la recherche, désactivez Personnalisés uniquement, ou choisissez une autre zone.';
+$string['settings_modal_error'] = 'Les paramètres Dixeo n\'ont pas pu être chargés.';
+$string['settings_modal_loading'] = 'Chargement des paramètres';
+$string['settings_modal_preferences'] = 'Mes préférences';
+$string['settings_modal_save_course'] = 'Enregistrez le cours avant de charger ses paramètres Dixeo.';
+$string['settings_modal_save_error'] = 'Les paramètres Dixeo n\'ont pas pu être enregistrés.';
+$string['settings_modal_saving'] = 'Enregistrement des modifications...';
+$string['settings_modal_search'] = 'Rechercher des paramètres';
+$string['settings_modal_search_placeholder'] = 'Rechercher par nom, clé ou plugin';
+$string['settings_modal_status'] = 'État';
+$string['settings_modal_title'] = 'Paramètres Dixeo';
+$string['settings_modal_unsaved_close'] = 'Fermer sans enregistrer';
+$string['settings_modal_unsaved_confirm'] = 'Fermer sans enregistrer ces modifications ?';
+$string['settings_modal_unsaved_count'] = '{$a} modifications non enregistrées';
+$string['settings_modal_unsaved_none'] = 'Aucune modification non enregistrée';
+$string['settings_modal_unsaved_title'] = 'Modifications non enregistrées';
+$string['settings_number_range'] = 'Saisissez un nombre entier entre {$a->min} et {$a->max}.';
+$string['settings_readonly'] = 'Ce paramètre ne peut pas être modifié';
+$string['settings_revert'] = 'Annuler les modifications de {$a}';
+$string['settings_value_empty'] = 'vide';
+$string['settings_value_off'] = 'Désactivé';
+$string['settings_value_on'] = 'Activé';
 $string['state_active'] = 'Actif';
 $string['state_frozen'] = 'Gelé';
 $string['state_suspended'] = 'Suspendu';
 $string['task_aggregate_tutor_usage'] = 'Agréger les analyses d\'usage du tuteur Dixeo';
 $string['task_cleanup_image_jobs'] = 'Nettoyer les enregistrements de tâches d\'image Dixeo';
-$string['task_cleanup_jobs'] = 'Nettoyer les anciens enregistrements de travaux';
 $string['task_poll_image'] = 'Interroger la tâche d\'image Dixeo';
 $string['task_poll_image_generation'] = 'Interroger la tâche de génération d\'images Dixeo';
 $string['task_process_file_sync'] = 'Traiter la synchronisation des fichiers Dixeo';
@@ -402,6 +552,7 @@ EXIGENCES OBLIGATOIRES — vous DEVEZ les respecter exactement :
 5. TEXTE UNIQUEMENT : Produisez uniquement du texte. N\'incluez pas d\'images, d\'illustrations, de balises <img> ni d\'espaces réservés [img-gen ...]. Les leçons personnalisées ne traitent pas les espaces réservés d\'image.
 
 Avant de terminer, vérifiez que le champ content est substantiel, uniquement textuel, et répond directement à la demande de l\'apprenant.';
+$string['total_used'] = 'Total utilisé';
 $string['tutor_usage_duration_days'] = '{$a->days}j {$a->hours}h {$a->minutes}m';
 $string['tutor_usage_duration_hours'] = '{$a->hours}h {$a->minutes}m';
 $string['tutor_usage_duration_minutes'] = '{$a} min';
@@ -412,7 +563,6 @@ $string['tutor_usage_mode_quiz'] = 'Quiz';
 $string['tutor_usage_mode_teach'] = 'Teach';
 $string['tutor_usage_report_breadcrumb'] = 'Navigation du rapport';
 $string['tutor_usage_report_cell_tooltip_adoption'] = '{$a->active} sur {$a->total} utilisateurs';
-$string['tutor_usage_report_cell_tooltip_sessions'] = 'Durée moyenne : {$a->average} · Total : {$a->total}';
 $string['tutor_usage_report_change_since_month'] = 'depuis le mois dernier';
 $string['tutor_usage_report_change_since_week'] = 'depuis la semaine dernière';
 $string['tutor_usage_report_column_guide'] = 'Guide';
@@ -421,7 +571,6 @@ $string['tutor_usage_report_column_messages'] = 'Messages';
 $string['tutor_usage_report_column_moduletype'] = 'Type d\'activité';
 $string['tutor_usage_report_column_name'] = 'Nom';
 $string['tutor_usage_report_column_quiz'] = 'Quiz';
-$string['tutor_usage_report_column_sessions'] = 'Sessions';
 $string['tutor_usage_report_column_standard'] = 'Standard';
 $string['tutor_usage_report_column_teach'] = 'Teach';
 $string['tutor_usage_report_course_page'] = 'Page du cours';
@@ -485,6 +634,7 @@ $string['tutor_usage_report_table_users'] = 'Utilisateurs';
 $string['tutor_usage_report_view_custom'] = 'Plage personnalisée';
 $string['tutor_usage_report_view_month'] = 'Mois';
 $string['tutor_usage_report_view_week'] = 'Semaine';
+$string['type'] = 'Type';
 $string['view_credit_report'] = 'Voir le rapport d\'utilisation des crédits';
 $string['viewtutorusage'] = 'Voir le rapport d\'usage du tuteur dans les cours';
 $string['viewtutorusage_desc'] = 'Permet de consulter les analyses d\'usage du tuteur et le détail par utilisateur dans les cours où cette capacité est assignée. Les rapports et exports incluent les noms d\'utilisateurs.';

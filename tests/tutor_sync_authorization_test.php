@@ -99,7 +99,7 @@ final class tutor_sync_authorization_test extends \advanced_testcase {
         $this->assertNull($repository->get_by_courseid((int) $course->id));
     }
 
-    public function test_teacher_ensure_enables_when_syncfiles_allowed(): void {
+    public function test_teacher_ensure_does_not_enable_when_sync_is_off(): void {
         global $DB;
 
         $this->resetAfterTest();
@@ -116,9 +116,8 @@ final class tutor_sync_authorization_test extends \advanced_testcase {
         $service = new file_sync_service($repository, $this->mock_client_allows_sync());
         $service->ensure_enabled_and_synchronized((int) $course->id, (int) $teacher->id);
 
-        $this->assertTrue($service->is_enabled((int) $course->id));
-        $status = $service->get_status((int) $course->id);
-        $this->assertSame('synchronized', $status->status);
+        $this->assertFalse($service->is_enabled((int) $course->id));
+        $this->assertNull($repository->get_by_courseid((int) $course->id));
     }
 
     public function test_student_submit_message_skips_sync_reactivation(): void {

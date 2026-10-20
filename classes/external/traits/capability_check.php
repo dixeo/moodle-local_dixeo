@@ -27,6 +27,8 @@
 
 namespace local_dixeo\external\traits;
 
+use local_dixeo\external\service_factory;
+
 /**
  * Trait providing capability checking for external API endpoints.
  */
@@ -41,6 +43,7 @@ trait capability_check {
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
+     * @throws \moodle_exception If Dixeo is turned off for the course.
      */
     protected static function validate_course_capability(
         int $courseid,
@@ -58,6 +61,8 @@ trait capability_check {
             require_capability('moodle/course:manageactivities', $coursecontext);
         }
 
+        service_factory::get_settings_config()->require_enabled($coursecontext);
+
         return $coursecontext;
     }
 
@@ -70,6 +75,7 @@ trait capability_check {
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
+     * @throws \moodle_exception If Dixeo is turned off for the course.
      */
     protected static function validate_course_sync_capability(int $courseid): \context_course {
         if ($courseid <= 1) {
@@ -79,6 +85,7 @@ trait capability_check {
         $coursecontext = \context_course::instance($courseid);
         self::validate_context($coursecontext);
         require_capability('local/dixeo:syncfiles', $coursecontext);
+        service_factory::get_settings_config()->require_enabled($coursecontext);
 
         return $coursecontext;
     }

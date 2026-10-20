@@ -60,10 +60,12 @@ class shortcode_service {
             return $html;
         }
 
+        $courseid = (int) $htmlfieldtarget->courseid;
         if (
             !policy::is_enabled(
                 policy::ENTITY_CONTENT,
-                policy::ACTION_GENERATE
+                policy::ACTION_GENERATE,
+                $courseid > 0 ? \context_course::instance($courseid) : null
             )
         ) {
             return shortcode_parser::strip_all($html);

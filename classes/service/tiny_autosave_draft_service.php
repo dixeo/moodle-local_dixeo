@@ -71,7 +71,11 @@ class tiny_autosave_draft_service {
      * @return bool
      */
     private function is_stale(\stdClass $record): bool {
-        $staleperiod = get_config('tiny_autosave', 'staleperiod');
+        $context = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+        $coursecontext = $context instanceof \context ? $context->get_course_context(false) : false;
+        $readcontext = $coursecontext instanceof \context ? $coursecontext : \context_system::instance();
+        $staleperiod = \local_dixeo\external\service_factory::get_settings_config()
+            ->get_moodle('tiny_autosave', 'staleperiod', $readcontext);
         if (empty($staleperiod)) {
             $staleperiod = 4 * DAYSECS;
         }

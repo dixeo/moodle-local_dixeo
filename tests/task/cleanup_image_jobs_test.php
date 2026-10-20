@@ -16,6 +16,7 @@
 
 namespace local_dixeo\task;
 
+use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\asset_helper;
 use local_dixeo\service\image\content\file_service;
@@ -104,5 +105,38 @@ final class cleanup_image_jobs_test extends \advanced_testcase {
 
         $this->assertSame(job_repository::STATUS_PENDING, $DB->get_field(job_repository::TABLE, 'status', ['id' => $job->id]));
         $this->assertSame($stubhash, $location->get_stored_file()->get_contenthash());
+    }
+
+    /**
+     * Dixeo off leaves a timed-out job pending.
+     */
+    public function test_dixeo_off_leaves_timed_out_jobs_unchanged(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        service_factory::get_settings_config()->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+
+        $course = $this->getDataGenerator()->create_course();
+        $label = $this->getDataGenerator()->create_module('label', ['course' => $course->id]);
+        $context = \context_module::instance($label->cmid);
+        $filename = file_service::stub_filename_for_placeholder('paused-placeholder-uuid');
+        $location = new location($context->id, 'mod_label', 'intro', 0, '/', $filename, (int) $course->id);
+        file_service::create_stub($location, (int) $USER->id);
+
+        $job = job_repository::upsert(content_target::from_location($location), 'remote-job-id', (int) $USER->id, [
+            'origin' => job_repository::ORIGIN_SHORTCODE,
+            'placeholderid' => 'paused-placeholder-uuid',
+        ]);
+        $DB->set_field(
+            job_repository::TABLE,
+            'timecreated',
+            time() - job_repository::TIMEOUT_SECONDS - 1,
+            ['id' => $job->id]
+        );
+
+        (new cleanup_image_jobs())->execute();
+
+        $this->assertSame(job_repository::STATUS_PENDING, $DB->get_field(job_repository::TABLE, 'status', ['id' => $job->id]));
     }
 }

@@ -108,7 +108,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $this->assertFalse($service->is_enabled($course->id));
     }
 
-    public function test_opt_in_on_block_added_enables_and_queues(): void {
+    public function test_ensure_enabled_does_not_turn_sync_on(): void {
         global $DB;
 
         $this->resetAfterTest();
@@ -122,46 +122,11 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $this->setUser($user);
 
         $repository = new course_ai_repository();
-        $service = new file_sync_service($repository);
+        $service = new file_sync_service($repository, $this->createMock(client::class));
+        $service->ensure_enabled_and_synchronized($course->id, (int) $user->id);
 
-        $service->opt_in_on_block_added($course->id, $user->id);
-
-        $record = $repository->get_by_courseid($course->id);
-        $this->assertNotNull($record);
-        $this->assertSame(1, (int) $record->enabled);
-
-        $tasks = \core\task\manager::get_adhoc_tasks('\\local_dixeo\\task\\process_file_sync');
-        $found = false;
-        foreach ($tasks as $task) {
-            $data = $task->get_custom_data();
-            if (isset($data->courseid) && (int) $data->courseid === (int) $course->id) {
-                $found = true;
-                break;
-            }
-        }
-        $this->assertTrue($found);
-    }
-
-    public function test_opt_in_on_block_added_ignored_without_syncfiles(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
-        $this->setUser($student);
-
-        $repository = new course_ai_repository();
-        $service = new file_sync_service($repository);
-
-        $service->opt_in_on_block_added($course->id, (int) $student->id);
-
+        $this->assertFalse($service->is_enabled($course->id));
         $this->assertNull($repository->get_by_courseid($course->id));
-        $tasks = \core\task\manager::get_adhoc_tasks('\\local_dixeo\\task\\process_file_sync');
-        foreach ($tasks as $task) {
-            $data = $task->get_custom_data();
-            if (isset($data->courseid) && (int) $data->courseid === (int) $course->id) {
-                $this->fail('Student opt-in must not queue process_file_sync');
-            }
-        }
     }
 
     public function test_ensure_enabled_and_synchronized_waits_for_synchronized_status(): void {
@@ -187,6 +152,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         ]);
 
         $service = new file_sync_service(null, $mockclient);
+        $service->enable_sync($course->id, (int) $user->id);
         $service->ensure_enabled_and_synchronized($course->id, (int) $user->id);
 
         $status = $service->get_status($course->id);
@@ -194,7 +160,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $this->assertSame('synchronized', $status->status);
     }
 
-    public function test_trigger_file_sync_enables_paused_course(): void {
+    public function test_trigger_file_sync_leaves_a_paused_course_off(): void {
         global $DB;
 
         $this->resetAfterTest();
@@ -227,6 +193,6 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
 
         $this->assertTrue($result['success']);
         $record = $repository->get_by_courseid($course->id);
-        $this->assertSame(1, (int) $record->enabled);
+        $this->assertSame(0, (int) $record->enabled);
     }
 }

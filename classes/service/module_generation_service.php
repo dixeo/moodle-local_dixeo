@@ -556,11 +556,13 @@ class module_generation_service {
             $payload['namespace'] = $this->namespace;
         }
 
+        $imagecontext = ($courseid !== null && $courseid > 0) ? \context_course::instance($courseid) : null;
         if (
             $this->generateimages
             && \local_dixeo\service\image\policy::is_enabled(
                 \local_dixeo\service\image\policy::ENTITY_CONTENT,
-                \local_dixeo\service\image\policy::ACTION_GENERATE
+                \local_dixeo\service\image\policy::ACTION_GENERATE,
+                $imagecontext
             )
         ) {
             $payload['generateImages'] = true;

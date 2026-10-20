@@ -28,11 +28,11 @@ namespace local_dixeo\service;
  * Policy helpers for per-course file sync defaults and UI gating.
  */
 final class file_sync_policy {
-    /** @var string[] Block types that imply RAG / file sync opt-in. */
+    /** @var string[] Block types whose course pages show the file sync status. */
     private const SYNC_BLOCK_NAMES = ['dixeo_tutor', 'dixeo_modulegen'];
 
     /**
-     * Block plugin names that trigger implicit file-sync opt-in when added to a course.
+     * Block plugin names that show the file sync status on a course.
      *
      * @return string[]
      */

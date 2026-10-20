@@ -17,6 +17,7 @@
 namespace local_dixeo\task;
 
 
+use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\content_target;
@@ -49,6 +50,10 @@ class cleanup_image_jobs extends \core\task\scheduled_task {
      */
     public function execute(): void {
         global $DB;
+
+        if (!service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
+            return;
+        }
 
         $now = time();
 

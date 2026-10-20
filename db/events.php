@@ -17,8 +17,9 @@
 /**
  * Event observers for the Dixeo plugin.
  *
- * Defines event handlers for file sync triggers based on course module events.
- * Sync activation itself is a manual action by an admin or teacher.
+ * Defines event handlers for file sync. A new course stores the course file sync
+ * setting from the Dixeo default. Saving that setting updates the operational flag.
+ * Module changes queue a sync when that course already has sync on.
  *
  * This plugin also emits custom events (not observed here) for audit logging:
  * file_sync_enabled, file_sync_disabled, file_sync_triggered, job_cancelled,
@@ -34,27 +35,45 @@
 
 defined('MOODLE_INTERNAL') || die();
 $observers = [
-    // Trigger sync when a course module is created.
+    // Stores the new-course file sync default as part of course creation.
+    // Internal so the stored setting is visible before the surrounding transaction commits.
+    [
+        'eventname' => '\core\event\course_created',
+        'callback' => '\local_dixeo\observer\file_sync_observer::course_created',
+        'internal' => true,
+        'priority' => 0,
+    ],
+
+    // Keep the operational file sync flag aligned with the course setting.
+    [
+        'eventname' => '\local_dixeo\event\setting_updated',
+        'callback' => '\local_dixeo\observer\file_sync_observer::setting_updated',
+        'internal' => true,
+        'priority' => 0,
+    ],
+
+    // Queues a sync as part of the module change when that course already has sync on.
+    // Internal so the outdated status is visible before the surrounding transaction commits.
     [
         'eventname' => '\core\event\course_module_created',
         'callback' => '\local_dixeo\observer\file_sync_observer::course_module_created',
-        'internal' => false,
+        'internal' => true,
         'priority' => 0,
     ],
 
-    // Trigger sync when a course module is updated.
+    // Queues a sync as part of the module change when that course already has sync on.
     [
         'eventname' => '\core\event\course_module_updated',
         'callback' => '\local_dixeo\observer\file_sync_observer::course_module_updated',
-        'internal' => false,
+        'internal' => true,
         'priority' => 0,
     ],
 
-    // Trigger sync when a course module is deleted.
+    // Queues a sync as part of the module change when that course already has sync on.
     [
         'eventname' => '\core\event\course_module_deleted',
         'callback' => '\local_dixeo\observer\file_sync_observer::course_module_deleted',
-        'internal' => false,
+        'internal' => true,
         'priority' => 0,
     ],
 ];

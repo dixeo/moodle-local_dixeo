@@ -1,0 +1,147 @@
+{{!
+    @template local_dixeo/consent_manage
+
+    Page where a user re-reads the notice and revokes acceptance.
+
+    Context variables required:
+    * title - Page heading inside the template is the sections; intro is the lead
+    * intro - Short explanation
+    * termsstatus - Current terms status, shown only before both choices are recorded
+    * processingstatus - Current analytics status, shown only before both choices are recorded
+    * acceptanceinfo - Single acceptance notice shown in the modal when both choices are recorded
+    * termschecked - True when the current terms are accepted
+    * processingchecked - True when tutor usage analytics are current
+    * termscheckbox - Terms checkbox label
+    * processingcheckbox - Usage analytics checkbox label
+    * saveprocessing - Save button label, used only before both choices are recorded
+    * withdrawterms - Revoke button label
+    * withdrawconfirmtitle - Title of the revoke confirmation
+    * withdrawconfirm - What revoking does
+    * closelabel - Close button label
+    * closeurl - Where Close goes when this template is a page
+    * canwithdrawterms - True when the current terms are accepted
+    * locked - True when both choices are already recorded
+    * actionurl - Form action
+    * sesskey - Session key
+    * sections - Notice sections
+
+    Example context (json):
+    {
+        "intro": "Review the Terms of Use and Privacy Notice, or revoke your acceptance.",
+        "termsstatus": "You have not accepted the current Terms of Use.",
+        "processingstatus": "Tutor usage analytics are not being recorded.",
+        "termscheckbox": "I have read and agree to the Terms of Use and acknowledge the Privacy Notice.",
+        "processingcheckbox": "My tutor usage will be recorded for usage analytics and reports.",
+        "saveprocessing": "Save",
+        "withdrawterms": "Revoke",
+        "withdrawconfirmtitle": "Revoke acceptance?",
+        "withdrawconfirm": "Revoking withdraws your acceptance of the Terms of Use.",
+        "closelabel": "Close",
+        "closeurl": "https://example.com/",
+        "actionurl": "https://example.com/local/dixeo/consent.php",
+        "sesskey": "sesskey",
+        "sections": [
+            {
+                "id": "local-dixeo-consent-terms-section",
+                "heading": "Terms of Use",
+                "blocks": [
+                    {
+                        "paragraph": "These terms are a contract."
+                    }
+                ]
+            }
+        ]
+    }
+}}
+<div class="local-dixeo-consent-manage">
+    <p>{{intro}}</p>
+    {{#acceptanceinfo}}
+    <div class="alert alert-info alert-block" role="status">{{acceptanceinfo}}</div>
+    {{/acceptanceinfo}}
+    {{^acceptanceinfo}}
+    <p class="local-dixeo-consent-status">{{termsstatus}}</p>
+    <p class="local-dixeo-consent-status">{{processingstatus}}</p>
+    {{/acceptanceinfo}}
+    <div class="local-dixeo-consent-manage-body">
+        {{> local_dixeo/consent_sections }}
+    </div>
+    {{#locked}}
+    <div class="local-dixeo-consent-manage-form">
+        <label class="local-dixeo-consent-check" for="local-dixeo-consent-manage-terms">
+            <input type="checkbox"
+                   id="local-dixeo-consent-manage-terms"
+                   checked
+                   disabled>
+            <span>{{termscheckbox}}</span>
+        </label>
+        <label class="local-dixeo-consent-check" for="local-dixeo-consent-manage-processing">
+            <input type="checkbox"
+                   id="local-dixeo-consent-manage-processing"
+                   checked
+                   disabled>
+            <span>{{processingcheckbox}}</span>
+        </label>
+        <div class="local-dixeo-consent-actions">
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-action="revoke-consent"
+                    data-confirm-title="{{withdrawconfirmtitle}}"
+                    data-confirm-body="{{withdrawconfirm}}"
+                    data-confirm-yes="{{withdrawterms}}">{{withdrawterms}}</button>
+            <button type="button"
+                    class="btn btn-primary"
+                    data-action="hide"
+                    data-close-url="{{closeurl}}">{{closelabel}}</button>
+        </div>
+    </div>
+    <form method="post" action="{{actionurl}}" id="local-dixeo-consent-revoke" hidden>
+        <input type="hidden" name="sesskey" value="{{sesskey}}">
+        <input type="hidden" name="action" value="withdrawterms">
+    </form>
+    {{/locked}}
+    {{^locked}}
+    <form method="post"
+          action="{{actionurl}}"
+          id="local-dixeo-consent-save-form"
+          class="local-dixeo-consent-manage-form"
+          autocomplete="off">
+        <input type="hidden" name="sesskey" value="{{sesskey}}">
+        <input type="hidden" name="action" value="saveprocessing">
+        <label class="local-dixeo-consent-check" for="local-dixeo-consent-manage-terms">
+            <input type="checkbox"
+                   name="terms"
+                   id="local-dixeo-consent-manage-terms"
+                   value="1"
+                   required
+                   {{#termschecked}}checked{{/termschecked}}>
+            <span>{{termscheckbox}}</span>
+        </label>
+        <label class="local-dixeo-consent-check" for="local-dixeo-consent-manage-processing">
+            <input type="checkbox"
+                   name="processing"
+                   id="local-dixeo-consent-manage-processing"
+                   value="1"
+                   required
+                   {{#processingchecked}}checked{{/processingchecked}}>
+            <span>{{processingcheckbox}}</span>
+        </label>
+        <div class="local-dixeo-consent-actions">
+            {{#canwithdrawterms}}
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-action="revoke-consent"
+                    data-confirm-title="{{withdrawconfirmtitle}}"
+                    data-confirm-body="{{withdrawconfirm}}"
+                    data-confirm-yes="{{withdrawterms}}">{{withdrawterms}}</button>
+            {{/canwithdrawterms}}
+            <button type="submit" class="btn btn-primary" id="local-dixeo-consent-save" disabled>{{saveprocessing}}</button>
+        </div>
+    </form>
+    {{#canwithdrawterms}}
+    <form method="post" action="{{actionurl}}" id="local-dixeo-consent-revoke" hidden>
+        <input type="hidden" name="sesskey" value="{{sesskey}}">
+        <input type="hidden" name="action" value="withdrawterms">
+    </form>
+    {{/canwithdrawterms}}
+    {{/locked}}
+</div>

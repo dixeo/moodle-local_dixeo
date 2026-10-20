@@ -44,6 +44,9 @@ function local_dixeo_extend_settings_navigation(settings_navigation $settingsnav
  * @param context_course $context Course context.
  */
 function local_dixeo_extend_navigation_course(navigation_node $navigation, stdClass $course, context_course $context): void {
+    if (!\local_dixeo\external\service_factory::get_settings_config()->enabled_for($context)) {
+        return;
+    }
     if (!\local_dixeo\service\tutor_usage_report_service::can_view_course((int) $course->id)) {
         return;
     }
@@ -109,4 +112,131 @@ function local_dixeo_is_valid_job_uuid(string $jobid): bool {
         '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
         $jobid
     );
+}
+
+/**
+ * Dixeo settings owned by local_dixeo.
+ *
+ * Plain arrays so the catalogue does not depend on loader classes. A setting with no `core`
+ * key does not override a Moodle setting. A `core` key names the Moodle admin setting it overrides.
+ *
+ * @return array[]
+ */
+function local_dixeo_dixeo_settings(): array {
+    return [
+        [
+            'key' => 'learning_intent',
+            'shortname' => 'learning_intent',
+            'component' => 'local_dixeo',
+            'type' => 'textarea',
+            'default' => '',
+            'levels' => ['course'],
+            'feature' => 'courses',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'learning_intent_help',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'enabled',
+            'shortname' => 'enabled',
+            'component' => 'local_dixeo',
+            'type' => 'bool',
+            'default' => '1',
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'dixeo',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'enabled_help',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'filesync_enabled_default',
+            'shortname' => 'filesync_enabled_default',
+            'component' => 'local_dixeo',
+            'type' => 'bool',
+            'default' => '0',
+            'levels' => ['dixeo'],
+            'feature' => 'filesync',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'filesync_enabled_default_help',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'filesync_enabled',
+            'shortname' => 'filesync_enabled',
+            'component' => 'local_dixeo',
+            'type' => 'bool',
+            'default' => '0',
+            'levels' => ['course'],
+            'feature' => 'filesync',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'filesync_enabled_help',
+            'sensitive' => false,
+            'retain' => true,
+            'retainparent' => 'filesync_enabled_default',
+        ],
+        [
+            'key' => 'filesync_pill',
+            'shortname' => 'filesync_pill',
+            'component' => 'local_dixeo',
+            'type' => 'select',
+            'default' => 'coursetitle',
+            'options' => ['hidden', 'coursetitle', 'footer'],
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'filesync',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'filesync_pill_help',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'image_generation_enabled',
+            'shortname' => 'image_generation_enabled',
+            'component' => 'local_dixeo',
+            'type' => 'bool',
+            'default' => '0',
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'imagegeneration',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'image_generation_enabled_desc',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'image_generation_course_mode',
+            'shortname' => 'image_generation_course_mode',
+            'component' => 'local_dixeo',
+            'type' => 'select',
+            'default' => 'disabled',
+            'options' => ['disabled', 'generate', 'generate_edit'],
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'imagegeneration',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'image_generation_course_mode_desc',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'image_generation_section_mode',
+            'shortname' => 'image_generation_section_mode',
+            'component' => 'local_dixeo',
+            'type' => 'select',
+            'default' => 'disabled',
+            'options' => ['disabled', 'generate', 'generate_edit'],
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'imagegeneration',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'image_generation_section_mode_desc',
+            'sensitive' => false,
+        ],
+        [
+            'key' => 'image_generation_content_mode',
+            'shortname' => 'image_generation_content_mode',
+            'component' => 'local_dixeo',
+            'type' => 'select',
+            'default' => 'disabled',
+            'options' => ['disabled', 'generate', 'generate_edit'],
+            'levels' => ['dixeo', 'course'],
+            'feature' => 'imagegeneration',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'image_generation_content_mode_desc',
+            'sensitive' => false,
+        ],
+    ];
 }

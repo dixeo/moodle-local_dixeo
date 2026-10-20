@@ -1,0 +1,152 @@
+{{!
+    @template local_dixeo/settings_rows
+
+    Read-only rows with sticky column headings. Parent columns are in the markup
+    and hidden until the list is marked advanced.
+
+    Example context (json):
+    {
+        "coursecolumn": "Course",
+        "sitecolumn": "Site default",
+        "dixeocolumn": "Dixeo",
+        "advanced": "Advanced",
+        "emptytext": "Clear the search, turn off Customised only, or pick another area.",
+        "rows": [
+            {
+                "label": "Enable Dixeo",
+                "shortname": "enabled",
+                "shortnameurl": "http://dixeo.local/admin/settings.php?section=local_dixeo#id_s_local_dixeo_enabled",
+                "help": "Enable or disable Dixeo features globally.",
+                "badge": "Dixeo default",
+                "isbool": true,
+                "displayvalue": "On",
+                "hassite": false,
+                "hasdixeo": true,
+                "dixeovalue": "On",
+                "dixeoclass": "local-dixeo-settings-supplied",
+                "valueclass": "local-dixeo-settings-inherited",
+                "revertlabel": "Revert changes to Enable Dixeo",
+                "showrevert": false
+            }
+        ]
+    }
+}}
+<p class="local-dixeo-settings-empty" data-region="local-dixeo-settings-empty" hidden>{{emptytext}}</p>
+<div class="local-dixeo-settings-table" role="table">
+    <div class="local-dixeo-settings-head" role="row">
+        <div class="local-dixeo-settings-head-name" role="columnheader">{{#str}}settings_column_setting, local_dixeo{{/str}}</div>
+        <div class="local-dixeo-settings-head-parent" role="columnheader" data-layer="site">{{sitecolumn}}</div>
+        <div class="local-dixeo-settings-head-parent" role="columnheader" data-layer="dixeo">{{dixeocolumn}}</div>
+        <div class="local-dixeo-settings-head-current" role="columnheader">
+            <span class="local-dixeo-settings-head-title">{{coursecolumn}}</span>
+            <label class="local-dixeo-settings-advanced">
+                <input type="checkbox" role="switch" data-action="local-dixeo-settings-advanced">
+                <span>{{advanced}}</span>
+            </label>
+        </div>
+    </div>
+    {{#rows}}
+    <div class="local-dixeo-settings-row" role="row"
+         data-component="{{component}}" data-name="{{name}}"
+         data-feature="{{feature}}" data-plugingroup="{{plugingroup}}" data-sub="{{sub}}">
+        <div class="local-dixeo-settings-row-name" role="cell">
+            <div class="local-dixeo-settings-row-label">{{label}}</div>
+            <div class="local-dixeo-settings-row-meta">
+                {{#shortnameurl}}
+                <a class="local-dixeo-settings-row-shortname" href="{{shortnameurl}}">{{shortname}}</a>
+                {{/shortnameurl}}
+                {{^shortnameurl}}
+                <span class="local-dixeo-settings-row-shortname">{{shortname}}</span>
+                {{/shortnameurl}}
+                <div class="local-dixeo-settings-row-help">{{help}}</div>
+            </div>
+        </div>
+        <div class="local-dixeo-settings-parent" role="cell" data-layer="site">
+            {{#hassite}}
+            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+            <button type="button"
+                    class="btn {{siteclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
+                    data-action="local-dixeo-settings-parent"
+                    data-layer="site"
+                    {{#readonly}}disabled{{/readonly}}>{{sitevalue}}</button>
+            {{/hassite}}
+        </div>
+        <div class="local-dixeo-settings-parent" role="cell" data-layer="dixeo">
+            {{#hasdixeo}}
+            <div class="local-dixeo-settings-spacer" aria-hidden="true"></div>
+            <button type="button"
+                    class="btn {{dixeoclass}}{{#istextarea}} local-dixeo-settings-parent-text{{/istextarea}}"
+                    data-action="local-dixeo-settings-parent"
+                    data-layer="dixeo"
+                    {{#readonly}}disabled{{/readonly}}>{{dixeovalue}}</button>
+            {{/hasdixeo}}
+        </div>
+        <div class="local-dixeo-settings-row-value" role="cell">
+            <div class="local-dixeo-settings-caption">
+                {{#badge}}
+                <span class="local-dixeo-settings-badge{{#badgeown}} local-dixeo-settings-badge-own{{/badgeown}}">{{badge}}</span>
+                {{/badge}}
+                <span class="local-dixeo-settings-icons">
+                    {{#readonly}}
+                    <span class="local-dixeo-settings-lock" title="{{readonlylabel}}">
+                        {{#pix}} t/locked, core, {{readonlylabel}} {{/pix}}
+                    </span>
+                    {{/readonly}}
+                    <button type="button"
+                            class="btn local-dixeo-settings-icon"
+                            data-action="local-dixeo-settings-revert"
+                            title="{{revertlabel}}"
+                            {{^showrevert}}hidden{{/showrevert}}>
+                        {{#pix}} e/undo, core, {{revertlabel}} {{/pix}}
+                    </button>
+                </span>
+            </div>
+            {{#isbool}}
+            <button type="button"
+                    class="btn local-dixeo-settings-control {{valueclass}}"
+                    data-action="local-dixeo-settings-value"
+                    aria-pressed="{{#valueon}}true{{/valueon}}{{^valueon}}false{{/valueon}}"
+                    {{#readonly}}disabled{{/readonly}}>
+                <span class="local-dixeo-settings-control-label">{{displayvalue}}</span>
+                <span class="local-dixeo-settings-switch" aria-hidden="true"></span>
+            </button>
+            {{/isbool}}
+            {{#istext}}
+            <input type="text"
+                   class="form-control local-dixeo-settings-control {{valueclass}}"
+                   value="{{displayvalue}}"
+                   data-action="local-dixeo-settings-value"
+                   {{#readonly}}disabled{{/readonly}}>
+            {{/istext}}
+            {{#istextarea}}
+            <textarea class="form-control local-dixeo-settings-control {{valueclass}}"
+                      rows="3"
+                      data-action="local-dixeo-settings-value"
+                      {{#readonly}}disabled{{/readonly}}>{{displayvalue}}</textarea>
+            {{/istextarea}}
+            {{#isselect}}
+            <select class="form-select local-dixeo-settings-control {{valueclass}}"
+                    data-action="local-dixeo-settings-value"
+                    {{#readonly}}disabled{{/readonly}}>
+                {{#options}}
+                <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                {{/options}}
+            </select>
+            {{/isselect}}
+            {{#ismultiselect}}
+            <div class="form-select">
+                <select class="form-control local-dixeo-settings-control {{valueclass}}"
+                        size="{{optioncount}}"
+                        data-action="local-dixeo-settings-value"
+                        {{#readonly}}disabled{{/readonly}}
+                        multiple>
+                    {{#options}}
+                    <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                    {{/options}}
+                </select>
+            </div>
+            {{/ismultiselect}}
+        </div>
+    </div>
+    {{/rows}}
+</div>
