@@ -208,10 +208,13 @@ define([
         panel.dataset.enabled = '0';
         panel.dataset.canmanagesync = '0';
         delete shell.dataset.syncstatus;
-        ['last-sync', 'progress', 'progress-text', 'error-message'].forEach(function(region) {
+        ['last-sync', 'progress', 'progress-text', 'error-message', 'status-files'].forEach(function(region) {
             const node = panel.querySelector('[data-region="' + region + '"]');
             if (node) {
                 node.hidden = true;
+                if (region === 'status-files') {
+                    node.replaceChildren();
+                }
             }
         });
         return Str.get_string('error:dixeo_disabled', 'local_dixeo').then(function(text) {
@@ -320,6 +323,9 @@ define([
             'filesync_status_pending_deletion',
             'filesync_status_disabled',
             'filesync_status_outdated',
+            'filesync_file_error',
+            'filesync_file_too_large',
+            'filesync_file_unmanaged',
             'filesync_files_count',
             'filesync_progress',
             'files',
@@ -396,6 +402,63 @@ define([
     };
 
     /**
+     * Hover text for a problem file. The API error text is never shown.
+     *
+     * @param {Object} file
+     * @param {Object} strings
+     * @returns {string}
+     */
+    const fileProblemReason = function(file, strings) {
+        if (file.reason === 'toolarge') {
+            return strings.filesync_file_too_large;
+        }
+        if (file.reason === 'unmanaged') {
+            return strings.filesync_file_unmanaged;
+        }
+        return strings.filesync_file_error;
+    };
+
+    /**
+     * File list under the status sentence. Hidden when the course has no rows.
+     *
+     * @param {HTMLElement} panel
+     * @param {Object} status
+     * @param {Object} strings
+     */
+    const paintStatusFiles = function(panel, status, strings) {
+        const list = panel.querySelector('[data-region="status-files"]');
+        if (!list) {
+            return;
+        }
+        list.replaceChildren();
+        const files = Array.isArray(status.files) ? status.files : [];
+        if (!files.length) {
+            list.hidden = true;
+            return;
+        }
+        list.hidden = false;
+        files.forEach(function(file) {
+            const item = document.createElement('li');
+            item.className = 'local-dixeo-settings-status-file';
+            const icon = document.createElement('i');
+            icon.setAttribute('aria-hidden', 'true');
+            if (file.state === 'problem') {
+                item.classList.add('local-dixeo-settings-status-file--problem');
+                icon.className = 'fa fa-times';
+                item.title = fileProblemReason(file, strings);
+            } else {
+                item.classList.add('local-dixeo-settings-status-file--synced');
+                icon.className = 'fa fa-check';
+            }
+            const name = document.createElement('span');
+            name.className = 'local-dixeo-settings-status-file-name';
+            name.textContent = file.filename || '';
+            item.append(icon, name);
+            list.append(item);
+        });
+    };
+
+    /**
      * Last-sync time, hidden when sync has never completed or the course is off with no status.
      *
      * @param {HTMLElement} shell
@@ -446,6 +509,7 @@ define([
             message.textContent = statusMessage(status, strings);
         }
         paintStatusProgress(panel, status, strings);
+        paintStatusFiles(panel, status, strings);
         const error = panel.querySelector('[data-region="error-message"]');
         if (error) {
             const showError = status.status === 'error' && !!status.errormessage;

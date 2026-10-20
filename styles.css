@@ -1138,6 +1138,45 @@ label[for="local-dixeo-settings-category"] {
     color: #1d2125;
 }
 
+.local-dixeo-settings-status-files {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+}
+
+.local-dixeo-settings-status-files[hidden] {
+    display: none;
+}
+
+.local-dixeo-settings-status-file {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 4px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #1d2125;
+}
+
+.local-dixeo-settings-status-file .fa {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+
+.local-dixeo-settings-status-file--synced .fa {
+    color: #22c55e;
+}
+
+.local-dixeo-settings-status-file--problem .fa {
+    color: #ef4444;
+}
+
+.local-dixeo-settings-status-file-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .local-dixeo-settings-status-meta {
     margin: 0;
     font-size: 12px;
