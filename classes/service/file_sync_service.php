@@ -94,6 +94,27 @@ class file_sync_service {
     /** @var int Max total bytes per outbound HTTP chunk (8 MB). */
     private const CHUNK_MAX_BYTES = 8388608;
 
+    /** @var int Maximum file size accepted by the Dixeo API (20 MB). */
+    private const MAX_FILE_SIZE = 20971520;
+
+    /**
+     * Validation codes that do not fail the course sync.
+     *
+     * An entry with no code is treated the same way, so a production API
+     * that omits the machine-readable code still does not fail the course.
+     *
+     * @var string[]
+     */
+    private const IGNORABLE_REJECTION_CODES = [
+        'FILE_EMPTY',
+        'FILE_TOO_LARGE',
+        'FILE_UNREADABLE',
+        'FILENAME_MISSING_EXTENSION',
+        'EXTENSION_NOT_ALLOWED',
+        'MIME_TYPE_MISMATCH',
+        'MIME_TYPE_UNDETECTABLE',
+    ];
+
     /** @var course_ai_repository Repository for course AI records. */
     private course_ai_repository $repository;
 
@@ -535,6 +556,10 @@ class file_sync_service {
      * The last chunk carries the full manifest of expected file hashes and
      * filenames so the remote store knows which older files to drop.
      *
+     * Files over 20 MB and empty files are omitted and do not fail the sync.
+     * A validation rejection from the API does not fail the course either.
+     * UPLOAD_FAILED, and a transport or HTTP failure, still do.
+     *
      * @param int $courseid The course ID.
      * @return void
      * @throws api_exception If the API request fails.
@@ -565,7 +590,7 @@ class file_sync_service {
             return;
         }
 
-        $uploaditems = $this->collect_upload_payload($courseid);
+        $uploaditems = $this->select_managed_files($this->collect_upload_payload($courseid));
 
         // Release the session lock for this request so other requests (e.g. file-sync status polls)
         // can run while the outbound upload is in flight.
@@ -580,8 +605,8 @@ class file_sync_service {
             $filecount = count($uploaditems);
 
             if ($filecount === 0) {
-                // No files remain in Moodle. Clear the remote store as well;
-                // POST /v1/files intentionally rejects empty multipart payloads.
+                // Nothing left to index (no files, or only files the API does not manage).
+                // Clear the remote store as well; POST /v1/files rejects an empty payload.
                 $this->client->delete_files((string) $courseid);
                 $this->repository->update_sync_status($courseid, 'synchronized', [
                     'filestotal' => 0,
@@ -620,9 +645,10 @@ class file_sync_service {
                 $failedfiles = array_merge($failedfiles, $this->extract_api_rejections($lastresult));
             }
 
-            if ($failedfiles !== []) {
-                $message = count($failedfiles) . ' file(s) were rejected by the Dixeo API';
-                throw new api_exception('file_sync_rejections', $message, 422, ['failedFiles' => $failedfiles]);
+            $fatalfiles = $this->fatal_api_rejections($failedfiles);
+            if ($fatalfiles !== []) {
+                $message = count($fatalfiles) . ' file(s) were rejected by the Dixeo API';
+                throw new api_exception('file_sync_rejections', $message, 422, ['failedFiles' => $fatalfiles]);
             }
 
             $this->poll_status($courseid);
@@ -638,6 +664,74 @@ class file_sync_service {
             $this->repository->record_error($courseid, $errormessage);
             throw $e;
         }
+    }
+
+    /**
+     * Drop files the API does not index.
+     *
+     * Files larger than {@see self::MAX_FILE_SIZE} and empty files are omitted.
+     * Unsupported extensions are already excluded by {@see self::get_module_files()}.
+     * SCORM extract parts go through this same size check.
+     *
+     * @param array $items Upload items (\stored_file|file_upload_part).
+     * @return array Items to upload, in the original order.
+     */
+    public function select_managed_files(array $items): array {
+        $managed = [];
+        foreach ($items as $item) {
+            $reason = $this->ignored_file_reason($item);
+            if ($reason === null) {
+                $managed[] = $item;
+                continue;
+            }
+            debugging(sprintf(
+                'local_dixeo: ignoring "%s" (%s)',
+                $this->item_filename($item),
+                $reason
+            ), DEBUG_DEVELOPER);
+        }
+        return $managed;
+    }
+
+    /**
+     * Per-file API rejections that fail the course sync.
+     *
+     * Size, type, empty, and unreadable files are ignored, as is an entry
+     * with no machine-readable code. UPLOAD_FAILED still fails the sync.
+     *
+     * @param array $failedfiles Entries from a chunk upload failedFiles list.
+     * @return array[]
+     */
+    public function fatal_api_rejections(array $failedfiles): array {
+        $fatal = [];
+        foreach ($failedfiles as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $code = (string) ($entry['code'] ?? '');
+            if ($code === '' || in_array($code, self::IGNORABLE_REJECTION_CODES, true)) {
+                continue;
+            }
+            $fatal[] = $entry;
+        }
+        return $fatal;
+    }
+
+    /**
+     * Why an upload item is left out of the sync, or null when it should be sent.
+     *
+     * @param \stored_file|file_upload_part $item
+     * @return string|null
+     */
+    private function ignored_file_reason($item): ?string {
+        $size = $this->item_size($item);
+        if ($size <= 0) {
+            return 'empty';
+        }
+        if ($size > self::MAX_FILE_SIZE) {
+            return 'too large';
+        }
+        return null;
     }
 
     /**
