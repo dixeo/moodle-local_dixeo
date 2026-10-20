@@ -24,7 +24,10 @@ namespace local_dixeo\settings;
  * layer exists only for a core Moodle config the setting overrides. A course value is a row
  * in local_dixeo_setting. A course value that matches its parent is removed, except a retained
  * setting, which stays stored including Off. A recorded course value is a snapshot: unset stays
- * empty and does not inherit Dixeo, and a value equal to Dixeo stays stored. A course-only setting
+ * empty and does not inherit Dixeo, and a value equal to Dixeo stays stored. The module generator
+ * stores each activity-level setting's Dixeo value on a new assignment, including a value equal
+ * to that default, and a later Dixeo change does not rewrite it. A module with no row still uses
+ * the Dixeo default. A course-only setting
  * has no stored Dixeo parent; its unset value is still the Dixeo catalogue default.
  * A bool that locks the course when its parent is off reads as Off for every course while the
  * Dixeo layer is Off, and a course write of On is ignored until the Dixeo layer is On.
@@ -207,6 +210,25 @@ final class config {
         }
         $this->write_stored($definition, $context, $level, $value);
         $this->notify_updated($definition, $context);
+    }
+
+    /**
+     * Store the current Dixeo value of every activity-level setting on a new module.
+     *
+     * The row is kept even when it equals the Dixeo value. Settings that omit the activity
+     * level stay on the Dixeo layer. The caller decides which modules receive a copy.
+     *
+     * @param \context_module $context The new module.
+     */
+    public function copy_activity_defaults(\context_module $context): void {
+        $system = \context_system::instance();
+        foreach (catalogue::load() as $definition) {
+            if (!in_array(resolver::LAYER_ACTIVITY, $definition->get_levels(), true)) {
+                continue;
+            }
+            $value = $this->get($definition->get_component(), $definition->get_key(), $system)->get_value();
+            $this->set($definition->get_component(), $definition->get_key(), $context, $value, false);
+        }
     }
 
     /**

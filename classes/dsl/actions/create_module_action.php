@@ -203,6 +203,11 @@ class create_module_action {
                 $this->set_quiz_pass_grade($courseid, (int) $instanceid);
             }
 
+            if ($modulename === 'assign') {
+                \local_dixeo\external\service_factory::get_settings_config()
+                    ->copy_activity_defaults(\context_module::instance($cmid));
+            }
+
             // Run module-specific post-creation hooks if available.
             $this->run_after_hook($modulename, $cmid, $moduledata);
 
