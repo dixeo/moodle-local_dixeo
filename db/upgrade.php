@@ -589,6 +589,12 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101502, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026102001) {
+        local_dixeo_install_dixeo_setting_defaults();
+
+        upgrade_plugin_savepoint(true, 2026102001, 'local', 'dixeo');
+    }
+
     return true;
 }
 
@@ -615,6 +621,27 @@ function local_dixeo_ensure_setting_table(): bool {
     $table->add_index('idx_context_component_name', XMLDB_INDEX_UNIQUE, ['contextid', 'component', 'name']);
     $dbman->create_table($table);
     return true;
+}
+
+/**
+ * Store each Dixeo-layer catalogue default that has no config row yet.
+ *
+ * Course-only settings are not site config. A row that is already stored is left unchanged.
+ *
+ * @return void
+ */
+function local_dixeo_install_dixeo_setting_defaults(): void {
+    foreach (\local_dixeo\settings\catalogue::load() as $definition) {
+        if (!in_array('dixeo', $definition->get_levels(), true)) {
+            continue;
+        }
+        $component = $definition->get_component();
+        $name = $definition->get_key();
+        if (get_config($component, $name) !== false) {
+            continue;
+        }
+        set_config($name, $definition->get_default(), $component);
+    }
 }
 
 /**

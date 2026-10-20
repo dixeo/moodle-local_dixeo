@@ -41,6 +41,19 @@ final class plugin_installation_service_test extends \advanced_testcase {
         h5p_library_service::reset_cache();
     }
 
+    /**
+     * An installed plugin has code and a version row. A missing plugin has neither.
+     */
+    public function test_is_plugin_installed_requires_code_and_a_version_row(): void {
+        $this->assertTrue(plugin_installation_service::is_plugin_installed('local_dixeo'));
+        $this->assertFalse(plugin_installation_service::is_plugin_installed('block_not_a_real_plugin'));
+        $this->assertFalse(plugin_installation_service::is_plugin_installed('core'));
+
+        unset_config('version', 'block_dixeo_tutor');
+
+        $this->assertFalse(plugin_installation_service::is_plugin_installed('block_dixeo_tutor'));
+    }
+
     public function test_resolve_module_type_plugin_name_uses_component_when_available(): void {
         $name = plugin_installation_service::resolve_module_type_plugin_name([
             'type' => 'h5p_quiz',

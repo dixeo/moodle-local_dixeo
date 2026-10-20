@@ -35,17 +35,34 @@ final class catalogue {
      * @return definition[]
      */
     public static function load(): array {
+        global $CFG;
+
         $rows = [];
         // Plugin callbacks are unavailable through get_plugins_with_function while an upgrade is running.
-        // The catalogue is read during upgrade, so the lib.php files are included directly.
+        // The catalogue is read during install and upgrade, so each lib.php that declares the callback
+        // is included directly. $CFG is in scope because those libraries use it at file scope.
+        // A plugin that is not installed is skipped, and its settings are not shown.
+        if (empty($CFG->dirroot)) {
+            return [];
+        }
         foreach (\core_component::get_plugin_types() as $plugintype => $unused) {
             foreach (\core_component::get_plugin_list($plugintype) as $plugin => $dir) {
                 $file = $dir . '/lib.php';
                 if (!is_readable($file)) {
                     continue;
                 }
-                include_once($file);
+                $component = $plugintype . '_' . $plugin;
+                if (!\local_dixeo\service\plugin_installation_service::is_plugin_installed($component)) {
+                    continue;
+                }
                 $function = $plugintype . '_' . $plugin . '_dixeo_settings';
+                if (!function_exists($function)) {
+                    $contents = file_get_contents($file);
+                    if ($contents === false || !str_contains($contents, 'function ' . $function)) {
+                        continue;
+                    }
+                    include_once($file);
+                }
                 if (!function_exists($function)) {
                     continue;
                 }

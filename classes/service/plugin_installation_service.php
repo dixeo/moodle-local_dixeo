@@ -51,6 +51,27 @@ class plugin_installation_service {
     }
 
     /**
+     * Whether a plugin is installed and its code is available.
+     *
+     * A plugin that has not been installed, or whose code is gone, does not contribute
+     * Dixeo settings. The version row is read directly so this stays accurate during install.
+     *
+     * @param string $component Frankenstyle component, such as block_dixeo_tutor.
+     * @return bool
+     */
+    public static function is_plugin_installed(string $component): bool {
+        [$type, $name] = core_component::normalize_component($component);
+        if ($type === 'core' || $name === null || $name === '') {
+            return false;
+        }
+        $directory = core_component::get_plugin_directory($type, $name);
+        if ($directory === null || !is_dir($directory)) {
+            return false;
+        }
+        return get_config($type . '_' . $name, 'version') !== false;
+    }
+
+    /**
      * Plugin names installed for a Moodle plugintype (mod, block, local, theme, tool, …).
      *
      * @param string $plugintype Moodle plugintype.

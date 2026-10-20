@@ -174,9 +174,11 @@ final class catalogue_test extends \advanced_testcase {
         }
 
         $this->assertSame('bool', $settings['image_generation_enabled']->get_type());
+        $this->assertSame('0', $settings['image_generation_enabled']->get_default());
         foreach (['image_generation_course_mode', 'image_generation_section_mode', 'image_generation_content_mode'] as $key) {
             $setting = $settings[$key];
             $this->assertSame('select', $setting->get_type());
+            $this->assertSame('disabled', $setting->get_default());
             $this->assertSame(['disabled', 'generate', 'generate_edit'], $setting->get_options());
             foreach ($setting->get_options() as $option) {
                 $this->assertTrue(get_string_manager()->string_exists($key . '_' . $option, 'local_dixeo'));
@@ -301,6 +303,47 @@ final class catalogue_test extends \advanced_testcase {
             }
         }
         $this->assertSame($designerkeys, $order);
+    }
+
+    /**
+     * Settings from a plugin that is not installed are left out of the catalogue and the config UI.
+     */
+    public function test_uninstalled_plugins_are_omitted_from_the_catalogue_and_the_config_ui(): void {
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        unset_config('version', 'block_dixeo_tutor');
+        unset_config('version', 'block_dixeo_designer');
+        unset_config('version', 'plagiarism_dixeo');
+
+        $settings = catalogue::load();
+        $this->assertArrayHasKey('enabled', $settings);
+        $this->assertSame('local_dixeo', $settings['enabled']->get_component());
+        foreach ($settings as $setting) {
+            $this->assertNotContains($setting->get_component(), [
+                'block_dixeo_tutor',
+                'block_dixeo_designer',
+                'plagiarism_dixeo',
+            ]);
+            $this->assertTrue(
+                \local_dixeo\service\plugin_installation_service::is_plugin_installed($setting->get_component()),
+                $setting->get_component()
+            );
+        }
+
+        $context = \context_system::instance();
+        $rows = (new config())->get_layers($context);
+        $components = array_column($rows, 'component');
+        $this->assertContains('local_dixeo', $components);
+        $this->assertNotContains('block_dixeo_tutor', $components);
+        $this->assertNotContains('block_dixeo_designer', $components);
+        $this->assertNotContains('plagiarism_dixeo', $components);
+
+        $result = \local_dixeo\external\get_settings::execute($context->id);
+        $served = array_column($result['settings'], 'component');
+        $this->assertContains('local_dixeo', $served);
+        $this->assertNotContains('block_dixeo_tutor', $served);
+        $this->assertNotContains('block_dixeo_designer', $served);
+        $this->assertNotContains('plagiarism_dixeo', $served);
     }
 
     /**

@@ -116,18 +116,58 @@ final class admin_setting_enabled_test extends \advanced_testcase {
         require_once($CFG->libdir . '/adminlib.php');
         $root = \admin_get_root(true, true);
 
-        $page = $root->locate('local_dixeo_assistant');
-        $this->assertInstanceOf(\admin_settingpage::class, $page);
-        $this->assertTrue(isset($page->settings->local_dixeo_assistantsettings_modal_open));
-        $html = $page->settings->local_dixeo_assistantsettings_modal_open->output_html('');
-        $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html);
-        $this->assertStringContainsString(
-            'data-contextid="' . \context_system::instance()->id . '"',
-            $html
-        );
+        if (\local_dixeo\service\plugin_installation_service::is_component_installed('local_dixeo_assistant')) {
+            $page = $root->locate('local_dixeo_assistant');
+            $this->assertInstanceOf(\admin_settingpage::class, $page);
+            $this->assertTrue(isset($page->settings->local_dixeo_assistantsettings_modal_open));
+            $html = $page->settings->local_dixeo_assistantsettings_modal_open->output_html('');
+            $this->assertStringContainsString('data-action="local-dixeo-settings-open"', $html);
+            $this->assertStringContainsString(
+                'data-contextid="' . \context_system::instance()->id . '"',
+                $html
+            );
+        }
 
         $this->assertNull($root->locate('blocksettingdixeo_tutor'));
         $this->assertNull($root->locate('blocksettingdixeo_designer'));
+    }
+
+    /**
+     * A new site stores every Dixeo-layer default, and an existing value is kept.
+     */
+    public function test_install_writes_missing_dixeo_setting_defaults(): void {
+        global $CFG;
+        $this->resetAfterTest();
+        require_once($CFG->dirroot . '/local/dixeo/db/upgrade.php');
+
+        $definitions = \local_dixeo\settings\catalogue::load();
+        $dixeo = [];
+        foreach ($definitions as $definition) {
+            if (!in_array('dixeo', $definition->get_levels(), true)) {
+                continue;
+            }
+            $dixeo[] = $definition;
+            unset_config($definition->get_key(), $definition->get_component());
+        }
+        $this->assertNotEmpty($dixeo);
+        unset_config('filesync_enabled', 'local_dixeo');
+        unset_config('learning_intent', 'local_dixeo');
+
+        \local_dixeo_install_dixeo_setting_defaults();
+
+        foreach ($dixeo as $definition) {
+            $this->assertSame(
+                $definition->get_default(),
+                get_config($definition->get_component(), $definition->get_key()),
+                $definition->get_component() . '/' . $definition->get_key()
+            );
+        }
+        $this->assertFalse(get_config('local_dixeo', 'filesync_enabled'));
+        $this->assertFalse(get_config('local_dixeo', 'learning_intent'));
+
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        \local_dixeo_install_dixeo_setting_defaults();
+        $this->assertSame('1', get_config('local_dixeo', 'image_generation_enabled'));
     }
 
     /**

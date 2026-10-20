@@ -229,7 +229,7 @@ class course_edit_form {
      * @return bool
      */
     private static function tutor_available(): bool {
-        return array_key_exists('dixeo_tutor', \core_component::get_plugin_list('block'));
+        return \local_dixeo\service\plugin_installation_service::is_plugin_installed('block_dixeo_tutor');
     }
 
     /**

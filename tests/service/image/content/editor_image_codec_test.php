@@ -157,6 +157,8 @@ final class editor_image_codec_test extends \advanced_testcase {
     public function test_decode_ref_shortcode_restores_img_tag(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
 
         [$ctx] = $this->make_page_context();
 
@@ -179,6 +181,8 @@ final class editor_image_codec_test extends \advanced_testcase {
     public function test_decode_file_shortcode_restores_pluginfile_img(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
 
         [$ctx] = $this->make_page_context(7);
         $this->create_module_file($ctx, 'photo.png');
