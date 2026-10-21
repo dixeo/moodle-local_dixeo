@@ -104,10 +104,10 @@ class get_file_sync_status extends external_api {
             'files' => new external_multiple_structure(
                 new external_single_structure([
                     'filename' => new external_value(PARAM_TEXT, 'File name'),
-                    'state' => new external_value(PARAM_ALPHA, 'synced or problem'),
+                    'state' => new external_value(PARAM_ALPHA, 'synced, syncing, or problem'),
                     'reason' => new external_value(
                         PARAM_ALPHANUMEXT,
-                        'toolarge, unmanaged, error, or empty when the file is synced',
+                        'toolarge, unsupported, empty, error, or blank when the file is synced or syncing',
                         VALUE_OPTIONAL
                     ),
                 ])

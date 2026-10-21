@@ -69,12 +69,12 @@ final class file_sync_status_files_test extends \advanced_testcase {
         ], 'synchronized');
 
         $this->assertSame([
-            ['filename' => 'archive.zip', 'state' => 'problem', 'reason' => 'unmanaged'],
-            ['filename' => 'blank.txt', 'state' => 'problem', 'reason' => 'unmanaged'],
-            ['filename' => 'huge.pdf', 'state' => 'problem', 'reason' => 'toolarge'],
             ['filename' => 'limit.docx', 'state' => 'synced', 'reason' => ''],
+            ['filename' => 'archive.zip', 'state' => 'problem', 'reason' => 'unsupported'],
+            ['filename' => 'blank.txt', 'state' => 'problem', 'reason' => 'empty'],
+            ['filename' => 'huge.pdf', 'state' => 'problem', 'reason' => 'toolarge'],
             ['filename' => 'notes.pdf', 'state' => 'problem', 'reason' => 'error'],
-            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unmanaged'],
+            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unsupported'],
             ['filename' => 'slides.pptx', 'state' => 'problem', 'reason' => 'error'],
         ], $rows);
         $this->assertStringNotContainsString($secret, json_encode($rows));
@@ -111,9 +111,10 @@ final class file_sync_status_files_test extends \advanced_testcase {
     }
 
     /**
-     * During a sync, only confirmed managed files and local problems are listed.
+     * During a sync, a file that is not confirmed yet is listed as syncing.
+     * A file the remote list has already accepted keeps its check.
      */
-    public function test_classify_sync_files_omits_unconfirmed_files_while_syncing(): void {
+    public function test_classify_sync_files_marks_unconfirmed_files_syncing(): void {
         $this->resetAfterTest();
         $service = new file_sync_service();
 
@@ -129,9 +130,129 @@ final class file_sync_status_files_test extends \advanced_testcase {
 
         $this->assertSame([
             ['filename' => 'done.pdf', 'state' => 'synced', 'reason' => ''],
+            ['filename' => 'waiting.pdf', 'state' => 'syncing', 'reason' => ''],
             ['filename' => 'huge.pdf', 'state' => 'problem', 'reason' => 'toolarge'],
-            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unmanaged'],
+            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unsupported'],
         ], $rows);
+    }
+
+    /**
+     * An outdated course spins only files that do not yet have a remote result.
+     */
+    public function test_classify_sync_files_spins_managed_files_when_outdated(): void {
+        $this->resetAfterTest();
+        $service = new file_sync_service();
+
+        $rows = $service->classify_sync_files([
+            ['filename' => 'done.pdf', 'size' => 100],
+            ['filename' => 'failed.pdf', 'size' => 100],
+            ['filename' => 'pending.pdf', 'size' => 100],
+            ['filename' => 'huge.pdf', 'size' => (20 * 1024 * 1024) + 1],
+            ['filename' => 'photo.jpg', 'size' => 10],
+        ], [
+            ['filename' => 'done.pdf', 'status' => 'uploaded'],
+            ['filename' => 'failed.pdf', 'status' => 'error', 'errorMessage' => 'provider text'],
+            ['filename' => 'pending.pdf', 'status' => 'pending'],
+        ], 'outdated');
+
+        $this->assertSame([
+            ['filename' => 'done.pdf', 'state' => 'synced', 'reason' => ''],
+            ['filename' => 'pending.pdf', 'state' => 'syncing', 'reason' => ''],
+            ['filename' => 'failed.pdf', 'state' => 'problem', 'reason' => 'error'],
+            ['filename' => 'huge.pdf', 'state' => 'problem', 'reason' => 'toolarge'],
+            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unsupported'],
+        ], $rows);
+        $this->assertStringNotContainsString('provider text', json_encode($rows));
+    }
+
+    /**
+     * A file added after the last completed sync stays on the spinner until a later sync finishes.
+     * The course status can still say synchronized in that window.
+     */
+    public function test_classify_sync_files_spins_a_file_until_a_later_sync_finishes(): void {
+        $this->resetAfterTest();
+        $service = new file_sync_service();
+        $existing = ['filename' => 'old.pdf', 'size' => 100, 'modified' => 1000];
+        $added = ['filename' => 'new.pdf', 'size' => 100, 'modified' => 2000];
+
+        $before = $service->classify_sync_files([
+            $existing,
+            $added,
+        ], [
+            ['filename' => 'old.pdf', 'status' => 'uploaded'],
+        ], 'synchronized', 1500, 1600);
+
+        $this->assertSame([
+            ['filename' => 'old.pdf', 'state' => 'synced', 'reason' => ''],
+            ['filename' => 'new.pdf', 'state' => 'syncing', 'reason' => ''],
+        ], $before);
+
+        $running = $service->classify_sync_files([$added], [], 'syncing', 2100, 1600);
+        $this->assertSame([
+            ['filename' => 'new.pdf', 'state' => 'syncing', 'reason' => ''],
+        ], $running);
+
+        $accepted = $service->classify_sync_files([$added], [
+            ['filename' => 'new.pdf', 'status' => 'uploaded'],
+        ], 'synchronized', 2100, 2200);
+        $this->assertSame([
+            ['filename' => 'new.pdf', 'state' => 'synced', 'reason' => ''],
+        ], $accepted);
+
+        $rejected = $service->classify_sync_files([$added], [
+            ['filename' => 'new.pdf', 'status' => 'error', 'errorMessage' => 'provider text'],
+        ], 'synchronized', 2100, 2200);
+        $this->assertSame([
+            ['filename' => 'new.pdf', 'state' => 'problem', 'reason' => 'error'],
+        ], $rejected);
+        $this->assertStringNotContainsString('provider text', json_encode($rejected));
+    }
+
+    /**
+     * A file a finished sync already covered spins again while the course is outdated
+     * when the remote list has no row for it.
+     */
+    public function test_classify_sync_files_spins_a_covered_file_when_the_course_is_outdated(): void {
+        $this->resetAfterTest();
+        $service = new file_sync_service();
+        $file = ['filename' => 'notes.pdf', 'size' => 100, 'modified' => 1000];
+
+        $settled = $service->classify_sync_files([$file], [], 'synchronized', 1500, 1600);
+        $outdated = $service->classify_sync_files([$file], [], 'outdated', 1500, 1600);
+
+        $this->assertSame([
+            ['filename' => 'notes.pdf', 'state' => 'synced', 'reason' => ''],
+        ], $settled);
+        $this->assertSame([
+            ['filename' => 'notes.pdf', 'state' => 'syncing', 'reason' => ''],
+        ], $outdated);
+    }
+
+    /**
+     * A SCORM package is listed under its zip name and matched to the uploaded extract.
+     */
+    public function test_classify_sync_files_lists_a_scorm_package_by_its_extract(): void {
+        $this->resetAfterTest();
+        $service = new file_sync_service();
+        $package = [
+            'filename' => 'intro.zip',
+            'size' => 50 * 1024 * 1024,
+            'remotefilename' => 'dixeo_scorm_cm12.txt',
+            'managed' => true,
+        ];
+
+        $synced = $service->classify_sync_files([$package], [
+            ['filename' => 'dixeo_scorm_cm12.txt', 'status' => 'uploaded', 'errorMessage' => ''],
+        ], 'synchronized');
+        $syncing = $service->classify_sync_files([$package], null, 'syncing');
+        $failed = $service->classify_sync_files([$package], [
+            ['fileName' => 'dixeo_scorm_cm12.txt', 'status' => 'error', 'errorMessage' => 'provider text'],
+        ], 'synchronized');
+
+        $this->assertSame([['filename' => 'intro.zip', 'state' => 'synced', 'reason' => '']], $synced);
+        $this->assertSame([['filename' => 'intro.zip', 'state' => 'syncing', 'reason' => '']], $syncing);
+        $this->assertSame([['filename' => 'intro.zip', 'state' => 'problem', 'reason' => 'error']], $failed);
+        $this->assertStringNotContainsString('provider text', json_encode($failed));
     }
 
     /**
@@ -158,12 +279,71 @@ final class file_sync_status_files_test extends \advanced_testcase {
         $client->method('list_files')->willThrowException(new api_exception('server_error', 'upstream 503', 503));
 
         $service = new file_sync_service(null, $client);
+        $this->record_completed_sync((int) $course->id);
         $rows = $service->list_status_files((int) $course->id, 'synchronized');
 
         $this->assertSame([
             ['filename' => 'notes.pdf', 'state' => 'synced', 'reason' => ''],
-            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unmanaged'],
+            ['filename' => 'photo.jpg', 'state' => 'problem', 'reason' => 'unsupported'],
         ], $rows);
+    }
+
+    /**
+     * A visible SCORM package is listed with the files that sync counts.
+     */
+    public function test_list_status_files_includes_a_visible_scorm_package(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('scorm', ['course' => $course->id]);
+        $this->getDataGenerator()->create_module('scorm', [
+            'course' => $course->id,
+            'visible' => 0,
+            'name' => 'Hidden package',
+        ]);
+
+        $service = new file_sync_service();
+        $this->record_completed_sync((int) $course->id);
+
+        $this->assertSame([
+            ['filename' => 'singlescobasic.zip', 'state' => 'synced', 'reason' => ''],
+        ], $service->list_status_files((int) $course->id, 'synchronized'));
+        $this->assertSame([
+            ['filename' => 'singlescobasic.zip', 'state' => 'syncing', 'reason' => ''],
+        ], $service->list_status_files((int) $course->id, 'syncing'));
+    }
+
+    /**
+     * Stamp the course files at a fixed time and record a sync that finished after them.
+     *
+     * @param int $courseid Course id.
+     */
+    private function record_completed_sync(int $courseid): void {
+        global $DB;
+
+        $context = \context_course::instance($courseid);
+        $DB->set_field_select(
+            'files',
+            'timemodified',
+            1000,
+            'contextid IN (SELECT id FROM {context} WHERE path = :path OR path LIKE :childpath) AND filename <> :directory',
+            [
+                'path' => $context->path,
+                'childpath' => $context->path . '/%',
+                'directory' => '.',
+            ]
+        );
+        $DB->insert_record('local_dixeo_course_ai', (object) [
+            'courseid' => $courseid,
+            'enabled' => 1,
+            'syncstatus' => 'synchronized',
+            'errorcount' => 0,
+            'lastsyncstarted' => 1500,
+            'lastsynccompleted' => 1600,
+            'timecreated' => 1600,
+            'timemodified' => 1600,
+        ]);
     }
 
     /**
