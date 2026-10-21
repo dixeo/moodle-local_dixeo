@@ -208,10 +208,13 @@ define([
         panel.dataset.enabled = '0';
         panel.dataset.canmanagesync = '0';
         delete shell.dataset.syncstatus;
-        ['last-sync', 'progress', 'progress-text', 'error-message'].forEach(function(region) {
+        ['last-sync', 'progress', 'progress-text', 'error-message', 'status-files'].forEach(function(region) {
             const node = panel.querySelector('[data-region="' + region + '"]');
             if (node) {
                 node.hidden = true;
+                if (region === 'status-files') {
+                    node.replaceChildren();
+                }
             }
         });
         return Str.get_string('error:dixeo_disabled', 'local_dixeo').then(function(text) {
@@ -320,6 +323,11 @@ define([
             'filesync_status_pending_deletion',
             'filesync_status_disabled',
             'filesync_status_outdated',
+            'filesync_file_empty',
+            'filesync_file_error',
+            'filesync_file_too_large',
+            'filesync_file_unmanaged',
+            'filesync_file_unsupported',
             'filesync_files_count',
             'filesync_progress',
             'files',
@@ -396,6 +404,72 @@ define([
     };
 
     /**
+     * Hover text for a problem file. The API error text is never shown.
+     *
+     * @param {Object} file
+     * @param {Object} strings
+     * @returns {string}
+     */
+    const fileProblemReason = function(file, strings) {
+        if (file.reason === 'toolarge') {
+            return strings.filesync_file_too_large;
+        }
+        if (file.reason === 'unsupported') {
+            return strings.filesync_file_unsupported;
+        }
+        if (file.reason === 'empty') {
+            return strings.filesync_file_empty;
+        }
+        if (file.reason === 'unmanaged') {
+            return strings.filesync_file_unmanaged;
+        }
+        return strings.filesync_file_error;
+    };
+
+    /**
+     * File list under the status sentence. Hidden when the course has no rows.
+     *
+     * @param {HTMLElement} panel
+     * @param {Object} status
+     * @param {Object} strings
+     */
+    const paintStatusFiles = function(panel, status, strings) {
+        const list = panel.querySelector('[data-region="status-files"]');
+        if (!list) {
+            return;
+        }
+        list.replaceChildren();
+        const files = Array.isArray(status.files) ? status.files : [];
+        if (!files.length) {
+            list.hidden = true;
+            return;
+        }
+        list.hidden = false;
+        files.forEach(function(file) {
+            const item = document.createElement('li');
+            item.className = 'local-dixeo-settings-status-file';
+            const icon = document.createElement('i');
+            icon.setAttribute('aria-hidden', 'true');
+            if (file.state === 'problem') {
+                item.classList.add('local-dixeo-settings-status-file--problem');
+                icon.className = 'fa fa-times';
+                item.title = fileProblemReason(file, strings);
+            } else if (file.state === 'syncing') {
+                item.classList.add('local-dixeo-settings-status-file--syncing');
+                icon.className = 'fa fa-spinner fa-spin';
+            } else {
+                item.classList.add('local-dixeo-settings-status-file--synced');
+                icon.className = 'fa fa-check';
+            }
+            const name = document.createElement('span');
+            name.className = 'local-dixeo-settings-status-file-name';
+            name.textContent = file.filename || '';
+            item.append(icon, name);
+            list.append(item);
+        });
+    };
+
+    /**
      * Last-sync time, hidden when sync has never completed or the course is off with no status.
      *
      * @param {HTMLElement} shell
@@ -446,6 +520,7 @@ define([
             message.textContent = statusMessage(status, strings);
         }
         paintStatusProgress(panel, status, strings);
+        paintStatusFiles(panel, status, strings);
         const error = panel.querySelector('[data-region="error-message"]');
         if (error) {
             const showError = status.status === 'error' && !!status.errormessage;
@@ -497,15 +572,22 @@ define([
     /**
      * Poll while the Status panel is open and sync is on. A disabled course stays as last painted.
      *
+     * The course pill already reads the same status and repaints an open panel, so this
+     * timer stays off while that pill is on the page.
+     *
      * @param {HTMLElement} shell
      */
     const scheduleStatusPoll = function(shell) {
         cancelStatusPoll(shell);
+        if (document.getElementById('dixeo-sync-indicator')) {
+            return;
+        }
         const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
         if (!shell.isConnected || shell.dataset.panel !== 'status' || !panel || panel.dataset.enabled !== '1') {
             return;
         }
-        const delay = shell.dataset.syncstatus === 'syncing' ? 5000 : 30000;
+        const waiting = shell.dataset.syncstatus === 'syncing' || shell.dataset.syncstatus === 'outdated';
+        const delay = waiting ? 5000 : 10000;
         const timer = setTimeout(function() {
             statusTimers.delete(shell);
             refreshStatus(shell, false).then(function() {
@@ -2509,6 +2591,22 @@ define([
                 return;
             }
             bound = true;
+            document.addEventListener('local_dixeo_syncstatus_updated', function(event) {
+                const status = event.detail;
+                if (!status || !statusStrings) {
+                    return;
+                }
+                document.querySelectorAll('.local-dixeo-settings-modal').forEach(function(shell) {
+                    if (shell.dataset.panel !== 'status') {
+                        return;
+                    }
+                    if (String(shell.dataset.courseid) !== String(status.courseid)) {
+                        return;
+                    }
+                    paintStatus(shell, status, statusStrings);
+                    scheduleStatusPoll(shell);
+                });
+            });
             document.addEventListener('click', function(event) {
                 const button = event.target.closest('[data-action="local-dixeo-settings-open"]');
                 if (!button) {

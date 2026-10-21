@@ -94,6 +94,27 @@ class file_sync_service {
     /** @var int Max total bytes per outbound HTTP chunk (8 MB). */
     private const CHUNK_MAX_BYTES = 8388608;
 
+    /** @var int Maximum file size accepted by the Dixeo API (20 MB). */
+    private const MAX_FILE_SIZE = 20971520;
+
+    /**
+     * Validation codes that do not fail the course sync.
+     *
+     * An entry with no code is treated the same way, so a production API
+     * that omits the machine-readable code still does not fail the course.
+     *
+     * @var string[]
+     */
+    private const IGNORABLE_REJECTION_CODES = [
+        'FILE_EMPTY',
+        'FILE_TOO_LARGE',
+        'FILE_UNREADABLE',
+        'FILENAME_MISSING_EXTENSION',
+        'EXTENSION_NOT_ALLOWED',
+        'MIME_TYPE_MISMATCH',
+        'MIME_TYPE_UNDETECTABLE',
+    ];
+
     /** @var course_ai_repository Repository for course AI records. */
     private course_ai_repository $repository;
 
@@ -525,6 +546,101 @@ class file_sync_service {
     }
 
     /**
+     * Per-file rows for the status tab.
+     *
+     * Resource and folder files are classified locally. A remote file list is
+     * applied when the API returns one. The remote error text is never copied
+     * onto the row: a failed remote file uses the generic reason "error".
+     *
+     * A file the remote list has already accepted or rejected keeps that result.
+     * A file with no result yet stays syncing until a sync that started after
+     * the file was added or changed has finished, and then shows that result.
+     * Files that are too large, empty, or an unsupported type stay visible as
+     * problems. A visible SCORM package is listed under its package name; its
+     * remote row is the text extract.
+     *
+     * @param int $courseid The course ID.
+     * @param string|null $syncstatus Course sync status. Read from the local row when omitted.
+     * @return array[] Each row has filename, state (synced, syncing, or problem), and reason.
+     */
+    public function list_status_files(int $courseid, ?string $syncstatus = null): array {
+        $timing = $this->get_status($courseid);
+        if ($syncstatus === null) {
+            $syncstatus = (string) $timing->status;
+        }
+
+        return $this->classify_sync_files(
+            $this->collect_status_file_descriptors($courseid),
+            $this->fetch_remote_file_list($courseid),
+            $syncstatus,
+            (int) ($timing->lastsyncstarted ?? 0),
+            (int) ($timing->lastsynccompleted ?? 0)
+        );
+    }
+
+    /**
+     * Classify local files, then overlay a remote file list when its shape is recognised.
+     *
+     * $remotefiles may be a list, a hydra:member collection, or a member collection.
+     * Filename is read from fileName or filename. An unusable payload is ignored.
+     *
+     * @param array $localfiles Rows with filename, size, and optional modified time.
+     * @param array|null $remotefiles Decoded GET /v1/files body, or null when the API was not called.
+     * @param string $syncstatus Course sync status.
+     * @param int $lastsyncstarted Start of the latest sync, or 0 when none has started.
+     * @param int $lastsynccompleted End of the latest completed sync, or 0 when none has finished.
+     * @return array[]
+     */
+    public function classify_sync_files(
+        array $localfiles,
+        ?array $remotefiles,
+        string $syncstatus,
+        int $lastsyncstarted = 0,
+        int $lastsynccompleted = 0
+    ): array {
+        $remote = $this->index_remote_files($remotefiles);
+        $rows = [];
+        foreach ($localfiles as $index => $file) {
+            if (!is_array($file)) {
+                continue;
+            }
+            $filename = (string) ($file['filename'] ?? '');
+            if ($filename === '') {
+                continue;
+            }
+            $row = $this->classify_one_status_file(
+                $file,
+                $remote,
+                $syncstatus,
+                $lastsyncstarted,
+                $lastsynccompleted
+            );
+            $row['sort'] = $index;
+            $rows[] = $row;
+        }
+
+        $rank = ['synced' => 0, 'syncing' => 1, 'problem' => 2];
+        usort($rows, static function (array $a, array $b) use ($rank): int {
+            $bystate = ($rank[$a['state']] ?? 3) <=> ($rank[$b['state']] ?? 3);
+            if ($bystate !== 0) {
+                return $bystate;
+            }
+            $byname = strcasecmp($a['filename'], $b['filename']);
+            if ($byname !== 0) {
+                return $byname;
+            }
+            return $a['sort'] <=> $b['sort'];
+        });
+
+        $sorted = [];
+        foreach ($rows as $row) {
+            unset($row['sort']);
+            $sorted[] = $row;
+        }
+        return $sorted;
+    }
+
+    /**
      * Trigger an immediate file sync for a course.
      *
      * Collects all syncable files from the course and uploads them to the API
@@ -534,6 +650,10 @@ class file_sync_service {
      * All chunks but the last are sent as append-only (finalChunk=false).
      * The last chunk carries the full manifest of expected file hashes and
      * filenames so the remote store knows which older files to drop.
+     *
+     * Files over 20 MB and empty files are omitted and do not fail the sync.
+     * A validation rejection from the API does not fail the course either.
+     * UPLOAD_FAILED, and a transport or HTTP failure, still do.
      *
      * @param int $courseid The course ID.
      * @return void
@@ -565,7 +685,7 @@ class file_sync_service {
             return;
         }
 
-        $uploaditems = $this->collect_upload_payload($courseid);
+        $uploaditems = $this->select_managed_files($this->collect_upload_payload($courseid));
 
         // Release the session lock for this request so other requests (e.g. file-sync status polls)
         // can run while the outbound upload is in flight.
@@ -580,8 +700,8 @@ class file_sync_service {
             $filecount = count($uploaditems);
 
             if ($filecount === 0) {
-                // No files remain in Moodle. Clear the remote store as well;
-                // POST /v1/files intentionally rejects empty multipart payloads.
+                // Nothing left to index (no files, or only files the API does not manage).
+                // Clear the remote store as well; POST /v1/files rejects an empty payload.
                 $this->client->delete_files((string) $courseid);
                 $this->repository->update_sync_status($courseid, 'synchronized', [
                     'filestotal' => 0,
@@ -620,9 +740,10 @@ class file_sync_service {
                 $failedfiles = array_merge($failedfiles, $this->extract_api_rejections($lastresult));
             }
 
-            if ($failedfiles !== []) {
-                $message = count($failedfiles) . ' file(s) were rejected by the Dixeo API';
-                throw new api_exception('file_sync_rejections', $message, 422, ['failedFiles' => $failedfiles]);
+            $fatalfiles = $this->fatal_api_rejections($failedfiles);
+            if ($fatalfiles !== []) {
+                $message = count($fatalfiles) . ' file(s) were rejected by the Dixeo API';
+                throw new api_exception('file_sync_rejections', $message, 422, ['failedFiles' => $fatalfiles]);
             }
 
             $this->poll_status($courseid);
@@ -638,6 +759,74 @@ class file_sync_service {
             $this->repository->record_error($courseid, $errormessage);
             throw $e;
         }
+    }
+
+    /**
+     * Drop files the API does not index.
+     *
+     * Files larger than {@see self::MAX_FILE_SIZE} and empty files are omitted.
+     * Unsupported extensions are already excluded by {@see self::get_module_files()}.
+     * SCORM extract parts go through this same size check.
+     *
+     * @param array $items Upload items (\stored_file|file_upload_part).
+     * @return array Items to upload, in the original order.
+     */
+    public function select_managed_files(array $items): array {
+        $managed = [];
+        foreach ($items as $item) {
+            $reason = $this->ignored_file_reason($item);
+            if ($reason === null) {
+                $managed[] = $item;
+                continue;
+            }
+            debugging(sprintf(
+                'local_dixeo: ignoring "%s" (%s)',
+                $this->item_filename($item),
+                $reason
+            ), DEBUG_DEVELOPER);
+        }
+        return $managed;
+    }
+
+    /**
+     * Per-file API rejections that fail the course sync.
+     *
+     * Size, type, empty, and unreadable files are ignored, as is an entry
+     * with no machine-readable code. UPLOAD_FAILED still fails the sync.
+     *
+     * @param array $failedfiles Entries from a chunk upload failedFiles list.
+     * @return array[]
+     */
+    public function fatal_api_rejections(array $failedfiles): array {
+        $fatal = [];
+        foreach ($failedfiles as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $code = (string) ($entry['code'] ?? '');
+            if ($code === '' || in_array($code, self::IGNORABLE_REJECTION_CODES, true)) {
+                continue;
+            }
+            $fatal[] = $entry;
+        }
+        return $fatal;
+    }
+
+    /**
+     * Why an upload item is left out of the sync, or null when it should be sent.
+     *
+     * @param \stored_file|file_upload_part $item
+     * @return string|null
+     */
+    private function ignored_file_reason($item): ?string {
+        $size = $this->item_size($item);
+        if ($size <= 0) {
+            return 'empty';
+        }
+        if ($size > self::MAX_FILE_SIZE) {
+            return 'too large';
+        }
+        return null;
     }
 
     /**
@@ -1049,6 +1238,276 @@ class file_sync_service {
     }
 
     /**
+     * Remote file list, or null when the API is not configured or the call fails.
+     *
+     * @param int $courseid The course ID.
+     * @return array|null
+     */
+    private function fetch_remote_file_list(int $courseid): ?array {
+        if (!$this->client->is_configured()) {
+            return null;
+        }
+
+        try {
+            $response = $this->client->list_files((string) $courseid);
+        } catch (api_exception $e) {
+            return null;
+        }
+
+        return is_array($response) ? $response : null;
+    }
+
+    /**
+     * Index remote files by filename.
+     *
+     * Null means the payload was missing or not a file list. An empty array
+     * means the API returned no files.
+     *
+     * @param array|null $response Decoded file-list payload.
+     * @return array|null Filename to remote entry.
+     */
+    private function index_remote_files(?array $response): ?array {
+        $entries = $this->remote_file_entries($response);
+        if ($entries === null) {
+            return null;
+        }
+
+        $indexed = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $filename = '';
+            if (isset($entry['fileName']) && is_string($entry['fileName'])) {
+                $filename = $entry['fileName'];
+            } else if (isset($entry['filename']) && is_string($entry['filename'])) {
+                $filename = $entry['filename'];
+            }
+            if ($filename === '') {
+                continue;
+            }
+            if (!isset($indexed[$filename]) || $this->remote_entry_failed($entry)) {
+                $indexed[$filename] = $entry;
+            }
+        }
+        return $indexed;
+    }
+
+    /**
+     * File entries from a bare list or a member collection.
+     *
+     * @param array|null $response Decoded file-list payload.
+     * @return array|null Null when the shape is not a file list.
+     */
+    private function remote_file_entries(?array $response): ?array {
+        if ($response === null) {
+            return null;
+        }
+        if (array_is_list($response)) {
+            return $response;
+        }
+        foreach (['hydra:member', 'member'] as $key) {
+            if (isset($response[$key]) && is_array($response[$key]) && array_is_list($response[$key])) {
+                return $response[$key];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether a remote file entry reports a failure.
+     *
+     * The message text is not used. Production may omit it, and the new API
+     * may replace it with a generic sentence.
+     *
+     * @param array $entry One remote file.
+     * @return bool
+     */
+    private function remote_entry_failed(array $entry): bool {
+        $status = strtolower((string) ($entry['status'] ?? ''));
+        if ($status === 'error' || $status === 'failed') {
+            return true;
+        }
+        return isset($entry['errorMessage']) && is_string($entry['errorMessage']) && $entry['errorMessage'] !== '';
+    }
+
+    /**
+     * Whether a remote file entry is known to be indexed.
+     *
+     * @param array $entry One remote file.
+     * @return bool
+     */
+    private function remote_entry_synced(array $entry): bool {
+        if ($this->remote_entry_failed($entry)) {
+            return false;
+        }
+        $status = strtolower((string) ($entry['status'] ?? ''));
+        return in_array($status, ['uploaded', 'completed', 'synchronized'], true);
+    }
+
+    /**
+     * Whether a file with no remote result should show the spinner.
+     *
+     * A course that is outdated or syncing spins every unconfirmed file.
+     * Otherwise a file spins until a sync that started after it changed has finished.
+     * A file with no modification time has no age, so only the course status applies.
+     *
+     * @param int $modified File modification time, or 0 when unknown.
+     * @param string $syncstatus Course sync status.
+     * @param int $lastsyncstarted Start of the latest sync, or 0 when none has started.
+     * @param int $lastsynccompleted End of the latest completed sync, or 0 when none has finished.
+     * @return bool
+     */
+    private function unconfirmed_file_is_syncing(
+        int $modified,
+        string $syncstatus,
+        int $lastsyncstarted,
+        int $lastsynccompleted
+    ): bool {
+        if ($syncstatus === 'outdated' || $syncstatus === 'syncing') {
+            return true;
+        }
+        if ($modified <= 0) {
+            return false;
+        }
+        $covered = $lastsyncstarted > $modified && $lastsynccompleted >= $lastsyncstarted;
+        return !$covered;
+    }
+
+    /**
+     * One status-tab row.
+     *
+     * A managed row skips the extension and size checks. SCORM packages use that
+     * so the zip is listed, while remotefilename selects the uploaded extract.
+     * A confirmed remote row keeps its check or cross. A file with no result yet
+     * stays syncing until a sync that started after the file changed has finished.
+     *
+     * @param array $file Local descriptor with filename, size, optional modified, remotefilename, and managed.
+     * @param array|null $remote Remote files indexed by filename, or null when unavailable.
+     * @param string $syncstatus Course sync status.
+     * @param int $lastsyncstarted Start of the latest sync, or 0 when none has started.
+     * @param int $lastsynccompleted End of the latest completed sync, or 0 when none has finished.
+     * @return array
+     */
+    private function classify_one_status_file(
+        array $file,
+        ?array $remote,
+        string $syncstatus,
+        int $lastsyncstarted = 0,
+        int $lastsynccompleted = 0
+    ): array {
+        $filename = (string) $file['filename'];
+        $size = (int) ($file['size'] ?? 0);
+        $remotename = (string) ($file['remotefilename'] ?? '');
+        if ($remotename === '') {
+            $remotename = $filename;
+        }
+        if (empty($file['managed'])) {
+            $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            $supported = in_array($extension, self::SUPPORTED_EXTENSIONS, true);
+            if ($size <= 0) {
+                return [
+                    'filename' => $filename,
+                    'state' => 'problem',
+                    'reason' => 'empty',
+                ];
+            }
+            if (!$supported) {
+                return [
+                    'filename' => $filename,
+                    'state' => 'problem',
+                    'reason' => 'unsupported',
+                ];
+            }
+            if ($size > self::MAX_FILE_SIZE) {
+                return [
+                    'filename' => $filename,
+                    'state' => 'problem',
+                    'reason' => 'toolarge',
+                ];
+            }
+        }
+
+        $entry = is_array($remote) ? ($remote[$remotename] ?? null) : null;
+        if (is_array($entry) && $this->remote_entry_failed($entry)) {
+            return [
+                'filename' => $filename,
+                'state' => 'problem',
+                'reason' => 'error',
+            ];
+        }
+        if (is_array($entry) && $this->remote_entry_synced($entry)) {
+            return [
+                'filename' => $filename,
+                'state' => 'synced',
+                'reason' => '',
+            ];
+        }
+        $modified = (int) ($file['modified'] ?? 0);
+        if ($this->unconfirmed_file_is_syncing($modified, $syncstatus, $lastsyncstarted, $lastsynccompleted)) {
+            return [
+                'filename' => $filename,
+                'state' => 'syncing',
+                'reason' => '',
+            ];
+        }
+        return [
+            'filename' => $filename,
+            'state' => 'synced',
+            'reason' => '',
+        ];
+    }
+
+    /**
+     * Filename and size of every visible resource, folder, and SCORM package.
+     *
+     * @param int $courseid The course ID.
+     * @return array[]
+     */
+    private function collect_status_file_descriptors(int $courseid): array {
+        $modinfo = get_fast_modinfo($courseid);
+        $fs = get_file_storage();
+        $files = [];
+
+        foreach ($modinfo->get_cms() as $cm) {
+            if (!$cm->visible) {
+                continue;
+            }
+            if (in_array($cm->modname, self::FILE_MODULE_TYPES, true)) {
+                $context = \context_module::instance($cm->id);
+                foreach ($this->list_module_files($cm->modname, $context, $fs) as $file) {
+                    $files[] = [
+                        'filename' => $file->get_filename(),
+                        'size' => (int) $file->get_filesize(),
+                        'modified' => (int) $file->get_timemodified(),
+                    ];
+                }
+                continue;
+            }
+            if ($cm->modname !== 'scorm') {
+                continue;
+            }
+            $package = $this->scormextract->get_package_file($cm);
+            if ($package === null) {
+                continue;
+            }
+            $extension = strtolower(pathinfo($package->get_filename(), PATHINFO_EXTENSION));
+            if ($extension !== 'zip' && $extension !== 'pif') {
+                continue;
+            }
+            $files[] = [
+                'filename' => $package->get_filename(),
+                'size' => (int) $package->get_filesize(),
+                'modified' => (int) $package->get_timemodified(),
+                'remotefilename' => scorm_vector_extract_service::UPLOAD_FILENAME_PREFIX . $cm->id . '.txt',
+                'managed' => true,
+            ];
+        }
+
+        return $files;
+    }
+
+    /**
      * Match the operational enabled flag to the stored course setting.
      *
      * On creates the operational row. Off updates an existing row and does not create one,
@@ -1201,30 +1660,39 @@ class file_sync_service {
      */
     private function get_module_files(string $modname, \context_module $context, \file_storage $fs): array {
         $files = [];
-
-        // Component and filearea depend on module type.
-        $component = 'mod_' . $modname;
-
-        // Get files based on module type.
-        if ($modname === 'resource') {
-            $areafiles = $fs->get_area_files($context->id, $component, 'content', 0, 'sortorder', false);
-        } else if ($modname === 'folder') {
-            $areafiles = $fs->get_area_files($context->id, $component, 'content', 0, 'sortorder', false);
-        } else {
-            return $files;
-        }
-
-        foreach ($areafiles as $file) {
-            if ($file->is_directory()) {
-                continue;
-            }
-
+        foreach ($this->list_module_files($modname, $context, $fs) as $file) {
             $extension = strtolower(pathinfo($file->get_filename(), PATHINFO_EXTENSION));
             if (in_array($extension, self::SUPPORTED_EXTENSIONS, true)) {
                 $files[] = $file;
             }
         }
+        return $files;
+    }
 
+    /**
+     * Every non-directory file in a resource or folder.
+     *
+     * Includes types and sizes the sync does not upload. Callers that build
+     * an upload payload still filter through {@see self::get_module_files()}.
+     *
+     * @param string $modname The module type (resource, folder).
+     * @param \context_module $context The module context.
+     * @param \file_storage $fs The file storage instance.
+     * @return \stored_file[]
+     */
+    private function list_module_files(string $modname, \context_module $context, \file_storage $fs): array {
+        if ($modname !== 'resource' && $modname !== 'folder') {
+            return [];
+        }
+
+        $areafiles = $fs->get_area_files($context->id, 'mod_' . $modname, 'content', 0, 'sortorder', false);
+        $files = [];
+        foreach ($areafiles as $file) {
+            if ($file->is_directory()) {
+                continue;
+            }
+            $files[] = $file;
+        }
         return $files;
     }
 }

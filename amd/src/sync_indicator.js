@@ -9,7 +9,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['core/ajax', 'core_course/events'], function(Ajax, CourseEvents) {
+define(['core/ajax', 'core/str', 'core_course/events'], function(Ajax, Str, CourseEvents) {
 
 /** @type {number|null} Scheduled poll timer ID. */
 let pollTimer = null;
@@ -18,7 +18,7 @@ let pollTimer = null;
 const ACTIVE_POLL_DELAY = 5000;
 
 /** @type {number} Background polling delay when idle (ms). */
-const BACKGROUND_POLL_DELAY = 30000;
+const BACKGROUND_POLL_DELAY = 10000;
 
 /** @type {number} Course ID. */
 let courseId = 0;
@@ -28,6 +28,20 @@ let currentStatus = 'none';
 
 /** @type {boolean} Whether sync is enabled. */
 let isEnabled = true;
+
+/** @type {Object|null} Tooltip strings, loaded once. */
+let labels = null;
+
+/** @type {string[]} Button modifiers the poll may replace. */
+const STATUS_MODIFIERS = [
+    'none',
+    'syncing',
+    'synchronized',
+    'error',
+    'outdated',
+    'paused',
+    'disabled',
+];
 
 /**
  * Check whether a value can be rendered as a number.
@@ -72,8 +86,54 @@ const init = (courseid, status, enabled, filesTotal, filesCompleted, placement) 
 
     setupEventListeners();
 
-    // Begin adaptive poll loop (fast during sync, slow background otherwise).
-    schedulePoll();
+    // Strings let the poll rewrite the tooltip. The first read is soon, then
+    // the loop stays fast while a sync is pending or running.
+    loadLabels().then(() => {
+        updateIndicatorUI();
+        return null;
+    }).catch(() => null);
+    schedulePoll(2000);
+};
+
+/**
+ * Load the pill tooltip strings.
+ *
+ * @returns {Promise<Object>}
+ */
+const loadLabels = () => {
+    if (labels) {
+        return Promise.resolve(labels);
+    }
+    const keys = [
+        'filesync_title',
+        'filesync_status_none',
+        'filesync_status_syncing',
+        'filesync_status_synchronized',
+        'filesync_status_error',
+        'filesync_status_paused',
+        'filesync_status_disabled',
+        'filesync_status_outdated',
+    ];
+    const requests = keys.map((key) => ({key, component: 'local_dixeo'}));
+    return Str.get_strings(requests).then((loaded) => {
+        labels = {};
+        keys.forEach((key, index) => {
+            labels[key] = loaded[index];
+        });
+        return labels;
+    });
+};
+
+/**
+ * Delay until the next read. Pending and running syncs are polled quickly.
+ *
+ * @returns {number}
+ */
+const pollDelay = () => {
+    if (currentStatus === 'syncing' || currentStatus === 'outdated') {
+        return ACTIVE_POLL_DELAY;
+    }
+    return BACKGROUND_POLL_DELAY;
 };
 
 /**
@@ -217,17 +277,19 @@ const setupEventListeners = () => {
 
 /**
  * Schedule the next poll with adaptive delay.
- * Uses fast polling during sync, slow background polling otherwise.
+ * Uses fast polling while a sync is pending or running, slow background polling otherwise.
  * Does not schedule if sync is disabled or page is hidden.
+ *
+ * @param {number} [delay] Override the wait, in milliseconds.
  */
-const schedulePoll = () => {
+const schedulePoll = (delay) => {
     cancelPoll();
 
     if (!isEnabled || document.hidden) {
         return;
     }
 
-    const delay = currentStatus === 'syncing' ? ACTIVE_POLL_DELAY : BACKGROUND_POLL_DELAY;
+    const wait = typeof delay === 'number' ? delay : pollDelay();
 
     pollTimer = setTimeout(async() => {
         pollTimer = null;
@@ -238,7 +300,7 @@ const schedulePoll = () => {
             window.console.error('Poll failed:', error);
         }
         schedulePoll();
-    }, delay);
+    }, wait);
 };
 
 /**
@@ -287,9 +349,12 @@ const pollStatus = () => {
  */
 const updateFromStatus = (status) => {
     currentStatus = status.status;
-    isEnabled = status.enabled;
+    isEnabled = status.enabled === true || status.enabled === 1 || status.enabled === '1';
 
     updateIndicatorUI(status);
+    document.dispatchEvent(new CustomEvent('local_dixeo_syncstatus_updated', {
+        detail: Object.assign({courseid: courseId}, status),
+    }));
 };
 
 /**
@@ -309,17 +374,28 @@ const updateIndicatorUI = (status = null) => {
     }
 
     container.dataset.status = currentStatus;
-    container.dataset.enabled = isEnabled;
+    container.dataset.enabled = isEnabled ? '1' : '0';
 
-    // 'deleting' uses the same visual style as 'syncing' (blue animated icon).
-    let statusClass;
-    if (currentStatus === 'deleting') {
-        statusClass = 'syncing';
-    } else {
-        statusClass = isEnabled ? currentStatus : 'disabled';
+    let statusClass = currentStatus;
+    if (!isEnabled) {
+        statusClass = 'disabled';
     }
-    button.className = button.className.replace(/dixeo-sync-btn--\w+/g, '');
+    STATUS_MODIFIERS.forEach((name) => {
+        button.classList.remove(`dixeo-sync-btn--${name}`);
+    });
     button.classList.add(`dixeo-sync-btn--${statusClass}`);
+    if (labels) {
+        let tip = labels.filesync_status_none;
+        const key = `filesync_status_${currentStatus}`;
+        if (!isEnabled) {
+            tip = labels.filesync_status_disabled;
+        } else if (labels[key]) {
+            tip = labels[key];
+        }
+        const text = `${labels.filesync_title}: ${tip}`;
+        button.title = text;
+        button.setAttribute('aria-label', text);
+    }
 
     if (status) {
         updateBadgeCount(status.filescompleted, status.filestotal);
