@@ -95,6 +95,44 @@ final class h5p_packaging_service_test extends \advanced_testcase {
         $this->assertSame($content, json_decode($contentjson, true));
     }
 
+    public function test_build_package_without_files_omits_content_images(): void {
+        $this->seed_library('H5P.Flashcards', 1, 7);
+        $service = new h5p_packaging_service();
+
+        $path = $service->build_package('H5P.Flashcards 1.7', ['cards' => []]);
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path) === true);
+        $this->assertFalse($zip->getFromName('content/images/card-1.jpeg'));
+        $zip->close();
+    }
+
+    public function test_build_package_writes_content_image_at_the_given_path(): void {
+        $this->seed_library('H5P.Flashcards', 1, 7);
+        $service = new h5p_packaging_service();
+        $content = ['cards' => [['text' => 'Leaf']]];
+
+        $path = $service->build_package(
+            'H5P.Flashcards 1.7',
+            $content,
+            '',
+            'en',
+            ['images/card-1.jpeg' => 'jpeg-bytes']
+        );
+
+        $this->assertSame('jpeg-bytes', $this->read_zip_entry($path, 'content/images/card-1.jpeg'));
+        $this->assertSame($content, json_decode($this->read_zip_entry($path, 'content/content.json'), true));
+    }
+
+    public function test_build_package_rejects_parent_directory_file_path(): void {
+        $this->seed_library('H5P.Flashcards', 1, 7);
+        $service = new h5p_packaging_service();
+
+        $this->expectException(coding_exception::class);
+
+        $service->build_package('H5P.Flashcards 1.7', ['cards' => []], '', 'en', ['../secret' => 'nope']);
+    }
+
     public function test_build_package_falls_back_to_machine_name_when_title_empty(): void {
         $this->seed_library('H5P.Flashcards', 1, 7);
         $service = new h5p_packaging_service();

@@ -69,10 +69,17 @@ class h5p_packaging_service {
      * @param array $content Content structure to serialize as content.json (already library-shaped).
      * @param string $title Human-readable activity title (stored in h5p.json metadata).
      * @param string $language Two-letter language code stored as h5p.json defaultLanguage.
+     * @param array $files Content-relative path to file bytes, stored under content/ in the archive.
      * @return string Absolute path to a temporary .h5p file.
      * @throws coding_exception If no compatible library is installed or the package cannot be written.
      */
-    public function build_package(string $mainlibrary, array $content, string $title = '', string $language = 'en'): string {
+    public function build_package(
+        string $mainlibrary,
+        array $content,
+        string $title = '',
+        string $language = 'en',
+        array $files = []
+    ): string {
         $resolved = h5p_library_service::resolve_installed_version($mainlibrary);
         if ($resolved === null) {
             throw new coding_exception("No installed H5P library satisfies '{$mainlibrary}'");
@@ -104,9 +111,39 @@ class h5p_packaging_service {
 
         $zip->addFromString('h5p.json', json_encode($h5pjson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         $zip->addFromString('content/content.json', json_encode($content, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        foreach ($files as $path => $bytes) {
+            if (!is_string($path) || !is_string($bytes)) {
+                $zip->close();
+                throw new coding_exception('H5P content file path and bytes must be strings');
+            }
+            try {
+                $this->assert_content_relative_path($path);
+            } catch (coding_exception $e) {
+                $zip->close();
+                throw $e;
+            }
+            $zip->addFromString('content/' . $path, $bytes);
+        }
         $zip->close();
 
         return $packagepath;
+    }
+
+    /**
+     * Reject a content file path that could escape the content directory.
+     *
+     * @param string $path Content-relative path, e.g. images/card-1.jpeg.
+     * @throws coding_exception When the path is absolute or contains a parent segment.
+     */
+    private function assert_content_relative_path(string $path): void {
+        if (
+            $path === ''
+            || str_contains($path, '\\')
+            || str_starts_with($path, '/')
+            || str_contains($path, '..')
+        ) {
+            throw new coding_exception('Invalid H5P content file path');
+        }
     }
 
     /**
