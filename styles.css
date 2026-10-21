@@ -1140,7 +1140,7 @@ label[for="local-dixeo-settings-category"] {
 
 .local-dixeo-settings-status-files {
     list-style: none;
-    margin: 8px 0 0;
+    margin: 8px 0;
     padding: 0;
 }
 
@@ -1170,6 +1170,10 @@ label[for="local-dixeo-settings-category"] {
 
 .local-dixeo-settings-status-file--problem .fa {
     color: #ef4444;
+}
+
+.local-dixeo-settings-status-file--syncing .fa {
+    color: #3b82f6;
 }
 
 .local-dixeo-settings-status-file-name {

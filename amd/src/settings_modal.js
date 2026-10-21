@@ -323,9 +323,11 @@ define([
             'filesync_status_pending_deletion',
             'filesync_status_disabled',
             'filesync_status_outdated',
+            'filesync_file_empty',
             'filesync_file_error',
             'filesync_file_too_large',
             'filesync_file_unmanaged',
+            'filesync_file_unsupported',
             'filesync_files_count',
             'filesync_progress',
             'files',
@@ -412,6 +414,12 @@ define([
         if (file.reason === 'toolarge') {
             return strings.filesync_file_too_large;
         }
+        if (file.reason === 'unsupported') {
+            return strings.filesync_file_unsupported;
+        }
+        if (file.reason === 'empty') {
+            return strings.filesync_file_empty;
+        }
         if (file.reason === 'unmanaged') {
             return strings.filesync_file_unmanaged;
         }
@@ -446,6 +454,9 @@ define([
                 item.classList.add('local-dixeo-settings-status-file--problem');
                 icon.className = 'fa fa-times';
                 item.title = fileProblemReason(file, strings);
+            } else if (file.state === 'syncing') {
+                item.classList.add('local-dixeo-settings-status-file--syncing');
+                icon.className = 'fa fa-spinner fa-spin';
             } else {
                 item.classList.add('local-dixeo-settings-status-file--synced');
                 icon.className = 'fa fa-check';
