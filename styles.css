@@ -149,40 +149,49 @@ h2:has(.dixeo-sync-indicator),
    ========================================================================== */
 
 /* None - gray dot */
-.dixeo-sync-btn--none .dixeo-sync-btn__dot {
+.dixeo-sync-btn--none .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="none"] .dixeo-sync-btn__dot {
     background: #94a3b8;
 }
 
 /* Synchronized - green dot */
-.dixeo-sync-btn--synchronized .dixeo-sync-btn__dot {
+.dixeo-sync-btn--synchronized .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="synchronized"] .dixeo-sync-btn__dot {
     background: #22c55e;
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
 
 /* Syncing - blue pulsing dot */
-.dixeo-sync-btn--syncing .dixeo-sync-btn__dot {
+.dixeo-sync-btn--syncing .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="syncing"] .dixeo-sync-btn__dot {
     background: #3b82f6;
     animation: dixeo-pulse 1.5s ease-in-out infinite;
 }
 
 /* Error - red dot */
-.dixeo-sync-btn--error .dixeo-sync-btn__dot {
+.dixeo-sync-btn--error .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="error"] .dixeo-sync-btn__dot {
     background: #ef4444;
 }
 
 /* Outdated - orange dot (content changed, sync needed) */
-.dixeo-sync-btn--outdated .dixeo-sync-btn__dot {
+.dixeo-sync-btn--outdated .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="outdated"] .dixeo-sync-btn__dot {
     background: #f59e0b;
 }
 
 /* Paused - orange dot */
-.dixeo-sync-btn--paused .dixeo-sync-btn__dot {
+.dixeo-sync-btn--paused .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-status="paused"] .dixeo-sync-btn__dot {
     background: #f59e0b;
 }
 
-/* Disabled - gray faded dot */
-.dixeo-sync-btn--disabled .dixeo-sync-btn__dot {
+/* Disabled - gray faded dot. Listed last so it wins over the status colour. */
+.dixeo-sync-btn--disabled .dixeo-sync-btn__dot,
+#dixeo-sync-indicator[data-enabled="0"] .dixeo-sync-btn__dot {
     background: #cbd5e1;
+    box-shadow: none;
+    animation: none;
 }
 
 /* ==========================================================================
@@ -352,7 +361,8 @@ h2:has(.dixeo-sync-indicator),
         transition: none;
     }
 
-    .dixeo-sync-btn--syncing .dixeo-sync-btn__dot {
+    .dixeo-sync-btn--syncing .dixeo-sync-btn__dot,
+    #dixeo-sync-indicator[data-status="syncing"] .dixeo-sync-btn__dot {
         animation: none;
     }
 

@@ -572,15 +572,22 @@ define([
     /**
      * Poll while the Status panel is open and sync is on. A disabled course stays as last painted.
      *
+     * The course pill already reads the same status and repaints an open panel, so this
+     * timer stays off while that pill is on the page.
+     *
      * @param {HTMLElement} shell
      */
     const scheduleStatusPoll = function(shell) {
         cancelStatusPoll(shell);
+        if (document.getElementById('dixeo-sync-indicator')) {
+            return;
+        }
         const panel = shell.querySelector('[data-region="local-dixeo-settings-status"]');
         if (!shell.isConnected || shell.dataset.panel !== 'status' || !panel || panel.dataset.enabled !== '1') {
             return;
         }
-        const delay = shell.dataset.syncstatus === 'syncing' ? 5000 : 30000;
+        const waiting = shell.dataset.syncstatus === 'syncing' || shell.dataset.syncstatus === 'outdated';
+        const delay = waiting ? 5000 : 10000;
         const timer = setTimeout(function() {
             statusTimers.delete(shell);
             refreshStatus(shell, false).then(function() {
@@ -2584,6 +2591,22 @@ define([
                 return;
             }
             bound = true;
+            document.addEventListener('local_dixeo_syncstatus_updated', function(event) {
+                const status = event.detail;
+                if (!status || !statusStrings) {
+                    return;
+                }
+                document.querySelectorAll('.local-dixeo-settings-modal').forEach(function(shell) {
+                    if (shell.dataset.panel !== 'status') {
+                        return;
+                    }
+                    if (String(shell.dataset.courseid) !== String(status.courseid)) {
+                        return;
+                    }
+                    paintStatus(shell, status, statusStrings);
+                    scheduleStatusPoll(shell);
+                });
+            });
             document.addEventListener('click', function(event) {
                 const button = event.target.closest('[data-action="local-dixeo-settings-open"]');
                 if (!button) {
