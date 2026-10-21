@@ -43,6 +43,7 @@ final class module_generation_service_test extends \advanced_testcase {
             ->build_edit_payload('page', 'Rewrite the intro', 'Course context');
 
         $this->assertTrue($payload['generateImages']);
+        $this->assertTrue($payload['packageImages']);
         $this->assertStringNotContainsString('[img-gen', $payload['instructions']);
         $this->assertSame('Rewrite the intro', $payload['instructions']);
     }
@@ -57,6 +58,7 @@ final class module_generation_service_test extends \advanced_testcase {
             ->build_edit_payload('page', 'Rewrite the intro', 'Course context');
 
         $this->assertArrayNotHasKey('generateImages', $payload);
+        $this->assertArrayNotHasKey('packageImages', $payload);
     }
 
     /**
@@ -69,5 +71,6 @@ final class module_generation_service_test extends \advanced_testcase {
         $payload = $service->build_edit_payload('page', 'Rewrite the intro', 'Course context');
 
         $this->assertArrayNotHasKey('generateImages', $payload);
+        $this->assertArrayNotHasKey('packageImages', $payload);
     }
 }

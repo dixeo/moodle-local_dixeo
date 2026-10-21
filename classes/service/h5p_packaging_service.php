@@ -162,6 +162,7 @@ class h5p_packaging_service {
      * @param array $content Content structure already shaped for the target H5P library.
      * @param string $language ISO 639-1 code for the .h5p defaultLanguage; falls back to current_language() when empty.
      * @param int|null $beforemod Optional cmid to insert before; null appends to the section.
+     * @param array $files Content-relative path to file bytes included in the package. Empty keeps a content-only archive.
      * @return array Two-key array: ['cmid' => int, 'id' => int (instance id)].
      * @throws coding_exception If mod_h5pactivity is missing or any step of the creation pipeline fails.
      */
@@ -174,14 +175,15 @@ class h5p_packaging_service {
         string $mainlibrary,
         array $content,
         string $language = '',
-        ?int $beforemod = null
+        ?int $beforemod = null,
+        array $files = []
     ): array {
         global $CFG, $DB;
 
         $moduleid = module_addinstance_service::require_for_course($courseid, self::MODULE_NAME);
 
         $resolvedlanguage = $language !== '' ? $language : current_language();
-        $packagepath = $this->build_package($mainlibrary, $content, $name, $resolvedlanguage);
+        $packagepath = $this->build_package($mainlibrary, $content, $name, $resolvedlanguage, $files);
 
         require_once($CFG->dirroot . '/mod/h5pactivity/lib.php');
 
