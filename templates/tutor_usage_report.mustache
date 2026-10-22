@@ -636,40 +636,42 @@
                     {{#pix}}t/expanded, core{{/pix}}
                 </button>
                 <h4 class="mb-0" id="dixeo-tutor-synthesis-title">{{#str}}tutor_usage_report_synthesis_title, local_dixeo{{/str}}</h4>
-                <button type="button"
-                        class="dixeo-tutor-usage-report-info btn btn-link text-muted p-0 ml-2"
-                        aria-label="{{#str}}moreinfo, core{{/str}}"
-                        data-info="{{synthesis.window}}">
-                    {{#pix}}i/circleinfo, core{{/pix}}
-                </button>
-            </div>
-            <div class="card-body collapse show" id="dixeo-tutor-synthesis-panel">
-                <div data-region="synthesis-status">
-                    {{#synthesis.pending}}
-                        <p class="dixeo-tutor-synthesis-status text-muted mb-2">
-                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            {{#str}}tutor_usage_report_synthesis_generating, local_dixeo{{/str}}
-                        </p>
-                    {{/synthesis.pending}}
-                </div>
-                <div data-region="synthesis-body">
-                    {{#synthesis.failed}}
-                        <p class="text-danger">{{#str}}tutor_usage_report_synthesis_failed, local_dixeo{{/str}}</p>
-                    {{/synthesis.failed}}
-                    {{#synthesis.isempty}}
-                        <p>{{#str}}tutor_usage_report_synthesis_empty, local_dixeo{{/str}}</p>
-                    {{/synthesis.isempty}}
-                    {{#synthesis.hascontent}}
-                        <p class="dixeo-tutor-synthesis-summary">{{synthesis.summary}}</p>
-                        {{#synthesis.truncated}}
-                            <p class="text-muted small">{{#str}}tutor_usage_report_synthesis_truncated, local_dixeo{{/str}}</p>
-                        {{/synthesis.truncated}}
-                    {{/synthesis.hascontent}}
-                </div>
-                <button type="button" class="btn btn-primary" data-action="tutor-synthesis"
+                <button type="button" class="btn btn-primary dixeo-tutor-synthesis-action" data-action="tutor-synthesis"
                         {{#synthesis.pending}}disabled{{/synthesis.pending}}>
                     {{synthesis.buttonlabel}}
                 </button>
+            </div>
+            <div class="card-body collapse show" id="dixeo-tutor-synthesis-panel">
+                <div data-region="synthesis-body">
+                    {{#synthesis.showmeta}}
+                        <div class="dixeo-tutor-synthesis-meta">
+                            {{#synthesis.pending}}
+                                <p class="dixeo-tutor-synthesis-note dixeo-tutor-synthesis-status text-muted mb-0">
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    {{#str}}tutor_usage_report_synthesis_generating, local_dixeo{{/str}}
+                                </p>
+                            {{/synthesis.pending}}
+                            {{#synthesis.failed}}
+                                <p class="dixeo-tutor-synthesis-note text-danger mb-0">{{#str}}tutor_usage_report_synthesis_failed, local_dixeo{{/str}}</p>
+                            {{/synthesis.failed}}
+                            {{#synthesis.hascontent}}
+                                <p class="dixeo-tutor-synthesis-window text-muted mb-0">{{synthesis.window}}</p>
+                            {{/synthesis.hascontent}}
+                        </div>
+                    {{/synthesis.showmeta}}
+                    {{#synthesis.showintro}}
+                        <p class="text-muted mb-0">{{#str}}tutor_usage_report_synthesis_intro, local_dixeo{{/str}}</p>
+                    {{/synthesis.showintro}}
+                    {{#synthesis.isempty}}
+                        <p class="mb-0">{{#str}}tutor_usage_report_synthesis_empty, local_dixeo{{/str}}</p>
+                    {{/synthesis.isempty}}
+                    {{#synthesis.hascontent}}
+                        <div class="dixeo-tutor-synthesis-summary">{{{synthesis.summary}}}</div>
+                        {{#synthesis.truncated}}
+                            <p class="text-muted small mb-0">{{#str}}tutor_usage_report_synthesis_truncated, local_dixeo{{/str}}</p>
+                        {{/synthesis.truncated}}
+                    {{/synthesis.hascontent}}
+                </div>
             </div>
         </div>
     {{/iscourse}}

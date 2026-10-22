@@ -39,6 +39,7 @@ define([
             {key: 'tutor_usage_report_synthesis_button', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_update', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_generating', component: 'local_dixeo'},
+            {key: 'tutor_usage_report_synthesis_intro', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_unchanged', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_failed', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_empty', component: 'local_dixeo'},
@@ -48,10 +49,11 @@ define([
                 button: values[0],
                 update: values[1],
                 generating: values[2],
-                unchanged: values[3],
-                failed: values[4],
-                empty: values[5],
-                truncated: values[6],
+                intro: values[3],
+                unchanged: values[4],
+                failed: values[5],
+                empty: values[6],
+                truncated: values[7],
             };
         });
     };
@@ -87,50 +89,58 @@ define([
     };
 
     /**
-     * Replace the block body and status from a service result.
+     * Replace the block body from a service result.
+     *
+     * result.summary is HTML already cleaned by the service.
      *
      * @param {HTMLElement} root Block root.
      * @param {Object} result Synthesis payload.
      * @param {Object} strings Localised labels.
      */
     const render = (root, result, strings) => {
-        const status = root.querySelector('[data-region="synthesis-status"]');
         const body = root.querySelector('[data-region="synthesis-body"]');
         const button = root.querySelector('[data-action="tutor-synthesis"]');
-        status.textContent = '';
+        const hasContent = Boolean(result.summary);
+        const showWindow = hasContent && Boolean(result.window);
         body.textContent = '';
 
-        if (result.state === 'pending') {
-            const line = document.createElement('p');
-            line.className = 'dixeo-tutor-synthesis-status text-muted mb-2';
-            const spinner = document.createElement('span');
-            spinner.className = 'spinner-border spinner-border-sm';
-            spinner.setAttribute('role', 'status');
-            spinner.setAttribute('aria-hidden', 'true');
-            line.appendChild(spinner);
-            line.appendChild(document.createTextNode(strings.generating));
-            status.appendChild(line);
+        if (result.state === 'pending' || result.unchanged || result.state === 'failed' || showWindow) {
+            const row = document.createElement('div');
+            row.className = 'dixeo-tutor-synthesis-meta';
+            if (result.state === 'pending') {
+                const line = document.createElement('p');
+                line.className = 'dixeo-tutor-synthesis-note dixeo-tutor-synthesis-status text-muted mb-0';
+                const spinner = document.createElement('span');
+                spinner.className = 'spinner-border spinner-border-sm';
+                spinner.setAttribute('role', 'status');
+                spinner.setAttribute('aria-hidden', 'true');
+                line.appendChild(spinner);
+                line.appendChild(document.createTextNode(strings.generating));
+                row.appendChild(line);
+            } else if (result.unchanged) {
+                addParagraph(row, strings.unchanged, 'dixeo-tutor-synthesis-note text-muted mb-0');
+            } else if (result.state === 'failed') {
+                addParagraph(row, strings.failed, 'dixeo-tutor-synthesis-note text-danger mb-0');
+            }
+            if (showWindow) {
+                addParagraph(row, result.window, 'dixeo-tutor-synthesis-window text-muted mb-0');
+            }
+            body.appendChild(row);
         }
-
-        if (result.unchanged) {
-            addParagraph(body, strings.unchanged, 'text-muted');
-        }
-        if (result.state === 'failed') {
-            addParagraph(body, strings.failed, 'text-danger');
+        if (result.state === 'empty') {
+            addParagraph(body, strings.intro, 'text-muted mb-0');
         }
         if (result.empty) {
-            addParagraph(body, strings.empty, '');
+            addParagraph(body, strings.empty, 'mb-0');
         }
-        if (result.summary) {
-            addParagraph(body, result.summary, 'dixeo-tutor-synthesis-summary');
+        if (hasContent) {
+            const summary = document.createElement('div');
+            summary.className = 'dixeo-tutor-synthesis-summary';
+            summary.innerHTML = result.summary;
+            body.appendChild(summary);
         }
         if (result.truncated) {
-            addParagraph(body, strings.truncated, 'text-muted small');
-        }
-
-        const icon = root.querySelector('.dixeo-tutor-usage-report-info');
-        if (icon && result.window) {
-            icon.dataset.info = result.window;
+            addParagraph(body, strings.truncated, 'text-muted small mb-0');
         }
 
         button.textContent = buttonLabel(result, strings);

@@ -627,6 +627,7 @@ $string['tutor_usage_report_synthesis_button'] = 'Synthèse';
 $string['tutor_usage_report_synthesis_empty'] = 'Aucun message d\'étudiants au cours des 3 derniers mois.';
 $string['tutor_usage_report_synthesis_failed'] = 'La synthèse n\'a pas pu être générée.';
 $string['tutor_usage_report_synthesis_generating'] = 'Génération de la synthèse…';
+$string['tutor_usage_report_synthesis_intro'] = 'Cliquez sur Synthèse pour générer la première synthèse de ce que les étudiants demandent au tuteur.';
 $string['tutor_usage_report_synthesis_title'] = 'Synthèse des conversations des étudiants';
 $string['tutor_usage_report_synthesis_truncated'] = 'La synthèse a utilisé les messages les plus récents.';
 $string['tutor_usage_report_synthesis_unchanged'] = 'Aucun nouveau message depuis la dernière synthèse.';

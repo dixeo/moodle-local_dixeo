@@ -418,12 +418,26 @@ class tutor_synthesis_service {
         return [
             'state' => (string) $record->status,
             'unchanged' => $unchanged,
-            'summary' => $summary,
+            'summary' => $this->clean_summary($summary),
             'truncated' => (int) $record->truncated === 1,
             'empty' => $record->status === self::STATE_READY && $summary === '' && (int) $record->messagecount === 0,
             'jobid' => (string) ($record->jobid ?? ''),
             'window' => $label,
         ];
+    }
+
+    /**
+     * Keep the synthesis tags and drop anything else the API might return.
+     *
+     * @param string $summary HTML stored from the API.
+     * @return string
+     */
+    private function clean_summary(string $summary): string {
+        $summary = trim($summary);
+        if ($summary === '') {
+            return '';
+        }
+        return trim(clean_text($summary, FORMAT_HTML));
     }
 
     /**

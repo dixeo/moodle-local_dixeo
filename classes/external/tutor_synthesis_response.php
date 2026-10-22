@@ -40,7 +40,7 @@ class tutor_synthesis_response {
         return new external_single_structure([
             'state' => new external_value(PARAM_ALPHA, 'empty, pending, ready, or failed'),
             'unchanged' => new external_value(PARAM_BOOL, 'True when the stored synthesis was kept'),
-            'summary' => new external_value(PARAM_RAW, 'Synthesis text'),
+            'summary' => new external_value(PARAM_RAW, 'Sanitised synthesis HTML'),
             'truncated' => new external_value(PARAM_BOOL, 'True when the transcript was cut'),
             'empty' => new external_value(PARAM_BOOL, 'True when the window had no student messages'),
             'jobid' => new external_value(PARAM_TEXT, 'In-flight job id, or an empty string'),

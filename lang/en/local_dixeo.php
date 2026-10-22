@@ -627,6 +627,7 @@ $string['tutor_usage_report_synthesis_button'] = 'Synthesis';
 $string['tutor_usage_report_synthesis_empty'] = 'No student messages in the past 3 months.';
 $string['tutor_usage_report_synthesis_failed'] = 'The synthesis could not be generated.';
 $string['tutor_usage_report_synthesis_generating'] = 'Generating the synthesis…';
+$string['tutor_usage_report_synthesis_intro'] = 'Click Synthesis to generate the first summary of what students have been asking the tutor.';
 $string['tutor_usage_report_synthesis_title'] = 'Student conversation synthesis';
 $string['tutor_usage_report_synthesis_truncated'] = 'The synthesis used the most recent messages.';
 $string['tutor_usage_report_synthesis_unchanged'] = 'No new messages since the last synthesis.';

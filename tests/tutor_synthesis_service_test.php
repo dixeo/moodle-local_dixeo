@@ -112,9 +112,9 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
         $this->setUser($this->getDataGenerator()->create_user());
         set_config('namespace', 'school', 'local_dixeo');
 
-        $summary = "Students asked about fractions.\n\n"
-            . "Common topics\nFractions: Several students asked how to simplify.\n\n"
-            . 'Areas of difficulty\nCancelling: Cancelling terms was confusing.';
+        $summary = '<p>Students asked about fractions.</p>'
+            . '<script>alert(1)</script>'
+            . '<ul><li><strong>Fractions</strong>: Several students asked how to simplify.</li></ul>';
         $api = new synthesis_fake_client([
             $this->pending_job(),
             $this->completed_job($summary),
@@ -125,7 +125,10 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
         $result = $service->get_for_course((int) $course->id);
 
         $this->assertSame(tutor_synthesis_service::STATE_READY, $result['state']);
-        $this->assertSame($summary, $result['summary']);
+        $this->assertStringContainsString('<strong>Fractions</strong>', $result['summary']);
+        $this->assertStringContainsString('<ul>', $result['summary']);
+        $this->assertStringNotContainsString('<script>', $result['summary']);
+        $this->assertStringNotContainsString('alert(1)', $result['summary']);
         $this->assertFalse($result['truncated']);
         $this->assertFalse($result['empty']);
     }

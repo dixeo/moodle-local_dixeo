@@ -289,6 +289,10 @@ class tutor_usage_report_page implements renderable, templatable {
             'pending' => $synthesis['state'] === tutor_synthesis_service::STATE_PENDING,
             'failed' => $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
             'hascontent' => $synthesis['summary'] !== '',
+            'showintro' => $synthesis['state'] === tutor_synthesis_service::STATE_EMPTY,
+            'showmeta' => $synthesis['summary'] !== ''
+                || $synthesis['state'] === tutor_synthesis_service::STATE_PENDING
+                || $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
             'isempty' => !empty($synthesis['empty']),
             'summary' => $synthesis['summary'],
             'truncated' => !empty($synthesis['truncated']),
