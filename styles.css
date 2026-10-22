@@ -484,6 +484,15 @@ h2:has(.dixeo-sync-indicator),
     transform: rotate(90deg);
 }
 
+.dixeo-tutor-synthesis-status .spinner-border {
+    margin-right: 0.5rem;
+    vertical-align: text-bottom;
+}
+
+.dixeo-tutor-synthesis-summary {
+    white-space: pre-line;
+}
+
 /* Bootstrap 4 has no gap utilities, so the control row spaces its groups here. */
 .local-dixeo-tutor-usage-report-controls,
 .local-dixeo-tutor-usage-report-controls .dixeo-tutor-usage-report-period,

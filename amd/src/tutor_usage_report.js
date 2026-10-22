@@ -300,7 +300,7 @@ define([
                 container: 'body',
                 placement: 'top',
                 trigger: 'click',
-                title: icon.dataset.info || '',
+                title: () => icon.dataset.info || '',
             });
         });
 
@@ -351,7 +351,7 @@ define([
                 container: 'body',
                 placement: 'top',
                 trigger: 'click',
-                title: icon.dataset.info || '',
+                title: () => icon.dataset.info || '',
             });
 
             icon.addEventListener('show.bs.tooltip', () => {

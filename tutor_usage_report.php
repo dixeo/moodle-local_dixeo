@@ -63,6 +63,7 @@ if ($usesadminsetup) {
 
 $PAGE->requires->css(new moodle_url('/local/dixeo/styles.css'));
 $PAGE->requires->js_call_amd('local_dixeo/tutor_usage_report', 'init');
+$PAGE->requires->js_call_amd('local_dixeo/tutor_synthesis', 'init');
 
 $report = new tutor_usage_report_page($request->to_renderable_params());
 

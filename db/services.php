@@ -177,6 +177,25 @@ $functions = [
         'readonlysession' => true,
     ],
 
+    // Start or reuse the student conversation synthesis for one course report period.
+    'local_dixeo_request_tutor_synthesis' => [
+        'classname' => 'local_dixeo\external\request_tutor_synthesis',
+        'description' => 'Start or reuse a course tutor synthesis',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/dixeo:viewtutorusage',
+    ],
+
+    // Read a course tutor synthesis and reconcile a pending job.
+    'local_dixeo_get_tutor_synthesis' => [
+        'classname' => 'local_dixeo\external\get_tutor_synthesis',
+        'description' => 'Read a course tutor synthesis',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/dixeo:viewtutorusage',
+        'readonlysession' => true,
+    ],
+
     // Grant or withdraw analytics consent, or withdraw Terms of Use acceptance.
     'local_dixeo_save_consent' => [
         'classname' => 'local_dixeo\external\save_consent',
