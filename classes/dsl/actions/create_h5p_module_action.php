@@ -28,6 +28,7 @@ namespace local_dixeo\dsl\actions;
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\service\h5p_packaging_service;
+use local_dixeo\service\job_service;
 
 /**
  * Action handler that delegates H5P activity creation to the packaging service.
@@ -51,13 +52,21 @@ class create_h5p_module_action {
     /** @var h5p_packaging_service The packaging service used to build and provision activities. */
     protected h5p_packaging_service $packagingservice;
 
+    /** @var job_service|null Job status client, created on the first packaged-image download. */
+    private ?job_service $jobservice;
+
     /**
      * Constructor.
      *
      * @param h5p_packaging_service|null $packagingservice Custom service (defaults to a new instance).
+     * @param job_service|null $jobservice Custom job service (defaults to a new instance when a download runs).
      */
-    public function __construct(?h5p_packaging_service $packagingservice = null) {
+    public function __construct(
+        ?h5p_packaging_service $packagingservice = null,
+        ?job_service $jobservice = null
+    ) {
         $this->packagingservice = $packagingservice ?? new h5p_packaging_service();
+        $this->jobservice = $jobservice;
     }
 
     /**
@@ -98,6 +107,13 @@ class create_h5p_module_action {
             );
         }
 
+        [$content, $files] = $this->prepare_packaged_images(
+            $content,
+            $fields['image_jobs'] ?? null,
+            (int) $context['courseid'],
+            (int) ($context['userid'] ?? $USER->id)
+        );
+
         try {
             $result = $this->packagingservice->create_activity(
                 (int) $context['courseid'],
@@ -108,7 +124,8 @@ class create_h5p_module_action {
                 $mainlibrary,
                 $content,
                 $language,
-                $context['beforemod'] ?? null
+                $context['beforemod'] ?? null,
+                $files
             );
         } catch (\Throwable $e) {
             throw new dsl_exception(
@@ -141,6 +158,106 @@ class create_h5p_module_action {
             'name' => $name,
             'modulename' => 'h5pactivity',
         ];
+    }
+
+    /**
+     * Download packaged flashcard images and drop any card image that has no file.
+     *
+     * A missing, null, or empty image_jobs list skips downloading. Card images are
+     * still removed so content.json cannot point at a file the archive will not contain.
+     *
+     * @param array $content H5P content structure.
+     * @param mixed $imagejobs Resolved image_jobs list, or null when the field is absent.
+     * @param int $courseid Course the activity belongs to.
+     * @param int $userid User the image jobs are attributed to.
+     * @return array Content and a map of content-relative path to file bytes.
+     */
+    private function prepare_packaged_images(array $content, mixed $imagejobs, int $courseid, int $userid): array {
+        $files = [];
+        if (is_array($imagejobs) && $imagejobs !== []) {
+            foreach ($imagejobs as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $path = isset($entry['path']) && is_string($entry['path']) ? $entry['path'] : '';
+                $jobid = isset($entry['jobId']) && is_string($entry['jobId']) ? trim($entry['jobId']) : '';
+                if ($path === '' || $jobid === '') {
+                    continue;
+                }
+                $bytes = $this->download_packaged_image($jobid, $courseid, $userid);
+                if ($bytes === '') {
+                    continue;
+                }
+                $files[$path] = $bytes;
+            }
+        }
+
+        return [$this->drop_undownloaded_card_images($content, $files), $files];
+    }
+
+    /**
+     * Register an API image job locally and return its bytes when the job completed.
+     *
+     * @param string $jobid Remote image job UUID.
+     * @param int $courseid Course the job is bound to.
+     * @param int $userid User the job is attributed to.
+     * @return string Image bytes, or an empty string when the job has no image.
+     */
+    private function download_packaged_image(string $jobid, int $courseid, int $userid): string {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+
+        (new \local_dixeo\repository\job_repository())->register(
+            $jobid,
+            $courseid,
+            $userid,
+            \local_dixeo_get_configured_namespace(),
+            'image_generate',
+            'local_dixeo'
+        );
+
+        $status = $this->job_service()->get_job_status($jobid, $courseid, $userid);
+        if (!$status->is_completed() || !is_array($status->result)) {
+            return '';
+        }
+
+        return \local_dixeo\service\image\result_helper::extract_image_binary_from_result($status->result);
+    }
+
+    /**
+     * Remove card images whose path is not in the downloaded file map.
+     *
+     * @param array $content H5P content structure.
+     * @param array $files Content-relative path to downloaded bytes.
+     * @return array
+     */
+    private function drop_undownloaded_card_images(array $content, array $files): array {
+        if (!isset($content['cards']) || !is_array($content['cards'])) {
+            return $content;
+        }
+        foreach ($content['cards'] as $index => $card) {
+            if (!is_array($card) || !isset($card['image']) || !is_array($card['image'])) {
+                continue;
+            }
+            $path = $card['image']['path'] ?? '';
+            if (!is_string($path) || !array_key_exists($path, $files)) {
+                unset($card['image']);
+                $content['cards'][$index] = $card;
+            }
+        }
+        return $content;
+    }
+
+    /**
+     * Job status client, created when the caller did not supply one.
+     *
+     * @return job_service
+     */
+    private function job_service(): job_service {
+        if ($this->jobservice === null) {
+            $this->jobservice = new job_service();
+        }
+        return $this->jobservice;
     }
 
     /**

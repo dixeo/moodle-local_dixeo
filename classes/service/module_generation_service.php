@@ -566,6 +566,9 @@ class module_generation_service {
             )
         ) {
             $payload['generateImages'] = true;
+            // The API ignores this unless the module packages images. An older API
+            // ignores the property altogether.
+            $payload['packageImages'] = true;
         }
 
         return $payload;

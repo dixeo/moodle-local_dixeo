@@ -72,6 +72,7 @@ final class teach_lesson_service_test extends \advanced_testcase {
         $payload = $modulegeneration->build_edit_payload('page', 'Explain cells', 'Course context');
 
         $this->assertArrayNotHasKey('generateImages', $payload);
+        $this->assertArrayNotHasKey('packageImages', $payload);
     }
 
     /**
