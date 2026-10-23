@@ -16,9 +16,12 @@
 
 namespace local_dixeo;
 
-use local_dixeo\api\client;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_synthesis_service;
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/fixtures/synthesis_fake_client.php');
 
 /**
  * Course synthesis requests: one in-flight job, and no rewrite without new messages.
@@ -134,7 +137,9 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
-     * @param array $responses Responses returned by post, then get, in order.
+     * Synthesis service backed by the queued client.
+     *
+     * @param synthesis_fake_client $api Queued API client.
      * @return tutor_synthesis_service
      */
     private function service(synthesis_fake_client $api): tutor_synthesis_service {
@@ -142,6 +147,8 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
+     * Course with one enrolled student.
+     *
      * @return array{0: \stdClass, 1: \stdClass}
      */
     private function course_with_student(): array {
@@ -153,6 +160,8 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
+     * Insert a ready synthesis row.
+     *
      * @param int $courseid Course id.
      * @param string $summary Stored summary.
      */
@@ -176,6 +185,8 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
+     * Queued pending job response.
+     *
      * @return array
      */
     private function pending_job(): array {
@@ -190,6 +201,8 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
+     * Queued completed job response.
+     *
      * @param string $summary Text the API already composed.
      * @return array
      */
@@ -213,65 +226,12 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
     }
 
     /**
+     * Moodle database used by this test.
+     *
      * @return \moodle_database
      */
     private function db(): \moodle_database {
         global $DB;
         return $DB;
-    }
-}
-
-/**
- * API client that returns queued responses and records calls.
- *
- * @package    local_dixeo
- * @copyright  2026 Edunao SAS (contact@edunao.com)
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-class synthesis_fake_client extends client {
-    /** @var array Recorded calls. */
-    public array $calls = [];
-
-    /** @var array Responses consumed in order. */
-    private array $responses;
-
-    /**
-     * @param array $responses Responses for post and get, in call order.
-     */
-    public function __construct(array $responses) {
-        parent::__construct('https://api.dixeo.test', 'test-key');
-        $this->responses = $responses;
-    }
-
-    /**
-     * @param string $endpoint Endpoint.
-     * @param array $data Payload.
-     * @param string|null $idempotencykey Idempotency key.
-     * @return array
-     */
-    public function post(string $endpoint, array $data, ?string $idempotencykey = null): array {
-        $this->calls[] = ['method' => 'post', 'endpoint' => $endpoint, 'data' => $data];
-        return $this->shift();
-    }
-
-    /**
-     * @param string $endpoint Endpoint.
-     * @param array $queryparams Query.
-     * @return array
-     */
-    public function get(string $endpoint, array $queryparams = []): array {
-        $this->calls[] = ['method' => 'get', 'endpoint' => $endpoint, 'data' => $queryparams];
-        return $this->shift();
-    }
-
-    /**
-     * @return array
-     */
-    private function shift(): array {
-        $response = array_shift($this->responses);
-        if (!is_array($response)) {
-            throw new \runtime_exception('synthesis_fake_client has no response left');
-        }
-        return $response;
     }
 }

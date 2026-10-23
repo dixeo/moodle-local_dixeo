@@ -190,25 +190,26 @@ define([
         };
 
         const button = root.querySelector('[data-action="tutor-synthesis"]');
+        const requestSynthesis = () => {
+            button.disabled = true;
+            return call('local_dixeo_request_tutor_synthesis', args).then((result) => {
+                render(root, result, strings);
+                if (result.state === 'pending') {
+                    polls = 0;
+                    poll();
+                }
+                return result;
+            }).catch((error) => {
+                button.disabled = false;
+                Notification.exception(error);
+            });
+        };
         loadStrings().then((loaded) => {
             strings = loaded;
             if (root.dataset.pending === '1') {
                 poll();
             }
-            button.addEventListener('click', () => {
-                button.disabled = true;
-                call('local_dixeo_request_tutor_synthesis', args).then((result) => {
-                    render(root, result, strings);
-                    if (result.state === 'pending') {
-                        polls = 0;
-                        poll();
-                    }
-                    return result;
-                }).catch((error) => {
-                    button.disabled = false;
-                    Notification.exception(error);
-                });
-            });
+            button.addEventListener('click', requestSynthesis);
             return loaded;
         }).catch(Notification.exception);
     };

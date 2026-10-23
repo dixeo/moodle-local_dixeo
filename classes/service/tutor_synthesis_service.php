@@ -66,6 +66,8 @@ class tutor_synthesis_service {
     private tutor_usage_report_service $report;
 
     /**
+     * Wire the API client, job service, and report helper.
+     *
      * @param client|null $client API client.
      * @param job_service|null $jobs Job service.
      * @param tutor_usage_report_service|null $report Report service.
@@ -182,6 +184,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Stored synthesis for this course and namespace.
+     *
      * @param int $courseid Course id.
      * @return \stdClass|null
      */
@@ -196,6 +200,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Request body for one course window.
+     *
      * @param int $courseid Course id.
      * @param int $timestart Window start.
      * @param int $timeend Window end.
@@ -248,6 +254,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Apply the remote job status onto the stored row.
+     *
      * @param \stdClass $record Pending row.
      * @return \stdClass Row after the job status has been applied.
      */
@@ -273,6 +281,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Write a completed job result onto the stored row.
+     *
      * @param \stdClass $record Pending row.
      * @param array $result Job result.
      * @return \stdClass
@@ -309,6 +319,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Mark the stored row failed and clear its job id.
+     *
      * @param \stdClass $record Row to mark failed.
      * @return \stdClass
      */
@@ -344,6 +356,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Store the window and job id while generation is in flight.
+     *
      * @param int $courseid Course id.
      * @param int $timestart Window start.
      * @param int $timeend Window end.
@@ -392,6 +406,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * View model for the synthesis block.
+     *
      * @param \stdClass|null $record Stored row.
      * @param bool $unchanged True when the API reported no new messages.
      * @return array
@@ -441,6 +457,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Lock one course so two requests cannot start two jobs.
+     *
      * @param int $courseid Course id.
      * @return \core\lock\lock|null
      */
@@ -452,6 +470,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * Configured Dixeo namespace for this site.
+     *
      * @return string
      */
     private function namespace(): string {
@@ -461,6 +481,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * UTC instant for the synthesis request.
+     *
      * @param int $timestamp Unix timestamp.
      * @return string ISO 8601 in UTC.
      */
@@ -469,6 +491,8 @@ class tutor_synthesis_service {
     }
 
     /**
+     * User id sent as the synthesis requester.
+     *
      * @return int
      */
     private function requester_id(): int {
