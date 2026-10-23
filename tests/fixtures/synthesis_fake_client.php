@@ -74,6 +74,9 @@ class synthesis_fake_client extends client {
      */
     private function shift(): array {
         $response = array_shift($this->responses);
+        if ($response instanceof \Throwable) {
+            throw $response;
+        }
         if (!is_array($response)) {
             throw new \runtime_exception('synthesis_fake_client has no response left');
         }

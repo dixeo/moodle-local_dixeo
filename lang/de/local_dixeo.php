@@ -247,6 +247,7 @@ $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Cred
 $string['error:rate_limit'] = 'Ratenlimit überschritten. Bitte warten Sie, bevor Sie weitere Anfragen senden.';
 $string['error:slidenotinslideshow'] = 'Die angeforderte Folie gehört nicht zu dieser Slideshow.';
 $string['error:tutor_synthesis_busy'] = 'Eine Synthese wird bereits angefordert. Versuchen Sie es gleich noch einmal.';
+$string['error:tutor_synthesis_unavailable'] = 'Dieser Dienst ist nicht verfügbar. Wenden Sie sich an Ihre Administration.';
 $string['error:unexpected'] = 'Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut oder bitten Sie Ihre Administration, die Website-Protokolle zu prüfen.';
 $string['error:upstream_ai'] = 'KI-Servicefehler. Bitte versuchen Sie es später erneut.';
 $string['error:validation_failed'] = 'Die Anfrage ist ungültig. Prüfen Sie die Werte und versuchen Sie es erneut.';

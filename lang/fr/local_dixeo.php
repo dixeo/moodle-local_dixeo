@@ -247,6 +247,7 @@ $string['error:payment_required'] = 'Crédits insuffisants. Veuillez ajouter des
 $string['error:rate_limit'] = 'Limite de requêtes dépassée. Veuillez patienter avant d\'effectuer d\'autres requêtes.';
 $string['error:slidenotinslideshow'] = 'La diapositive demandée n\'appartient pas à ce diaporama.';
 $string['error:tutor_synthesis_busy'] = 'Une synthèse est déjà en cours de demande. Réessayez dans un instant.';
+$string['error:tutor_synthesis_unavailable'] = 'Ce service n\'est pas disponible. Contactez votre administrateur.';
 $string['error:unexpected'] = 'Une erreur est survenue. Veuillez réessayer ou demander à votre administrateur de consulter les journaux du site.';
 $string['error:upstream_ai'] = 'Erreur du service IA. Veuillez réessayer plus tard.';
 $string['error:validation_failed'] = 'La requête est invalide. Vérifiez les valeurs et réessayez.';

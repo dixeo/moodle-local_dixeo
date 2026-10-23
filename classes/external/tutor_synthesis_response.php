@@ -40,6 +40,7 @@ class tutor_synthesis_response {
         return new external_single_structure([
             'state' => new external_value(PARAM_ALPHA, 'empty, pending, ready, or failed'),
             'unchanged' => new external_value(PARAM_BOOL, 'True when the stored synthesis was kept'),
+            'unavailable' => new external_value(PARAM_BOOL, 'True when this API has no synthesis route'),
             'summary' => new external_value(PARAM_RAW, 'Sanitised synthesis HTML'),
             'truncated' => new external_value(PARAM_BOOL, 'True when the transcript was cut'),
             'empty' => new external_value(PARAM_BOOL, 'True when the window had no student messages'),
@@ -58,6 +59,7 @@ class tutor_synthesis_response {
         return [
             'state' => (string) $view['state'],
             'unchanged' => !empty($view['unchanged']),
+            'unavailable' => !empty($view['unavailable']),
             'summary' => (string) $view['summary'],
             'truncated' => !empty($view['truncated']),
             'empty' => !empty($view['empty']),

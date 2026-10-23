@@ -16,6 +16,7 @@
 
 namespace local_dixeo;
 
+use local_dixeo\api\exception\api_exception;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_synthesis_service;
 
@@ -104,6 +105,33 @@ final class tutor_synthesis_service_test extends \advanced_testcase {
         $this->assertSame('Students asked about fractions.', $row->summary);
         $this->assertSame(tutor_synthesis_service::STATE_READY, $row->status);
         $this->assertEqualsWithDelta(time(), (int) $row->timeend, 5);
+    }
+
+    /**
+     * An API without the synthesis route tells the teacher the service is unavailable.
+     */
+    public function test_missing_endpoint_reports_that_the_service_is_unavailable(): void {
+        $this->resetAfterTest();
+        [$course] = $this->course_with_student();
+        $this->setUser($this->getDataGenerator()->create_user());
+        set_config('namespace', 'school', 'local_dixeo');
+
+        $api = new synthesis_fake_client([
+            new api_exception(
+                'unknown_error',
+                'No route found for "POST http://staging-api.dixeo.com/v1/tutor/synthesis"',
+                404
+            ),
+        ]);
+        $service = $this->service($api);
+
+        $result = $service->request((int) $course->id);
+
+        $this->assertTrue($result['unavailable']);
+        $this->assertFalse($result['unchanged']);
+        $this->assertSame(tutor_synthesis_service::STATE_EMPTY, $result['state']);
+        $this->assertSame('', $result['summary']);
+        $this->assertFalse($this->db()->record_exists(tutor_synthesis_service::TABLE, ['courseid' => $course->id]));
     }
 
     /**

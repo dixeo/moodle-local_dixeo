@@ -17,6 +17,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\client;
+use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_status;
 use local_dixeo\job_access_mode;
 
@@ -152,7 +153,12 @@ class tutor_synthesis_service {
 
             $window = $this->current_window();
             $payload = $this->payload($courseid, $window['timestart'], $window['timeend'], $record);
-            $response = $this->client->post(self::ENDPOINT, $payload);
+            $response = $this->submit($payload);
+            if (!empty($response['unavailable'])) {
+                $view = $this->present($record, false);
+                $view['unavailable'] = true;
+                return $view;
+            }
             if (!empty($response['unchanged'])) {
                 $record = $this->remember_window($record, $window['timestart'], $window['timeend']);
                 return $this->present($record, true);
@@ -180,6 +186,25 @@ class tutor_synthesis_service {
             return $this->present($record, false);
         } finally {
             $lock->release();
+        }
+    }
+
+    /**
+     * Send the synthesis request.
+     *
+     * A 404 means this API has no synthesis route. The block shows that in the card.
+     *
+     * @param array $payload Request body.
+     * @return array
+     */
+    private function submit(array $payload): array {
+        try {
+            return $this->client->post(self::ENDPOINT, $payload);
+        } catch (api_exception $e) {
+            if ($e->get_http_status() === 404) {
+                return ['unavailable' => true];
+            }
+            throw $e;
         }
     }
 
@@ -427,6 +452,7 @@ class tutor_synthesis_service {
                 'empty' => false,
                 'jobid' => '',
                 'window' => $label,
+                'unavailable' => false,
             ];
         }
 
@@ -439,6 +465,7 @@ class tutor_synthesis_service {
             'empty' => $record->status === self::STATE_READY && $summary === '' && (int) $record->messagecount === 0,
             'jobid' => (string) ($record->jobid ?? ''),
             'window' => $label,
+            'unavailable' => false,
         ];
     }
 

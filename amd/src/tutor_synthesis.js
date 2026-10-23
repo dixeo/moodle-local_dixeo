@@ -41,6 +41,7 @@ define([
             {key: 'tutor_usage_report_synthesis_generating', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_intro', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_unchanged', component: 'local_dixeo'},
+            {key: 'error:tutor_synthesis_unavailable', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_failed', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_empty', component: 'local_dixeo'},
             {key: 'tutor_usage_report_synthesis_truncated', component: 'local_dixeo'},
@@ -51,9 +52,10 @@ define([
                 generating: values[2],
                 intro: values[3],
                 unchanged: values[4],
-                failed: values[5],
-                empty: values[6],
-                truncated: values[7],
+                unavailable: values[5],
+                failed: values[6],
+                empty: values[7],
+                truncated: values[8],
             };
         });
     };
@@ -104,7 +106,7 @@ define([
         const showWindow = hasContent && Boolean(result.window);
         body.textContent = '';
 
-        if (result.state === 'pending' || result.unchanged || result.state === 'failed' || showWindow) {
+        if (result.state === 'pending' || result.unchanged || result.unavailable || result.state === 'failed' || showWindow) {
             const row = document.createElement('div');
             row.className = 'dixeo-tutor-synthesis-meta';
             if (result.state === 'pending') {
@@ -119,6 +121,8 @@ define([
                 row.appendChild(line);
             } else if (result.unchanged) {
                 addParagraph(row, strings.unchanged, 'dixeo-tutor-synthesis-note text-muted mb-0');
+            } else if (result.unavailable) {
+                addParagraph(row, strings.unavailable, 'dixeo-tutor-synthesis-note text-muted mb-0');
             } else if (result.state === 'failed') {
                 addParagraph(row, strings.failed, 'dixeo-tutor-synthesis-note text-danger mb-0');
             }
@@ -127,7 +131,7 @@ define([
             }
             body.appendChild(row);
         }
-        if (result.state === 'empty') {
+        if (result.state === 'empty' && !result.unavailable) {
             addParagraph(body, strings.intro, 'text-muted mb-0');
         }
         if (result.empty) {

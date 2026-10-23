@@ -247,6 +247,7 @@ $string['error:payment_required'] = 'Créditos insuficientes. Adicione créditos
 $string['error:rate_limit'] = 'Limite de pedidos excedido. Aguarde antes de fazer mais pedidos.';
 $string['error:slidenotinslideshow'] = 'O diapositivo solicitado não pertence a esta apresentação.';
 $string['error:tutor_synthesis_busy'] = 'Já está a ser pedida uma síntese. Tente novamente dentro de momentos.';
+$string['error:tutor_synthesis_unavailable'] = 'Este serviço não está disponível. Contacte o administrador.';
 $string['error:unexpected'] = 'Ocorreu um erro. Tente novamente ou peça ao administrador para verificar os registos do site.';
 $string['error:upstream_ai'] = 'Erro do serviço de IA. Tente novamente mais tarde.';
 $string['error:validation_failed'] = 'O pedido é inválido. Verifique os valores e tente novamente.';

@@ -247,6 +247,7 @@ $string['error:payment_required'] = 'Insufficient credits. Please add credits to
 $string['error:rate_limit'] = 'Rate limit exceeded. Please wait before making more requests.';
 $string['error:slidenotinslideshow'] = 'The requested slide does not belong to this slideshow.';
 $string['error:tutor_synthesis_busy'] = 'A synthesis is already being requested. Try again in a moment.';
+$string['error:tutor_synthesis_unavailable'] = 'This service is not available. Contact your administrator.';
 $string['error:unexpected'] = 'Something went wrong. Please try again, or ask your administrator to check the site logs.';
 $string['error:upstream_ai'] = 'AI service error. Please try again later.';
 $string['error:validation_failed'] = 'The request is invalid. Check the values and try again.';
