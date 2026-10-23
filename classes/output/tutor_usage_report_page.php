@@ -22,6 +22,7 @@ use renderer_base;
 use core\output\paging_bar;
 use core\plugin_manager;
 use local_dixeo\event\tutor_usage_report_viewed;
+use local_dixeo\service\tutor_synthesis_service;
 use local_dixeo\service\tutor_usage_performance_service;
 use local_dixeo\service\tutor_usage_report_service;
 
@@ -251,6 +252,54 @@ class tutor_usage_report_page implements renderable, templatable {
             'tabletitle' => $this->get_table_title($request),
             'hasperformance' => $performance !== null,
             'performance' => $performance,
+            'synthesis' => $request->level === tutor_usage_report_service::LEVEL_COURSE
+                ? $this->synthesis_context($request->courseid)
+                : null,
+        ];
+    }
+
+    /**
+     * Course-level synthesis block.
+     *
+     * A failure here must not replace the rest of the report.
+     *
+     * @param int $courseid Course id.
+     * @return array
+     */
+    protected function synthesis_context(int $courseid): array {
+        $service = new tutor_synthesis_service();
+        try {
+            $synthesis = $service->get_for_course($courseid);
+        } catch (\moodle_exception $e) {
+            $window = $service->current_window();
+            $synthesis = [
+                'state' => tutor_synthesis_service::STATE_FAILED,
+                'summary' => '',
+                'truncated' => false,
+                'empty' => false,
+                'window' => $service->window_label($window['timestart'], $window['timeend']),
+            ];
+        }
+
+        $stored = $synthesis['summary'] !== '' || !empty($synthesis['empty'])
+            || $synthesis['state'] === tutor_synthesis_service::STATE_READY;
+
+        return [
+            'courseid' => $courseid,
+            'pending' => $synthesis['state'] === tutor_synthesis_service::STATE_PENDING,
+            'failed' => $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
+            'hascontent' => $synthesis['summary'] !== '',
+            'showintro' => $synthesis['state'] === tutor_synthesis_service::STATE_EMPTY,
+            'showmeta' => $synthesis['summary'] !== ''
+                || $synthesis['state'] === tutor_synthesis_service::STATE_PENDING
+                || $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
+            'isempty' => !empty($synthesis['empty']),
+            'summary' => $synthesis['summary'],
+            'truncated' => !empty($synthesis['truncated']),
+            'window' => (string) ($synthesis['window'] ?? ''),
+            'buttonlabel' => $stored
+                ? get_string('tutor_usage_report_synthesis_update', 'local_dixeo')
+                : get_string('tutor_usage_report_synthesis_button', 'local_dixeo'),
         ];
     }
 

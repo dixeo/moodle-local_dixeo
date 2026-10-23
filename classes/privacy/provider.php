@@ -75,6 +75,9 @@ class provider implements
     /** @var string Tutor usage open session table. */
     public const TABLE_TUTOR_USAGE_OPEN = 'local_dixeo_tutor_usage_open';
 
+    /** @var string Course-period synthesis of student tutor conversations. */
+    public const TABLE_TUTOR_SYNTHESIS = 'local_dixeo_tutor_synthesis';
+
     /** @var string Terms acceptance records. */
     public const TABLE_CONSENT = 'local_dixeo_consent';
 
@@ -221,6 +224,17 @@ class provider implements
         );
 
         $collection->add_database_table(
+            self::TABLE_TUTOR_SYNTHESIS,
+            [
+                'userid' => 'privacy:metadata:tutor_synthesis:userid',
+                'courseid' => 'privacy:metadata:tutor_synthesis:courseid',
+                'status' => 'privacy:metadata:tutor_synthesis:status',
+                'timecreated' => 'privacy:metadata:tutor_synthesis:timecreated',
+            ],
+            'privacy:metadata:tutor_synthesis'
+        );
+
+        $collection->add_database_table(
             self::TABLE_CONSENT,
             [
                 'userid' => 'privacy:metadata:consent:userid',
@@ -351,6 +365,16 @@ class provider implements
             'userid' => $userid,
         ]);
 
+        $sql = "SELECT ctx.id
+                  FROM {" . self::TABLE_TUTOR_SYNTHESIS . "} ts
+                  JOIN {context} ctx ON ctx.instanceid = ts.courseid AND ctx.contextlevel = :contextlevel
+                 WHERE ts.userid = :userid AND ts.courseid > 0";
+
+        $contextlist->add_from_sql($sql, [
+            'contextlevel' => CONTEXT_COURSE,
+            'userid' => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -416,6 +440,7 @@ class provider implements
             self::export_user_credit_usage($context, $userid, $courseid);
             self::export_user_image_jobs($context, $userid, $courseid);
             self::export_user_tutor_usage($context, $userid, $courseid);
+            self::export_user_tutor_synthesis($context, $userid, $courseid);
             $error = self::export_user_conversation($context, $userid, $courseid);
             $failure ??= $error;
         }
@@ -560,6 +585,90 @@ class provider implements
     }
 
     /**
+     * Export the fact that a user requested a course synthesis, not the synthesis text.
+     *
+     * The text is an aggregate about the course's students. It stays on the row
+     * when the requester is deleted.
+     *
+     * @param \context $context Export context.
+     * @param int $userid User id.
+     * @param int $courseid Course id.
+     */
+    private static function export_user_tutor_synthesis(\context $context, int $userid, int $courseid): void {
+        global $DB;
+
+        $rows = $DB->get_records(self::TABLE_TUTOR_SYNTHESIS, [
+            'courseid' => $courseid,
+            'userid' => $userid,
+        ]);
+        if (!$rows) {
+            return;
+        }
+
+        $exported = [];
+        foreach ($rows as $row) {
+            $exported[] = (object) [
+                'courseid' => (int) $row->courseid,
+                'status' => (string) $row->status,
+                'timecreated' => transform::datetime((int) $row->timecreated),
+            ];
+        }
+
+        writer::with_context($context)->export_data(
+            [get_string('privacy:path:tutor_synthesis', 'local_dixeo')],
+            (object) ['syntheses' => $exported]
+        );
+    }
+
+    /**
+     * Drop the requester from synthesis rows and keep the course aggregate.
+     *
+     * @param int $userid Requester being deleted.
+     * @param int[] $courseids Course ids in the approved context list.
+     */
+    private static function clear_tutor_synthesis_requester(int $userid, array $courseids): void {
+        global $DB;
+
+        if ($courseids === []) {
+            return;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+        $params['userid'] = $userid;
+        $params['timemodified'] = time();
+        $DB->execute(
+            "UPDATE {" . self::TABLE_TUTOR_SYNTHESIS . "}
+                SET userid = 0, timemodified = :timemodified
+              WHERE userid = :userid AND courseid {$insql}",
+            $params
+        );
+    }
+
+    /**
+     * Drop the listed requesters from one course's synthesis rows.
+     *
+     * @param int $courseid Course id.
+     * @param int[] $userids Users being deleted.
+     */
+    private static function clear_tutor_synthesis_requesters(int $courseid, array $userids): void {
+        global $DB;
+
+        if ($userids === []) {
+            return;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $params['courseid'] = $courseid;
+        $params['timemodified'] = time();
+        $DB->execute(
+            "UPDATE {" . self::TABLE_TUTOR_SYNTHESIS . "}
+                SET userid = 0, timemodified = :timemodified
+              WHERE courseid = :courseid AND userid {$insql}",
+            $params
+        );
+    }
+
+    /**
      * Export image generation job rows for a user within a course.
      *
      * @param \context $context Export context.
@@ -677,6 +786,7 @@ class provider implements
         $DB->delete_records(self::TABLE_TUTOR_USAGE_DAILY, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_TUTOR_USAGE_SESSION, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_TUTOR_USAGE_OPEN, ['courseid' => $courseid]);
+        $DB->delete_records(self::TABLE_TUTOR_SYNTHESIS, ['courseid' => $courseid]);
 
         if ($remotedeleted) {
             $DB->delete_records(self::TABLE_COURSE_AI, ['courseid' => $courseid]);
@@ -784,6 +894,7 @@ class provider implements
         foreach ($courseids as $courseid) {
             self::delete_user_tutor_usage($userid, (int) $courseid);
         }
+        self::clear_tutor_synthesis_requester($userid, $courseids);
 
         $failure = null;
         foreach ($courseids as $courseid) {
@@ -894,6 +1005,14 @@ class provider implements
             "SELECT tu.userid AS userid
                FROM {" . self::TABLE_TUTOR_USAGE_EVENT . "} tu
               WHERE tu.courseid = :courseid AND tu.userid > 0",
+            $params
+        );
+
+        $userlist->add_from_sql(
+            'userid',
+            "SELECT ts.userid AS userid
+               FROM {" . self::TABLE_TUTOR_SYNTHESIS . "} ts
+              WHERE ts.courseid = :courseid AND ts.userid > 0",
             $params
         );
     }
@@ -1012,6 +1131,7 @@ class provider implements
         foreach ($userids as $targetuserid) {
             self::delete_user_tutor_usage((int) $targetuserid, $courseid);
         }
+        self::clear_tutor_synthesis_requesters($courseid, $userids);
 
         $failure = null;
         foreach ($userids as $targetuserid) {

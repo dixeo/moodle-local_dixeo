@@ -336,6 +336,28 @@ class job_service {
     }
 
     /**
+     * Bind a job the caller already created.
+     *
+     * Used when the endpoint can answer without a job. submit_job() always
+     * posts; this only records a job id the caller already received.
+     *
+     * @param string $jobid Remote job UUID.
+     * @param string $endpoint API endpoint that created the job.
+     * @param array $payload Request payload. courseId selects the course binding.
+     * @param string|null $component Originating frankenstyle component.
+     * @param job_access_mode $accessmode Persisted access policy.
+     */
+    public function bind_submitted_job(
+        string $jobid,
+        string $endpoint,
+        array $payload,
+        ?string $component = null,
+        job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
+    ): void {
+        $this->register_job($jobid, $endpoint, $payload, $component, null, $accessmode);
+    }
+
+    /**
      * Register a local binding for a remote job using the request payload.
      *
      * @param string $jobid Remote job UUID.
@@ -425,6 +447,7 @@ class job_service {
             '/v1/modules/fill' => 'module_fill',
             '/v1/modules/edit' => 'module_edit',
             '/v1/tutor/messages' => 'tutor_message',
+            '/v1/tutor/synthesis' => 'tutor_synthesis',
             '/v1/images/generate' => 'image_generate',
             '/v1/images/edit' => 'image_edit',
             '/v1/courses/structure' => 'course_structure',

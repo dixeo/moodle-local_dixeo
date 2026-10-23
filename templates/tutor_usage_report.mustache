@@ -619,6 +619,63 @@
     </div>
     {{/hasperformance}}
 
+    {{#iscourse}}
+        <div class="card mb-4" id="dixeo-tutor-synthesis"
+             data-courseid="{{synthesis.courseid}}"
+             data-pending="{{#synthesis.pending}}1{{/synthesis.pending}}{{^synthesis.pending}}0{{/synthesis.pending}}">
+            <div class="card-header d-flex align-items-center">
+                <button type="button"
+                        class="btn btn-link p-0 mr-2 dixeo-tutor-usage-report-toggle"
+                        data-toggle="collapse"
+                        data-bs-toggle="collapse"
+                        data-target="#dixeo-tutor-synthesis-panel"
+                        data-bs-target="#dixeo-tutor-synthesis-panel"
+                        aria-expanded="true"
+                        aria-controls="dixeo-tutor-synthesis-panel"
+                        aria-labelledby="dixeo-tutor-synthesis-title">
+                    {{#pix}}t/expanded, core{{/pix}}
+                </button>
+                <h4 class="mb-0" id="dixeo-tutor-synthesis-title">{{#str}}tutor_usage_report_synthesis_title, local_dixeo{{/str}}</h4>
+                <button type="button" class="btn btn-primary dixeo-tutor-synthesis-action" data-action="tutor-synthesis"
+                        {{#synthesis.pending}}disabled{{/synthesis.pending}}>
+                    {{synthesis.buttonlabel}}
+                </button>
+            </div>
+            <div class="card-body collapse show" id="dixeo-tutor-synthesis-panel">
+                <div data-region="synthesis-body">
+                    {{#synthesis.showmeta}}
+                        <div class="dixeo-tutor-synthesis-meta">
+                            {{#synthesis.pending}}
+                                <p class="dixeo-tutor-synthesis-note dixeo-tutor-synthesis-status text-muted mb-0">
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    {{#str}}tutor_usage_report_synthesis_generating, local_dixeo{{/str}}
+                                </p>
+                            {{/synthesis.pending}}
+                            {{#synthesis.failed}}
+                                <p class="dixeo-tutor-synthesis-note text-danger mb-0">{{#str}}tutor_usage_report_synthesis_failed, local_dixeo{{/str}}</p>
+                            {{/synthesis.failed}}
+                            {{#synthesis.hascontent}}
+                                <p class="dixeo-tutor-synthesis-window text-muted mb-0">{{synthesis.window}}</p>
+                            {{/synthesis.hascontent}}
+                        </div>
+                    {{/synthesis.showmeta}}
+                    {{#synthesis.showintro}}
+                        <p class="text-muted mb-0">{{#str}}tutor_usage_report_synthesis_intro, local_dixeo{{/str}}</p>
+                    {{/synthesis.showintro}}
+                    {{#synthesis.isempty}}
+                        <p class="mb-0">{{#str}}tutor_usage_report_synthesis_empty, local_dixeo{{/str}}</p>
+                    {{/synthesis.isempty}}
+                    {{#synthesis.hascontent}}
+                        <div class="dixeo-tutor-synthesis-summary">{{{synthesis.summary}}}</div>
+                        {{#synthesis.truncated}}
+                            <p class="text-muted small mb-0">{{#str}}tutor_usage_report_synthesis_truncated, local_dixeo{{/str}}</p>
+                        {{/synthesis.truncated}}
+                    {{/synthesis.hascontent}}
+                </div>
+            </div>
+        </div>
+    {{/iscourse}}
+
     <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
             <div class="d-flex align-items-center">
