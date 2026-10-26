@@ -32,7 +32,7 @@ use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\external\service_factory;
-use local_dixeo\service\image\content\shortcode_parser;
+use local_dixeo\service\image\content\slide_featured_image;
 
 /**
  * Action handler for creating slideshow slides.
@@ -56,6 +56,18 @@ use local_dixeo\service\image\content\shortcode_parser;
 class create_slides_action {
     use action_validation;
 
+    /** @var slide_featured_image Featured image resolver. */
+    private slide_featured_image $featuredimages;
+
+    /**
+     * Create the action.
+     *
+     * @param slide_featured_image|null $featuredimages Featured image resolver, or null for the shared one.
+     */
+    public function __construct(?slide_featured_image $featuredimages = null) {
+        $this->featuredimages = $featuredimages ?? new slide_featured_image();
+    }
+
     /**
      * Execute the add_slides action.
      *
@@ -66,8 +78,6 @@ class create_slides_action {
      */
     public function execute(array $action, value_resolver $resolver): array {
         global $CFG, $DB, $USER;
-
-        require_once($CFG->dirroot . '/mod/slideshow/locallib.php');
 
         $this->validate_action($action);
 
@@ -89,6 +99,10 @@ class create_slides_action {
             (int) $moduledata['id'],
             (int) $moduledata['cmid']
         );
+
+        // Layout constants are only needed once the parent module is accepted.
+        require_once($CFG->dirroot . '/mod/slideshow/locallib.php');
+
         $cmid = (int) $cm->id;
         $slideshowinstanceid = (int) $cm->instance;
 
@@ -168,6 +182,26 @@ class create_slides_action {
                 $userid
             );
 
+            if ($this->featured_image_is_present($resolvedfields)) {
+                $queued = $this->featuredimages->queue(
+                    $slideid,
+                    $modulecontext,
+                    (int) $cm->course,
+                    $cmid,
+                    (string) $resolvedfields['featuredimage'],
+                    (string) ($resolvedfields['title'] ?? ''),
+                    $userid
+                );
+                if (!$queued) {
+                    $DB->set_field(
+                        'slideshow_slide',
+                        'layout',
+                        MOD_SLIDESHOW_LAYOUT_BACKGROUND,
+                        ['id' => $slideid]
+                    );
+                }
+            }
+
             $createdids[] = $slideid;
         }
 
@@ -243,16 +277,8 @@ class create_slides_action {
      * @return bool
      */
     private function featured_image_is_present(array $resolvedfields): bool {
-        $value = isset($resolvedfields['featuredimage']) ? trim((string) $resolvedfields['featuredimage']) : '';
-        if ($value === '') {
-            return false;
-        }
-        $parsed = shortcode_parser::find_all($value);
-        if ($parsed === []) {
-            return false;
-        }
-
-        return shortcode_parser::is_new_generation($parsed[0]);
+        $value = isset($resolvedfields['featuredimage']) ? (string) $resolvedfields['featuredimage'] : '';
+        return slide_featured_image::has_generatable_shortcode($value);
     }
 
     /**

@@ -16,6 +16,10 @@
 
 namespace local_dixeo\dsl;
 
+use local_dixeo\dsl\actions\create_slides_action;
+use local_dixeo\service\image\content\slide_featured_image;
+use local_dixeo\service\image_generation_service;
+use local_dixeo\service\job_service;
 use local_dixeo\service\plugin_installation_service;
 
 /**
@@ -37,6 +41,7 @@ final class create_slides_action_test extends \advanced_testcase {
         if (!plugin_installation_service::is_plugin_installed('mod_slideshow')) {
             $this->markTestSkipped('mod_slideshow is not installed');
         }
+        set_config('image_generation_enabled', '0', 'local_dixeo');
     }
 
     /**
@@ -113,9 +118,11 @@ final class create_slides_action_test extends \advanced_testcase {
     }
 
     /**
-     * A known content layout is kept when the featured image shortcode is present.
+     * Image generation is off, so a content layout with a shortcode becomes background.
      */
-    public function test_featured_image_shortcode_keeps_the_content_layout(): void {
+    public function test_featured_image_is_dropped_when_generation_is_disabled(): void {
+        set_config('image_generation_enabled', '0', 'local_dixeo');
+
         $slides = $this->create_slideshow('Cells', [
             'name' => 'Cells',
             'intro' => '<p>How cells work.</p>',
@@ -130,8 +137,70 @@ final class create_slides_action_test extends \advanced_testcase {
             ],
         ], true);
 
+        $this->assertSame('background', $slides[1]->layout);
+        $this->assertStringNotContainsString('[img-gen', $slides[1]->content);
+    }
+
+    /**
+     * A queued featured image keeps the content layout and is stored beside the slide.
+     */
+    public function test_featured_image_shortcode_is_stored_in_the_slide_image_area(): void {
+        global $DB;
+
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+
+        $jobmock = $this->getMockBuilder(job_service::class)
+            ->onlyMethods(['submit_job'])
+            ->getMock();
+        $jobmock->expects($this->once())
+            ->method('submit_job')
+            ->with(
+                $this->equalTo('/v1/images/generate'),
+                $this->callback(static function (array $payload): bool {
+                    return ($payload['scope'] ?? '') === 'content'
+                        && ($payload['prompt'] ?? '') === 'A cell membrane'
+                        && ($payload['size'] ?? '') === '1024x1536';
+                })
+            )
+            ->willReturn(\local_dixeo\dto\operation_result::pending('slide-image-1', 'pending'));
+
+        $slidesaction = new create_slides_action(
+            new slide_featured_image(new image_generation_service($jobmock))
+        );
+        $slides = $this->create_slideshow('Cells', [
+            'name' => 'Cells',
+            'intro' => '<p>How cells work.</p>',
+            'openingTitle' => 'A look at cells',
+            'slides' => [
+                [
+                    'title' => 'Membrane',
+                    'content' => '<p>The boundary.</p>',
+                    'layout' => 'contentleft',
+                    'featuredImage' => '[img-gen prompt="A cell membrane" mode="portrait"]',
+                ],
+            ],
+        ], true, $slidesaction);
+
         $this->assertSame('contentleft', $slides[1]->layout);
         $this->assertStringNotContainsString('[img-gen', $slides[1]->content);
+        $cm = get_coursemodule_from_instance('slideshow', (int) $slides[1]->slideshow, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+        $files = get_file_storage()->get_area_files(
+            $context->id,
+            'mod_slideshow',
+            'image',
+            (int) $slides[1]->id,
+            'filename',
+            false
+        );
+        $this->assertCount(1, $files);
+        $job = $DB->get_record('local_dixeo_image_job', [
+            'component' => 'mod_slideshow',
+            'filearea' => 'image',
+            'itemid' => $slides[1]->id,
+        ], '*', MUST_EXIST);
+        $this->assertSame('slide_featured', $job->origin);
     }
 
     /**
@@ -140,9 +209,15 @@ final class create_slides_action_test extends \advanced_testcase {
      * @param string $activityname Activity name.
      * @param array $data AI response.
      * @param bool $withlayout True to map layout and featured image fields.
+     * @param create_slides_action|null $slidesaction Slides action, or null for the default one.
      * @return \stdClass[]
      */
-    private function create_slideshow(string $activityname, array $data, bool $withlayout): array {
+    private function create_slideshow(
+        string $activityname,
+        array $data,
+        bool $withlayout,
+        ?create_slides_action $slidesaction = null
+    ): array {
         global $DB;
 
         $this->setAdminUser();
@@ -166,7 +241,7 @@ final class create_slides_action_test extends \advanced_testcase {
             $fields['featuredimage'] = ['source' => '$.featuredImage'];
         }
 
-        $cmid = (new interpreter())->execute([
+        $cmid = (new interpreter(null, null, null, $slidesaction))->execute([
             [
                 'action' => 'create_module',
                 'save_as' => 'module',
