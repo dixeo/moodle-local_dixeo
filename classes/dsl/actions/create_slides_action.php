@@ -32,6 +32,7 @@ use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\external\service_factory;
+use local_dixeo\service\image\content\shortcode_parser;
 
 /**
  * Action handler for creating slideshow slides.
@@ -43,9 +44,14 @@ use local_dixeo\external\service_factory;
  *   "foreach": "$.slides",
  *   "fields": {
  *     "title": {"source": "$.title"},
- *     "content": {"source": "$.content"}
+ *     "content": {"source": "$.content"},
+ *     "layout": {"source": "$.layout"},
+ *     "featuredimage": {"source": "$.featuredImage"}
  *   }
  * }
+ *
+ * An older API omits layout and featuredimage. The first slide is always
+ * title only. A content slide with no featured image uses the background layout.
  */
 class create_slides_action {
     use action_validation;
@@ -59,7 +65,9 @@ class create_slides_action {
      * @throws dsl_exception If creation fails.
      */
     public function execute(array $action, value_resolver $resolver): array {
-        global $DB, $USER;
+        global $CFG, $DB, $USER;
+
+        require_once($CFG->dirroot . '/mod/slideshow/locallib.php');
 
         $this->validate_action($action);
 
@@ -97,12 +105,26 @@ class create_slides_action {
         }
 
         $fieldsspec = $action['fields'] ?? [];
+        $optionalfields = [];
+        foreach (['layout', 'featuredimage'] as $optionalfield) {
+            if (isset($fieldsspec[$optionalfield])) {
+                $optionalfields[$optionalfield] = $fieldsspec[$optionalfield];
+                unset($fieldsspec[$optionalfield]);
+            }
+        }
         $createdids = [];
         $now = time();
         $modulecontext = \context_module::instance($cmid);
         $shortcodeservice = service_factory::get_content_image_shortcode_service();
         $userid = (int) ($resolver->get_context()['userid'] ?? $USER->id);
 
+        $createdids[] = $this->insert_opening_slide(
+            $resolver,
+            $slideshowinstanceid,
+            $now
+        );
+
+        $sortorder = 1;
         foreach ($slides as $index => $slideitem) {
             $itemdata = is_object($slideitem) ? (array) $slideitem : $slideitem;
 
@@ -117,6 +139,7 @@ class create_slides_action {
             // Create resolver with this slide's data for per-item field resolution.
             $itemresolver = $resolver->with_ai_data($itemdata);
             $resolvedfields = $itemresolver->resolve_fields($fieldsspec);
+            $resolvedfields += $itemresolver->resolve_fields($optionalfields, true);
 
             // Build the slide record.
             $record = new \stdClass();
@@ -124,9 +147,12 @@ class create_slides_action {
             $record->name = $resolvedfields['title'] ?? '';
             $record->content = generated_html::strip_active_content((string) ($resolvedfields['content'] ?? ''));
             $record->contentformat = FORMAT_HTML;
+            $record->layout = $this->layout_for_content_slide($resolvedfields);
+            $record->hidetitle = 0;
             $record->hidden = 0;
-            $record->sortorder = $index;
+            $record->sortorder = $sortorder;
             $record->timemodified = $now;
+            $sortorder++;
 
             // Insert the slide.
             $slideid = $DB->insert_record('slideshow_slide', $record);
@@ -146,6 +172,87 @@ class create_slides_action {
         }
 
         return $createdids;
+    }
+
+    /**
+     * Insert the title-only opening slide.
+     *
+     * The title is the API openingTitle when that response includes one, and
+     * the slideshow activity name otherwise.
+     *
+     * @param value_resolver $resolver Resolver holding the full AI response.
+     * @param int $slideshowinstanceid Slideshow instance id.
+     * @param int $now Modification time.
+     * @return int Created slide id.
+     */
+    private function insert_opening_slide(
+        value_resolver $resolver,
+        int $slideshowinstanceid,
+        int $now
+    ): int {
+        global $DB;
+
+        $aidata = $resolver->get_ai_data();
+        $opening = trim((string) ($aidata['openingTitle'] ?? ''));
+        if ($opening === '') {
+            $slideshow = $DB->get_record('slideshow', ['id' => $slideshowinstanceid], 'name', MUST_EXIST);
+            $opening = (string) $slideshow->name;
+        }
+
+        $record = new \stdClass();
+        $record->slideshow = $slideshowinstanceid;
+        $record->name = $opening;
+        $record->content = '';
+        $record->contentformat = FORMAT_HTML;
+        $record->layout = MOD_SLIDESHOW_LAYOUT_TITLEONLY;
+        $record->hidetitle = 0;
+        $record->hidden = 0;
+        $record->sortorder = 0;
+        $record->timemodified = $now;
+
+        return $DB->insert_record('slideshow_slide', $record);
+    }
+
+    /**
+     * Choose a content-slide layout.
+     *
+     * A missing layout, an unknown layout, and a content layout without a
+     * featured-image shortcode are stored as background.
+     *
+     * @param array $resolvedfields Resolved slide fields.
+     * @return string One of the MOD_SLIDESHOW_LAYOUT_* values.
+     */
+    private function layout_for_content_slide(array $resolvedfields): string {
+        $raw = isset($resolvedfields['layout']) ? trim((string) $resolvedfields['layout']) : '';
+        $known = slideshow_get_layouts();
+        if (
+            !$this->featured_image_is_present($resolvedfields)
+            || !isset($known[$raw])
+            || $raw === MOD_SLIDESHOW_LAYOUT_TITLEONLY
+        ) {
+            return MOD_SLIDESHOW_LAYOUT_BACKGROUND;
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Whether the slide carries a new featured-image shortcode.
+     *
+     * @param array $resolvedfields Resolved slide fields.
+     * @return bool
+     */
+    private function featured_image_is_present(array $resolvedfields): bool {
+        $value = isset($resolvedfields['featuredimage']) ? trim((string) $resolvedfields['featuredimage']) : '';
+        if ($value === '') {
+            return false;
+        }
+        $parsed = shortcode_parser::find_all($value);
+        if ($parsed === []) {
+            return false;
+        }
+
+        return shortcode_parser::is_new_generation($parsed[0]);
     }
 
     /**
