@@ -52,6 +52,8 @@ final class job_repository {
     public const ORIGIN_STRUCTURE = 'structure';
     /** @var string Constant ORIGIN_EDITOR_DRAFT. */
     public const ORIGIN_EDITOR_DRAFT = 'editor_draft';
+    /** @var string Featured slide image, stored in the slideshow image file area. */
+    public const ORIGIN_SLIDE_FEATURED = 'slide_featured';
 
     /** @var string Editor session table name for draft image jobs. */
     public const TARGETTABLE_EDITOR_SESSION = 'local_dixeo_editor_session';

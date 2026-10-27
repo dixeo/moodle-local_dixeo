@@ -19,6 +19,7 @@ namespace local_dixeo\service\image\apply;
 
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\apply_handler;
+use local_dixeo\service\image\content\slide_featured_image;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\html_helper as content_html_helper;
 use local_dixeo\service\image\content\location;
@@ -52,6 +53,11 @@ final class content_handler {
         ?apply_handler $modalhandler
     ): void {
         $location = $target->get_location();
+
+        if ($jobrow && ($jobrow->origin ?? '') === job_repository::ORIGIN_SLIDE_FEATURED) {
+            file_service::apply_job_result($location, $result, $userid);
+            return;
+        }
 
         if ($jobrow && $jobrow->origin === job_repository::ORIGIN_MODAL && $modalhandler !== null) {
             $modalhandler->apply_job_result($location, $result, $userid, $source);
@@ -139,6 +145,11 @@ final class content_handler {
      * @return void
      */
     public static function apply_failure(content_target $target, int $userid, ?\stdClass $jobrow): void {
+        if ($jobrow && ($jobrow->origin ?? '') === job_repository::ORIGIN_SLIDE_FEATURED) {
+            slide_featured_image::abandon($target->get_location());
+            return;
+        }
+
         $isdraft = job_repository::is_editor_draft_job($jobrow);
         // Mirror apply(): replace stub for shortcode + editor_draft; never overwrite modal images.
         $shouldreplacefile = $jobrow !== null
