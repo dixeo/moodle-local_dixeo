@@ -196,7 +196,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $this->assertSame(0, (int) $record->enabled);
     }
 
-    public function test_trigger_file_sync_resends_an_unchanged_course(): void {
+    public function test_trigger_file_sync_reports_an_unchanged_course_as_up_to_date(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
 
@@ -215,12 +215,15 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $service = new file_sync_service($repository, $mockclient);
         service_factory::set_test_file_sync_service($service);
 
-        // The automatic path skips an unchanged course; the manual trigger does not.
-        $service->trigger_sync($course->id);
-        $service->trigger_sync($course->id);
-        $result = trigger_file_sync::execute($course->id);
+        $this->assertFalse(trigger_file_sync::execute($course->id)['uptodate']);
 
+        $result = trigger_file_sync::execute($course->id);
         $this->assertTrue($result['success']);
+        $this->assertTrue($result['uptodate']);
         $this->assertSame('synchronized', $result['status']);
+
+        // A changed course is synced again.
+        $this->getDataGenerator()->create_module('resource', ['course' => $course->id]);
+        $this->assertFalse(trigger_file_sync::execute($course->id)['uptodate']);
     }
 }

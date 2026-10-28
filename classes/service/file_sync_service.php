@@ -682,19 +682,18 @@ class file_sync_service {
      * or HTTP failure of a one-file chunk, skip that file only: the course stays
      * out of date and the file is retried later. Any other failure fails the sync.
      *
-     * A forced sync (manual "Sync now") runs even when nothing changed and sends
-     * rejected files again so the API checks them anew.
+     * An unchanged course only sends the files waiting for a retry, with the full
+     * manifest: the API keeps the files it already holds.
      *
      * @param int $courseid The course ID.
-     * @param bool $force Sync an unchanged course and resend rejected files.
-     * @return void
+     * @return bool Whether a sync ran; false when off or already up to date.
      * @throws api_exception If the API request fails.
      */
-    public function trigger_sync(int $courseid, bool $force = false): void {
+    public function trigger_sync(int $courseid): bool {
         global $USER;
 
         if (!$this->dixeo_enabled($courseid)) {
-            return;
+            return false;
         }
 
         $userid = $USER->id ?? 0;
@@ -703,20 +702,17 @@ class file_sync_service {
         $record = $this->repository->get_or_create($courseid, $userid);
 
         if (!$record->enabled) {
-            return;
+            return false;
         }
 
         // Hash from stored packages only (no SCORM temp extraction until we know sync is needed).
         $filehash = $this->compute_sync_manifest_hash($courseid);
         $previous = $this->repository->get_skipped_files($courseid);
 
-        if (
-            !$force
-            && $filehash === ($record->filehash ?? null)
-            && ($record->syncstatus ?? null) === 'synchronized'
-            && !course_ai_repository::has_retry_files($previous)
-        ) {
-            return;
+        $unchanged = $filehash === ($record->filehash ?? null)
+            && ($record->syncstatus ?? null) === 'synchronized';
+        if ($unchanged && !course_ai_repository::has_retry_files($previous)) {
+            return false;
         }
 
         [$uploaditems, $sourceids] = $this->collect_upload_payload($courseid);
@@ -748,12 +744,17 @@ class file_sync_service {
                 ? []
                 : array_combine(array_keys($uploaditems), $this->compute_expected_files($uploaditems, $sourceids));
 
-            // A file the API rejected for good is not sent again until it changes.
+            // A file the API rejected for good is not sent again until it changes;
+            // an unchanged course only sends the files waiting for a retry.
             $tosend = [];
             foreach ($uploaditems as $key => $item) {
                 $entry = self::find_skipped($previous, $expectedfiles[$key]);
-                if (!$force && $entry !== null && empty($entry['retry'])) {
+                $retry = !empty($entry['retry']);
+                if ($entry !== null && !$retry) {
                     $skipped[] = $entry;
+                    continue;
+                }
+                if ($unchanged && !$retry) {
                     continue;
                 }
                 $tosend[$key] = $item;
@@ -762,7 +763,10 @@ class file_sync_service {
             if ($tosend === []) {
                 // Nothing left to index (no files, or only files the API does not manage).
                 // Clear the remote store as well; POST /v1/files rejects an empty payload.
-                $this->client->delete_files((string) $courseid);
+                // An unchanged course keeps its store: its retry entries matched no file.
+                if (!$unchanged) {
+                    $this->client->delete_files((string) $courseid);
+                }
                 $this->repository->set_skipped_files($courseid, $skipped);
                 $this->repository->update_sync_status($courseid, 'synchronized', [
                     'filestotal' => 0,
@@ -770,7 +774,7 @@ class file_sync_service {
                     'progresspercent' => 100,
                 ]);
                 $this->repository->update_filehash($courseid, $filehash);
-                return;
+                return true;
             }
 
             $manifest = array_values($expectedfiles);
@@ -788,8 +792,9 @@ class file_sync_service {
             );
             $this->repository->set_skipped_files($courseid, $skipped);
 
-            if ($failures['error'] !== null) {
+            if ($failures['error'] !== null && !$unchanged) {
                 // No chunk reached the API, so the manifest could not be sent.
+                // An unchanged course's store already holds it.
                 throw $failures['error'];
             }
 
@@ -803,6 +808,7 @@ class file_sync_service {
                 $this->repository->clear_error($courseid);
             }
             $this->repository->update_filehash($courseid, $filehash);
+            return true;
         } catch (api_exception $e) {
             // Persist a short UI-safe message only — never raw API response bodies.
             $errormessage = $e->get_error_code() . ': ' . $e->getMessage();
@@ -852,7 +858,7 @@ class file_sync_service {
                     null,
                     $isfinal,
                     $isfinal ? $manifest : null,
-                    count($items)
+                    count($manifest)
                 );
             } catch (api_exception $e) {
                 if (count($keys) !== 1 || !self::is_retryable_failure($e)) {
@@ -893,7 +899,7 @@ class file_sync_service {
                     null,
                     true,
                     $manifest,
-                    count($items)
+                    count($manifest)
                 );
                 $this->log_api_rejections($result);
                 $rejections = array_merge($rejections, $this->extract_api_rejections($result));

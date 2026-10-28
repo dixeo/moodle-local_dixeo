@@ -68,12 +68,13 @@ class trigger_file_sync extends external_api {
         $service = service_factory::get_file_sync_service();
 
         try {
-            $service->trigger_sync($params['courseid'], true);
+            $synced = $service->trigger_sync($params['courseid']);
 
             $status = $service->get_status($params['courseid']);
 
             return [
                 'success' => true,
+                'uptodate' => !$synced,
                 'status' => $status->status,
                 'filestotal' => $status->filestotal,
                 'filescompleted' => $status->filescompleted,
@@ -95,6 +96,7 @@ class trigger_file_sync extends external_api {
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Whether the sync succeeded'),
+            'uptodate' => new external_value(PARAM_BOOL, 'Whether the course was already up to date', VALUE_OPTIONAL),
             'status' => new external_value(PARAM_ALPHANUMEXT, 'Current sync status'),
             'filestotal' => new external_value(PARAM_INT, 'Total files synced', VALUE_OPTIONAL),
             'filescompleted' => new external_value(PARAM_INT, 'Files successfully synced', VALUE_OPTIONAL),

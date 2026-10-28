@@ -115,11 +115,12 @@ final class file_sync_service_skip_test extends \advanced_testcase {
         $this->assertCount(1, $tasks);
         $this->assertGreaterThan(time() + 200, (int) reset($tasks)->get_next_run_time());
 
-        // The course is not up to date: the next sync sends the files again.
+        // The next sync sends that file only. Failing again does not fail the course:
+        // its store already holds the manifest.
         $this->calls = [];
-        $service->trigger_sync($course->id);
+        $this->assertTrue($service->trigger_sync($course->id));
         $this->assertDebuggingCalled();
-        $this->assertCount(2, $this->calls);
+        $this->assertSame([['files' => ['big.pdf'], 'final' => true, 'manifest' => ['big.pdf', 'notes.txt']]], $this->calls);
         $this->assertSame(2, (int) $repository->get_by_courseid($course->id)->errorcount);
         $this->assertSame('synchronized', $service->get_status($course->id)->status);
 
@@ -146,6 +147,31 @@ final class file_sync_service_skip_test extends \advanced_testcase {
         $this->assertTrue($this->calls[2]['final']);
         $this->assertSame(['first.pdf', 'second.pdf'], $this->calls[2]['manifest']);
         $this->assertSame('synchronized', $service->get_status($course->id)->status);
+    }
+
+    public function test_retry_of_an_unchanged_course_keeps_a_carrier_for_a_skipped_final_chunk(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $mb = 1024 * 1024;
+        [$course] = $this->create_course_with_files(['first.pdf' => 6 * $mb, 'second.pdf' => 5 * $mb, 'notes.txt' => 4 * $mb]);
+
+        $repository = new course_ai_repository();
+        $service = new file_sync_service($repository, $this->mock_client(['first.pdf' => 504, 'second.pdf' => 504]));
+        $service->trigger_sync($course->id);
+        $this->resetDebugging();
+
+        $this->calls = [];
+        $service = new file_sync_service($repository, $this->mock_client(['second.pdf' => 504]));
+        $service->trigger_sync($course->id);
+        $this->assertDebuggingCalled();
+
+        $manifest = ['first.pdf', 'second.pdf', 'notes.txt'];
+        $this->assertSame([
+            ['files' => ['first.pdf'], 'final' => false, 'manifest' => null],
+            ['files' => ['second.pdf'], 'final' => true, 'manifest' => $manifest],
+            ['files' => ['first.pdf'], 'final' => true, 'manifest' => $manifest],
+        ], $this->calls);
+        $this->assertSame(['second.pdf'], array_column($repository->get_skipped_files($course->id), 'filename'));
     }
 
     public function test_sync_fails_when_no_chunk_reaches_the_api(): void {
@@ -213,25 +239,28 @@ final class file_sync_service_skip_test extends \advanced_testcase {
         $this->assertSame('unsupported', $rows['bad.txt']['reason']);
         $this->assertSame('synced', $rows['good.txt']['state']);
 
-        // A retry sends the flaky file again but not the rejected one, which stays listed.
+        // A retry of the unchanged course sends the flaky file only, with the full manifest.
         $this->calls = [];
         $service = new file_sync_service($repository, $this->mock_client([]));
-        $service->trigger_sync($course->id);
-        $this->assertSame(['flaky.txt', 'good.txt'], $this->calls[0]['files']);
-        $this->assertSame(['bad.txt', 'flaky.txt', 'good.txt'], $this->calls[0]['manifest']);
+        $this->assertTrue($service->trigger_sync($course->id));
+        $manifest = ['bad.txt', 'flaky.txt', 'good.txt'];
+        $this->assertSame([['files' => ['flaky.txt'], 'final' => true, 'manifest' => $manifest]], $this->calls);
         $reasons = array_column($repository->get_skipped_files($course->id), 'reason', 'filename');
         $this->assertSame(['bad.txt' => 'unsupported'], $reasons);
         $this->assertCount(3, $cms);
 
         // Without files to retry, an unchanged course is not sent again.
         $this->calls = [];
-        $service->trigger_sync($course->id);
+        $this->assertFalse($service->trigger_sync($course->id));
         $this->assertSame([], $this->calls);
 
-        // A forced sync sends it all again, the rejected file included.
-        $service->trigger_sync($course->id, true);
-        $this->assertSame(['bad.txt', 'flaky.txt', 'good.txt'], $this->calls[0]['files']);
-        $this->assertSame([], $repository->get_skipped_files($course->id));
+        // A changed course is sent in full, except the rejected file.
+        $this->add_file($course, 'new.txt', 5);
+        $this->assertTrue($service->trigger_sync($course->id));
+        $this->assertSame(['flaky.txt', 'good.txt', 'new.txt'], $this->calls[0]['files']);
+        $this->assertSame(['bad.txt', 'flaky.txt', 'good.txt', 'new.txt'], $this->calls[0]['manifest']);
+        $reasons = array_column($repository->get_skipped_files($course->id), 'reason', 'filename');
+        $this->assertSame(['bad.txt' => 'unsupported'], $reasons);
     }
 
     public function test_ensure_does_not_resync_or_verify_while_files_wait_for_a_retry(): void {
@@ -259,27 +288,39 @@ final class file_sync_service_skip_test extends \advanced_testcase {
      */
     private function create_course_with_files(array $files): array {
         $course = $this->getDataGenerator()->create_course();
-        $fs = get_file_storage();
         $cms = [];
         foreach ($files as $filename => $size) {
-            $cm = $this->getDataGenerator()->create_module('resource', ['course' => $course->id]);
-            $context = \context_module::instance($cm->cmid);
-            $fs->delete_area_files($context->id, 'mod_resource', 'content');
-            $fs->create_file_from_string([
-                'contextid' => $context->id,
-                'component' => 'mod_resource',
-                'filearea' => 'content',
-                'itemid' => 0,
-                'filepath' => '/',
-                'filename' => $filename,
-            ], str_repeat('x', $size));
-            $cms[] = $cm;
+            $cms[] = $this->add_file($course, $filename, $size);
         }
 
         $repository = new course_ai_repository();
         $repository->create($course->id, get_admin()->id);
         $repository->set_enabled($course->id, true, get_admin()->id);
         return [$course, $cms];
+    }
+
+    /**
+     * Add a resource holding only the given file.
+     *
+     * @param \stdClass $course
+     * @param string $filename
+     * @param int $size
+     * @return \stdClass The resource module.
+     */
+    private function add_file(\stdClass $course, string $filename, int $size): \stdClass {
+        $cm = $this->getDataGenerator()->create_module('resource', ['course' => $course->id]);
+        $context = \context_module::instance($cm->cmid);
+        $fs = get_file_storage();
+        $fs->delete_area_files($context->id, 'mod_resource', 'content');
+        $fs->create_file_from_string([
+            'contextid' => $context->id,
+            'component' => 'mod_resource',
+            'filearea' => 'content',
+            'itemid' => 0,
+            'filepath' => '/',
+            'filename' => $filename,
+        ], str_repeat('x', $size));
+        return $cm;
     }
 
     /**

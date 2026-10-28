@@ -332,6 +332,7 @@ define([
             'filesync_files_count',
             'filesync_files_count_partial',
             'filesync_progress',
+            'filesync_uptodate',
             'files',
             'last_sync',
         ];
@@ -1093,6 +1094,7 @@ define([
             });
         }
         let request;
+        let uptodate = false;
         if (action === 'resync') {
             request = Ajax.call([{
                 methodname: 'local_dixeo_trigger_file_sync',
@@ -1143,11 +1145,16 @@ define([
                 reloadAppliedPage();
                 return null;
             }
+            uptodate = !!(result && result.uptodate);
             return refreshStatus(shell, true);
         }).catch(function(error) {
             Notification.exception(error);
             return refreshStatus(shell, false);
         }).then(function() {
+            const message = shell.querySelector('[data-region="status-message"]');
+            if (uptodate && message && statusStrings) {
+                message.textContent = statusStrings.filesync_uptodate;
+            }
             delete shell.dataset.statusbusy;
             if (panel) {
                 panel.querySelectorAll('button').forEach(function(button) {

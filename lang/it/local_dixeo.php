@@ -320,6 +320,7 @@ $string['filesync_status_synchronized'] = 'File sincronizzati';
 $string['filesync_status_syncing'] = 'Sincronizzazione in corso...';
 $string['filesync_timeout'] = 'Timeout della sincronizzazione file prima dell\'indicizzazione dei file del corso';
 $string['filesync_title'] = 'Sincronizzazione file Dixeo';
+$string['filesync_uptodate'] = 'Corso già aggiornato';
 $string['generation_language'] = 'Lingua di generazione';
 $string['generation_language_desc'] = 'Lingua dei quiz e delle lezioni generati dal tutor. All\'inizio corrisponde alla lingua preferita.';
 $string['generation_output_language'] = 'LINGUA: Genera tutti i contenuti per gli studenti (domande, risposte, testo della lezione e titoli) in {$a->language}.';
