@@ -76,11 +76,11 @@ final class file_sync_service_ignore_test extends \advanced_testcase {
         self::assertSame('notes.txt', $chunks[0][0]->filename);
         self::assertSame('slides.pptx', $chunks[1][0]->filename);
 
-        $manifest = $service->compute_expected_files($managed);
+        $manifest = $service->compute_expected_files($managed, [11, 22, 33, 44]);
         self::assertSame(
             [
-                ['hash' => hash_file('sha256', $small->path), 'filename' => 'notes.txt'],
-                ['hash' => hash_file('sha256', $withinlimit->path), 'filename' => 'slides.pptx'],
+                ['hash' => hash_file('sha256', $small->path), 'filename' => 'notes.txt', 'sourceId' => '11'],
+                ['hash' => hash_file('sha256', $withinlimit->path), 'filename' => 'slides.pptx', 'sourceId' => '22'],
             ],
             $manifest
         );
@@ -118,9 +118,9 @@ final class file_sync_service_ignore_test extends \advanced_testcase {
     }
 
     /**
-     * UPLOAD_FAILED still fails the course, even when another file was only too large.
+     * UPLOAD_FAILED is retried on a later sync and does not fail the course. An unknown code still does.
      */
-    public function test_upload_failed_rejection_fails_the_course_sync(): void {
+    public function test_only_an_unknown_rejection_code_fails_the_course_sync(): void {
         $this->resetAfterTest();
         $service = new file_sync_service();
 
@@ -134,10 +134,15 @@ final class file_sync_service_ignore_test extends \advanced_testcase {
             'code' => 'UPLOAD_FAILED',
             'reason' => 'provider error',
         ];
+        $unknown = [
+            'filename' => 'other.pdf',
+            'code' => 'SOMETHING_NEW',
+            'reason' => 'rejected',
+        ];
 
         self::assertSame(
-            [$uploadfailed],
-            $service->fatal_api_rejections([$toolarge, $uploadfailed])
+            [$unknown],
+            $service->fatal_api_rejections([$toolarge, $uploadfailed, $unknown])
         );
     }
 

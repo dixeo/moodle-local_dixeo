@@ -82,6 +82,7 @@ class get_file_sync_status extends external_api {
             'errormessage' => $status->errormessage ?? '',
             'lastsyncstarted' => $status->lastsyncstarted ?? 0,
             'lastsynccompleted' => $status->lastsynccompleted ?? 0,
+            'filesskipped' => $status->filesskipped ?? 0,
             'files' => $service->list_status_files($params['courseid'], (string) $status->status),
         ];
     }
@@ -101,13 +102,14 @@ class get_file_sync_status extends external_api {
             'errormessage' => new external_value(PARAM_RAW, 'Error message if status is error', VALUE_OPTIONAL),
             'lastsyncstarted' => new external_value(PARAM_INT, 'Timestamp of last sync start', VALUE_OPTIONAL),
             'lastsynccompleted' => new external_value(PARAM_INT, 'Timestamp of last successful sync', VALUE_OPTIONAL),
+            'filesskipped' => new external_value(PARAM_INT, 'Number of files the last sync left out', VALUE_OPTIONAL),
             'files' => new external_multiple_structure(
                 new external_single_structure([
                     'filename' => new external_value(PARAM_TEXT, 'File name'),
                     'state' => new external_value(PARAM_ALPHA, 'synced, syncing, or problem'),
                     'reason' => new external_value(
                         PARAM_ALPHANUMEXT,
-                        'toolarge, unsupported, empty, error, or blank when the file is synced or syncing',
+                        'toolarge, unsupported, empty, error, retry, or blank when the file is synced or syncing',
                         VALUE_OPTIONAL
                     ),
                 ])

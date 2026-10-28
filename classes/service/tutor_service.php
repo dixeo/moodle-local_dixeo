@@ -70,6 +70,9 @@ class tutor_service {
     /**
      * Submit a tutor message (user, assistant, or system).
      *
+     * A file sync problem never stops the message: it is logged and the tutor
+     * answers from the files already indexed.
+     *
      * @param int $courseid The course ID.
      * @param int $userid The user ID.
      * @param tutor_message $message Unified message DTO.
@@ -85,7 +88,12 @@ class tutor_service {
         string $mode = tutor_message::MODE_NORMAL,
         int $cmid = 0
     ): operation_result {
-        service_factory::get_file_sync_service()->ensure_enabled_and_synchronized($courseid, $userid);
+        try {
+            service_factory::get_file_sync_service()->ensure_enabled_and_synchronized($courseid, $userid);
+        } catch (\Throwable $e) {
+            // The tutor answers from what is already indexed. The course status keeps the sync error.
+            debugging('local_dixeo: file sync before a tutor message failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
         $message->validate();
 
         $payload = $this->build_submit_payload($courseid, $userid, $message, $mode);
@@ -111,7 +119,7 @@ class tutor_service {
      * @param string $sinceid Optional message ID cursor for newer messages (delta).
      * @param int $limit Maximum number of messages to return per request.
      * @param int $offset Skip that many messages, counted from the newest when no cursor is supplied.
-     * @return array Array of message objects with id, role, content, time keys.
+     * @return array Array of message objects with id, role, content, time keys, and sources when cited.
      * @throws api_exception If the API request fails.
      */
     public function get_conversation(
@@ -125,7 +133,8 @@ class tutor_service {
         $offset = max(0, $offset);
 
         return $this->map_raw_messages(
-            $this->request_messages($courseid, $userid, $sinceid, $limit, $offset)
+            $this->request_messages($courseid, $userid, $sinceid, $limit, $offset),
+            $courseid
         );
     }
 
@@ -287,9 +296,10 @@ class tutor_service {
     /**
      * Map raw messages.
      * @param array $rawmessages
+     * @param int $courseid Course the conversation belongs to, for source resolution.
      * @return array
      */
-    private function map_raw_messages(array $rawmessages): array {
+    private function map_raw_messages(array $rawmessages, int $courseid): array {
         $messages = [];
 
         foreach ($rawmessages as $msg) {
@@ -315,11 +325,55 @@ class tutor_service {
             if ($instructions !== null && $instructions !== '') {
                 $normalized['instructions'] = $instructions;
             }
+            if (!empty($msg['sources']) && is_array($msg['sources'])) {
+                $normalized['sources'] = self::resolve_sources($msg['sources'], $courseid);
+            }
 
             $messages[] = $normalized;
         }
 
         return $messages;
+    }
+
+    /**
+     * Resolve the API source references to activities the current user can see.
+     *
+     * Resolved at read time so renames show; hidden or restricted activities resolve
+     * to null so their names never leak. Keys follow the API list, which the
+     * {{cite:N}} placeholders of the content index from 1.
+     *
+     * @param array $rawsources API rows with sourceId (cmid), file (null when cited from the course context) and pages.
+     * @param int $courseid The course ID.
+     * @return array List of null or ['cmid', 'name', 'url', 'iconurl', 'file' => ?string, 'pages' => int[]].
+     */
+    private static function resolve_sources(array $rawsources, int $courseid): array {
+        $cms = get_fast_modinfo($courseid)->get_cms();
+        $sources = [];
+
+        foreach (array_values($rawsources) as $i => $raw) {
+            $cmid = is_array($raw) ? (int) ($raw['sourceId'] ?? 0) : 0;
+            $cm = $cms[$cmid] ?? null;
+            if ($cm === null || !$cm->uservisible || $cm->url === null) {
+                $sources[$i] = null;
+                continue;
+            }
+
+            $file = (string) ($raw['file'] ?? '');
+            $pages = is_array($raw['pages'] ?? null) ? array_map('intval', $raw['pages']) : [];
+            $pages = array_filter(array_unique($pages), fn(int $page): bool => $page > 0);
+            sort($pages);
+
+            $sources[$i] = [
+                'cmid' => $cmid,
+                'name' => $cm->get_formatted_name(['escape' => false]),
+                'url' => $cm->url->out(false),
+                'iconurl' => $cm->get_icon_url()->out(false),
+                'file' => $file !== '' ? $file : null,
+                'pages' => $file !== '' ? $pages : [],
+            ];
+        }
+
+        return $sources;
     }
 
     /**
@@ -492,7 +546,7 @@ class tutor_service {
      * @return string The complete instruction string.
      */
     private function build_instructions(int $courseid): string {
-        return context_builder_factory::buildCourseContext($courseid, null, 'assessment');
+        return context_builder_factory::course($courseid, null, 'assessment')->with_activity_refs()->build();
     }
 
     /**

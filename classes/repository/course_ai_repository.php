@@ -44,9 +44,6 @@ class course_ai_repository {
     /** @var int Retry delay in seconds after third error (1 hour). */
     private const RETRY_DELAY_THIRD = 3600;
 
-    /** @var int Maximum number of retries before stopping auto-retry. */
-    private const MAX_RETRY_COUNT = 3;
-
     /**
      * Get the course AI record by course ID.
      *
@@ -140,7 +137,10 @@ class course_ai_repository {
 
         if ($status === 'synchronized') {
             $update->lastsynccompleted = time();
-            // Clear error state on successful sync.
+        }
+
+        // Clear error state on a successful sync. Files waiting for a retry keep the backoff count.
+        if ($status === 'synchronized' && !self::has_retry_files(self::parse_skipped_files($record->skippedfiles ?? null))) {
             $update->errorcount = 0;
             $update->errormessage = null;
             $update->lasterrorat = null;
@@ -221,6 +221,32 @@ class course_ai_repository {
     }
 
     /**
+     * Count a sync that left files to send again as a failed attempt.
+     *
+     * Feeds the same backoff as {@see record_error()} without changing the sync status,
+     * so the course still shows as synchronized with files left out.
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     */
+    public function record_retry_pending(int $courseid): void {
+        global $DB;
+
+        $record = $this->get_by_courseid($courseid);
+        if ($record === null) {
+            return;
+        }
+
+        $update = new \stdClass();
+        $update->id = $record->id;
+        $update->errorcount = (int) $record->errorcount + 1;
+        $update->lasterrorat = time();
+        $update->timemodified = time();
+
+        $DB->update_record(self::TABLE, $update);
+    }
+
+    /**
      * Clear the error state for a course.
      *
      * @param int $courseid The course ID.
@@ -252,7 +278,8 @@ class course_ai_repository {
     /**
      * Get the retry delay in seconds based on error count.
      *
-     * Uses exponential backoff: 5min -> 15min -> 1hour -> stop.
+     * Uses exponential backoff: 5min -> 15min -> 1hour -> stop, so a course
+     * gets at most three automatic retries.
      *
      * @param int $courseid The course ID.
      * @return int The delay in seconds, or 0 if no retry should occur.
@@ -269,36 +296,6 @@ class course_ai_repository {
             3 => self::RETRY_DELAY_THIRD,
             default => 0,
         };
-    }
-
-    /**
-     * Check if the course should auto-retry after an error.
-     *
-     * Returns true if the error count is within limits and enough time has passed.
-     *
-     * @param int $courseid The course ID.
-     * @return bool True if auto-retry should proceed.
-     */
-    public function should_auto_retry(int $courseid): bool {
-        $record = $this->get_by_courseid($courseid);
-        if ($record === null) {
-            return false;
-        }
-
-        if ((int) $record->errorcount >= self::MAX_RETRY_COUNT) {
-            return false;
-        }
-
-        if ($record->lasterrorat === null) {
-            return true;
-        }
-
-        $delay = $this->get_retry_delay($courseid);
-        if ($delay === 0) {
-            return false;
-        }
-
-        return (time() - $record->lasterrorat) >= $delay;
     }
 
     /**
@@ -319,6 +316,70 @@ class course_ai_repository {
         $update = new \stdClass();
         $update->id = $record->id;
         $update->filehash = $filehash;
+        $update->timemodified = time();
+
+        $DB->update_record(self::TABLE, $update);
+    }
+
+    /**
+     * Files the last sync left out.
+     *
+     * @param int $courseid The course ID.
+     * @return array[] Entries with filename, reason, and optional hash, code, and retry.
+     */
+    public function get_skipped_files(int $courseid): array {
+        $record = $this->get_by_courseid($courseid);
+        return $record === null ? [] : self::parse_skipped_files($record->skippedfiles ?? null);
+    }
+
+    /**
+     * Whether some skipped files wait for a later sync.
+     *
+     * @param array[] $entries Skipped-file entries.
+     * @return bool
+     */
+    public static function has_retry_files(array $entries): bool {
+        foreach ($entries as $entry) {
+            if (!empty($entry['retry'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Decode a stored skipped-file list.
+     *
+     * @param string|null $value Column value.
+     * @return array[]
+     */
+    public static function parse_skipped_files(?string $value): array {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+    }
+
+    /**
+     * Replace the list of files the last sync left out.
+     *
+     * @param int $courseid The course ID.
+     * @param array[] $files Entries as returned by {@see get_skipped_files()}.
+     * @return void
+     */
+    public function set_skipped_files(int $courseid, array $files): void {
+        global $DB;
+
+        $record = $this->get_by_courseid($courseid);
+        if ($record === null) {
+            return;
+        }
+
+        $update = new \stdClass();
+        $update->id = $record->id;
+        $update->skippedfiles = $files === [] ? null : json_encode(array_values($files));
         $update->timemodified = time();
 
         $DB->update_record(self::TABLE, $update);
@@ -348,6 +409,7 @@ class course_ai_repository {
         $update->errormessage = null;
         $update->lasterrorat = null;
         $update->filehash = null;
+        $update->skippedfiles = null;
         $update->lastsyncstarted = null;
         $update->lastsynccompleted = null;
         $update->timemodified = time();

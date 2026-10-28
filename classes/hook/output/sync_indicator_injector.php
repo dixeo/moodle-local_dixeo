@@ -143,6 +143,7 @@ class sync_indicator_injector {
             $status->filestotal,
             $status->filescompleted,
             $placement,
+            $status->filesskipped,
         ]);
     }
 
@@ -156,6 +157,9 @@ class sync_indicator_injector {
      */
     private static function prepare_template_context(int $courseid, \stdClass $status, bool $canmanagesync = false): array {
         $statusclass = $status->enabled ? $status->status : 'disabled';
+        if (self::is_partial($status)) {
+            $statusclass = 'partial';
+        }
 
         $context = [
             'courseid' => $courseid,
@@ -198,6 +202,16 @@ class sync_indicator_injector {
     }
 
     /**
+     * Whether the course is synchronized but the last sync left files out.
+     *
+     * @param \stdClass $status The status object.
+     * @return bool
+     */
+    private static function is_partial(\stdClass $status): bool {
+        return $status->enabled && $status->status === 'synchronized' && !empty($status->filesskipped);
+    }
+
+    /**
      * Get the tooltip text for the indicator.
      *
      * @param \stdClass $status The status object.
@@ -206,6 +220,10 @@ class sync_indicator_injector {
     private static function get_tooltip(\stdClass $status): string {
         if (!$status->enabled) {
             return get_string('filesync_status_disabled', 'local_dixeo');
+        }
+
+        if (self::is_partial($status)) {
+            return get_string('filesync_status_partial', 'local_dixeo');
         }
 
         return match ($status->status) {

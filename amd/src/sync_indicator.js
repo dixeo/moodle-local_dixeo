@@ -29,6 +29,9 @@ let currentStatus = 'none';
 /** @type {boolean} Whether sync is enabled. */
 let isEnabled = true;
 
+/** @type {number} Files the last sync left out. */
+let skippedCount = 0;
+
 /** @type {Object|null} Tooltip strings, loaded once. */
 let labels = null;
 
@@ -37,6 +40,7 @@ const STATUS_MODIFIERS = [
     'none',
     'syncing',
     'synchronized',
+    'partial',
     'error',
     'outdated',
     'paused',
@@ -69,11 +73,13 @@ const toNumber = (value, fallback = 0) => hasNumber(value) ? Number(value) : fal
  * @param {number} filesTotal Total number of files.
  * @param {number} filesCompleted Files synced so far.
  * @param {string} [placement] coursetitle moves the pill to the heading. footer moves it into the page footer.
+ * @param {number} [filesSkipped] Files the last sync left out.
  */
-const init = (courseid, status, enabled, filesTotal, filesCompleted, placement) => {
+const init = (courseid, status, enabled, filesTotal, filesCompleted, placement, filesSkipped) => {
     courseId = courseid;
     currentStatus = status;
     isEnabled = enabled;
+    skippedCount = toNumber(filesSkipped);
 
     // Title sits beside the heading. Footer is moved into the dark footer bar.
     if (placement === 'footer') {
@@ -109,6 +115,7 @@ const loadLabels = () => {
         'filesync_status_none',
         'filesync_status_syncing',
         'filesync_status_synchronized',
+        'filesync_status_partial',
         'filesync_status_error',
         'filesync_status_paused',
         'filesync_status_disabled',
@@ -350,6 +357,7 @@ const pollStatus = () => {
 const updateFromStatus = (status) => {
     currentStatus = status.status;
     isEnabled = status.enabled === true || status.enabled === 1 || status.enabled === '1';
+    skippedCount = toNumber(status.filesskipped);
 
     updateIndicatorUI(status);
     document.dispatchEvent(new CustomEvent('local_dixeo_syncstatus_updated', {
@@ -376,9 +384,13 @@ const updateIndicatorUI = (status = null) => {
     container.dataset.status = currentStatus;
     container.dataset.enabled = isEnabled ? '1' : '0';
 
+    // Synchronized with files left out shows a warning, not a clean sync.
+    const partial = isEnabled && currentStatus === 'synchronized' && skippedCount > 0;
     let statusClass = currentStatus;
     if (!isEnabled) {
         statusClass = 'disabled';
+    } else if (partial) {
+        statusClass = 'partial';
     }
     STATUS_MODIFIERS.forEach((name) => {
         button.classList.remove(`dixeo-sync-btn--${name}`);
@@ -389,6 +401,8 @@ const updateIndicatorUI = (status = null) => {
         const key = `filesync_status_${currentStatus}`;
         if (!isEnabled) {
             tip = labels.filesync_status_disabled;
+        } else if (partial) {
+            tip = labels.filesync_status_partial;
         } else if (labels[key]) {
             tip = labels[key];
         }

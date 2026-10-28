@@ -195,4 +195,32 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         $record = $repository->get_by_courseid($course->id);
         $this->assertSame(0, (int) $record->enabled);
     }
+
+    public function test_trigger_file_sync_resends_an_unchanged_course(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('resource', ['course' => $course->id]);
+        $repository = new course_ai_repository();
+        $repository->create($course->id, get_admin()->id);
+        $repository->set_enabled($course->id, true, get_admin()->id);
+
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('is_configured')->willReturn(true);
+        $mockclient->method('get_files_status')->willReturn(['status' => 'synchronized']);
+        $mockclient->expects($this->exactly(2))->method('upload_files')
+            ->willReturn(['uploaded' => 1, 'failedFiles' => []]);
+
+        $service = new file_sync_service($repository, $mockclient);
+        service_factory::set_test_file_sync_service($service);
+
+        // The automatic path skips an unchanged course; the manual trigger does not.
+        $service->trigger_sync($course->id);
+        $service->trigger_sync($course->id);
+        $result = trigger_file_sync::execute($course->id);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('synchronized', $result['status']);
+    }
 }

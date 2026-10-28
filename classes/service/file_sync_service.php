@@ -115,6 +115,9 @@ class file_sync_service {
         'MIME_TYPE_UNDETECTABLE',
     ];
 
+    /** @var string[] API rejection codes of a file that a later sync sends again. */
+    private const RETRYABLE_REJECTION_CODES = ['UPLOAD_FAILED'];
+
     /** @var course_ai_repository Repository for course AI records. */
     private course_ai_repository $repository;
 
@@ -225,7 +228,8 @@ class file_sync_service {
      * When sync is on, refreshes and waits for a synchronized (or empty) status.
      *
      * Used before RAG-backed API jobs (tutor messages, module generation).
-     * Does nothing when Dixeo is off for the course.
+     * Does nothing when Dixeo is off for the course. A synchronized course with
+     * files waiting for a retry is not re-synced here: queued retries send them.
      *
      * @param int $courseid The course ID.
      * @param int $userid Unused. Sync is not turned on for this user.
@@ -252,13 +256,25 @@ class file_sync_service {
             return;
         }
 
+        $record = $this->repository->get_by_courseid($courseid);
+        if (
+            $record !== null
+            && $record->syncstatus === 'synchronized'
+            && course_ai_repository::has_retry_files($this->repository->get_skipped_files($courseid))
+        ) {
+            return;
+        }
+
         $this->trigger_sync($courseid);
 
         $deadline = time() + $timeoutseconds;
         while (time() < $deadline) {
             $status = $this->poll_status($courseid);
             if ($status->status === 'synchronized' || $status->status === 'none') {
-                self::mark_verified($courseid);
+                // Files waiting for a retry keep the course out of date.
+                if (!course_ai_repository::has_retry_files($this->repository->get_skipped_files($courseid))) {
+                    self::mark_verified($courseid);
+                }
                 return;
             }
             if ($status->status === 'error') {
@@ -514,7 +530,8 @@ class file_sync_service {
      *
      * @param int $courseid The course ID.
      * @return \stdClass Status object with: enabled, status, filestotal, filescompleted,
-     *                   progresspercent, errormessage, lastsyncstarted, lastsynccompleted.
+     *                   progresspercent, errormessage, lastsyncstarted, lastsynccompleted,
+     *                   filesskipped.
      */
     public function get_status(int $courseid): \stdClass {
         $record = $this->repository->get_by_courseid($courseid);
@@ -530,6 +547,7 @@ class file_sync_service {
             $status->errormessage = null;
             $status->lastsyncstarted = null;
             $status->lastsynccompleted = null;
+            $status->filesskipped = 0;
             return $status;
         }
 
@@ -541,6 +559,7 @@ class file_sync_service {
         $status->errormessage = $record->errormessage;
         $status->lastsyncstarted = $record->lastsyncstarted;
         $status->lastsynccompleted = $record->lastsynccompleted;
+        $status->filesskipped = count(course_ai_repository::parse_skipped_files($record->skippedfiles ?? null));
 
         return $status;
     }
@@ -574,7 +593,8 @@ class file_sync_service {
             $this->fetch_remote_file_list($courseid),
             $syncstatus,
             (int) ($timing->lastsyncstarted ?? 0),
-            (int) ($timing->lastsynccompleted ?? 0)
+            (int) ($timing->lastsynccompleted ?? 0),
+            $this->repository->get_skipped_files($courseid)
         );
     }
 
@@ -589,6 +609,7 @@ class file_sync_service {
      * @param string $syncstatus Course sync status.
      * @param int $lastsyncstarted Start of the latest sync, or 0 when none has started.
      * @param int $lastsynccompleted End of the latest completed sync, or 0 when none has finished.
+     * @param array[] $skippedfiles Files the last sync left out, with their reason.
      * @return array[]
      */
     public function classify_sync_files(
@@ -596,9 +617,11 @@ class file_sync_service {
         ?array $remotefiles,
         string $syncstatus,
         int $lastsyncstarted = 0,
-        int $lastsynccompleted = 0
+        int $lastsynccompleted = 0,
+        array $skippedfiles = []
     ): array {
         $remote = $this->index_remote_files($remotefiles);
+        $skipped = array_column($skippedfiles, 'reason', 'filename');
         $rows = [];
         foreach ($localfiles as $index => $file) {
             if (!is_array($file)) {
@@ -613,7 +636,8 @@ class file_sync_service {
                 $remote,
                 $syncstatus,
                 $lastsyncstarted,
-                $lastsynccompleted
+                $lastsynccompleted,
+                $skipped
             );
             $row['sort'] = $index;
             $rows[] = $row;
@@ -643,23 +667,30 @@ class file_sync_service {
     /**
      * Trigger an immediate file sync for a course.
      *
-     * Collects all syncable files from the course and uploads them to the API
-     * in chunks of at most {@see self::CHUNK_MAX_FILES} files or
+     * Collects all syncable files from the course and uploads them to the API,
+     * largest first, in chunks of at most {@see self::CHUNK_MAX_FILES} files or
      * {@see self::CHUNK_MAX_BYTES} bytes (first limit reached closes the chunk).
+     * The last chunk, which makes the API start indexing, then holds the smallest files.
      *
      * All chunks but the last are sent as append-only (finalChunk=false).
      * The last chunk carries the full manifest of expected file hashes and
      * filenames so the remote store knows which older files to drop.
      *
      * Files over 20 MB and empty files are omitted and do not fail the sync.
-     * A validation rejection from the API does not fail the course either.
-     * UPLOAD_FAILED, and a transport or HTTP failure, still do.
+     * A validation rejection from the API does not fail the course either, and
+     * the file is not sent again until it changes. UPLOAD_FAILED, and a transport
+     * or HTTP failure of a one-file chunk, skip that file only: the course stays
+     * out of date and the file is retried later. Any other failure fails the sync.
+     *
+     * A forced sync (manual "Sync now") runs even when nothing changed and sends
+     * rejected files again so the API checks them anew.
      *
      * @param int $courseid The course ID.
+     * @param bool $force Sync an unchanged course and resend rejected files.
      * @return void
      * @throws api_exception If the API request fails.
      */
-    public function trigger_sync(int $courseid): void {
+    public function trigger_sync(int $courseid, bool $force = false): void {
         global $USER;
 
         if (!$this->dixeo_enabled($courseid)) {
@@ -677,15 +708,27 @@ class file_sync_service {
 
         // Hash from stored packages only (no SCORM temp extraction until we know sync is needed).
         $filehash = $this->compute_sync_manifest_hash($courseid);
+        $previous = $this->repository->get_skipped_files($courseid);
 
         if (
-            $filehash === ($record->filehash ?? null)
+            !$force
+            && $filehash === ($record->filehash ?? null)
             && ($record->syncstatus ?? null) === 'synchronized'
+            && !course_ai_repository::has_retry_files($previous)
         ) {
             return;
         }
 
-        $uploaditems = $this->select_managed_files($this->collect_upload_payload($courseid));
+        [$uploaditems, $sourceids] = $this->collect_upload_payload($courseid);
+        $manageditems = $this->select_managed_files($uploaditems);
+        $skipped = [];
+        foreach (array_diff_key($uploaditems, $manageditems) as $item) {
+            $skipped[] = [
+                'filename' => $this->item_filename($item),
+                'reason' => $this->item_size($item) <= 0 ? 'empty' : 'toolarge',
+            ];
+        }
+        $uploaditems = $this->order_largest_first($manageditems);
 
         // Release the session lock for this request so other requests (e.g. file-sync status polls)
         // can run while the outbound upload is in flight.
@@ -697,12 +740,30 @@ class file_sync_service {
         file_sync_triggered::create_for_course($courseid, (int) $userid, (int) $record->id)->trigger();
 
         try {
-            $filecount = count($uploaditems);
+            // Pre-compute the full manifest. It is only needed on the final
+            // chunk (so the API knows what to keep) but we build it up front
+            // so any hashing error fails the whole sync before we start
+            // sending partial data over the wire.
+            $expectedfiles = $uploaditems === []
+                ? []
+                : array_combine(array_keys($uploaditems), $this->compute_expected_files($uploaditems, $sourceids));
 
-            if ($filecount === 0) {
+            // A file the API rejected for good is not sent again until it changes.
+            $tosend = [];
+            foreach ($uploaditems as $key => $item) {
+                $entry = self::find_skipped($previous, $expectedfiles[$key]);
+                if (!$force && $entry !== null && empty($entry['retry'])) {
+                    $skipped[] = $entry;
+                    continue;
+                }
+                $tosend[$key] = $item;
+            }
+
+            if ($tosend === []) {
                 // Nothing left to index (no files, or only files the API does not manage).
                 // Clear the remote store as well; POST /v1/files rejects an empty payload.
                 $this->client->delete_files((string) $courseid);
+                $this->repository->set_skipped_files($courseid, $skipped);
                 $this->repository->update_sync_status($courseid, 'synchronized', [
                     'filestotal' => 0,
                     'filescompleted' => 0,
@@ -712,43 +773,35 @@ class file_sync_service {
                 return;
             }
 
-            // Pre-compute the full manifest. It is only needed on the final
-            // chunk (so the API knows what to keep) but we build it up front
-            // so any hashing error fails the whole sync before we start
-            // sending partial data over the wire.
-            $expectedfiles = $this->compute_expected_files($uploaditems);
+            $manifest = array_values($expectedfiles);
+            $failures = $this->upload_chunks($courseid, $tosend, $manifest);
 
-            $chunks = $this->build_chunks($uploaditems);
-            $totalchunks = count($chunks);
-
-            $lastresult = null;
-            $failedfiles = [];
-            foreach ($chunks as $idx => $chunk) {
-                $isfinal = ($idx === $totalchunks - 1);
-                $chunkmanifest = $isfinal ? $expectedfiles : null;
-
-                $lastresult = $this->client->upload_files(
-                    (string) $courseid,
-                    $chunk,
-                    null,
-                    null,
-                    $isfinal,
-                    $chunkmanifest,
-                    $filecount
-                );
-                $this->log_api_rejections($lastresult);
-                $failedfiles = array_merge($failedfiles, $this->extract_api_rejections($lastresult));
-            }
-
-            $fatalfiles = $this->fatal_api_rejections($failedfiles);
+            $fatalfiles = $this->fatal_api_rejections($failures['rejections']);
             if ($fatalfiles !== []) {
                 $message = count($fatalfiles) . ' file(s) were rejected by the Dixeo API';
                 throw new api_exception('file_sync_rejections', $message, 422, ['failedFiles' => $fatalfiles]);
             }
 
+            $skipped = array_merge(
+                $skipped,
+                $this->skipped_after_upload($tosend, $expectedfiles, $failures)
+            );
+            $this->repository->set_skipped_files($courseid, $skipped);
+
+            if ($failures['error'] !== null) {
+                // No chunk reached the API, so the manifest could not be sent.
+                throw $failures['error'];
+            }
+
             $this->poll_status($courseid);
 
-            $this->repository->clear_error($courseid);
+            if (course_ai_repository::has_retry_files($skipped)) {
+                // Files to send again count as a failed attempt for the course retry backoff.
+                $this->repository->record_retry_pending($courseid);
+                $this->queue_sync_retry($courseid);
+            } else {
+                $this->repository->clear_error($courseid);
+            }
             $this->repository->update_filehash($courseid, $filehash);
         } catch (api_exception $e) {
             // Persist a short UI-safe message only — never raw API response bodies.
@@ -762,6 +815,236 @@ class file_sync_service {
     }
 
     /**
+     * Send the upload items in chunks, the last one with the manifest.
+     *
+     * A one-file chunk that fails in transport or with a retryable HTTP status
+     * skips that file. When the final chunk is skipped, a file the API already
+     * accepted in this sync carries the manifest instead: the API keeps it without
+     * a new upload, and POST /v1/files rejects a request without files.
+     *
+     * @param int $courseid The course ID.
+     * @param array $items Items to send, largest first, keyed like the manifest.
+     * @param array[] $manifest Full manifest of expected files.
+     * @return array rejections (API failedFiles entries), skipped (item key to exception),
+     *               and error (the last skip when no chunk could carry the manifest, else null).
+     * @throws api_exception When a chunk fails for any other reason.
+     */
+    private function upload_chunks(int $courseid, array $items, array $manifest): array {
+        $chunks = $this->chunk_keys($items);
+        $lastindex = count($chunks) - 1;
+        $rejections = [];
+        $skipped = [];
+        $carrierkey = null;
+        $finalsent = false;
+
+        foreach ($chunks as $index => $keys) {
+            $isfinal = $index === $lastindex;
+            $chunk = [];
+            foreach ($keys as $key) {
+                $chunk[] = $items[$key];
+            }
+
+            try {
+                $result = $this->client->upload_files(
+                    (string) $courseid,
+                    $chunk,
+                    null,
+                    null,
+                    $isfinal,
+                    $isfinal ? $manifest : null,
+                    count($items)
+                );
+            } catch (api_exception $e) {
+                if (count($keys) !== 1 || !self::is_retryable_failure($e)) {
+                    throw $e;
+                }
+                debugging(sprintf(
+                    'local_dixeo: skipping "%s" after a failed upload [%s]: %s',
+                    $this->item_filename($items[$keys[0]]),
+                    $e->get_error_code(),
+                    $e->getMessage()
+                ), DEBUG_DEVELOPER);
+                $skipped[$keys[0]] = $e;
+                continue;
+            }
+
+            $this->log_api_rejections($result);
+            $chunkrejections = $this->extract_api_rejections($result);
+            $rejections = array_merge($rejections, $chunkrejections);
+            $finalsent = $finalsent || $isfinal;
+
+            $rejectednames = array_column($chunkrejections, 'filename');
+            foreach ($keys as $key) {
+                if (!in_array($this->item_filename($items[$key]), $rejectednames, true)) {
+                    $carrierkey = $key;
+                }
+            }
+        }
+
+        $error = null;
+        if (!$finalsent) {
+            if ($carrierkey === null) {
+                $error = end($skipped);
+            } else {
+                $result = $this->client->upload_files(
+                    (string) $courseid,
+                    [$items[$carrierkey]],
+                    null,
+                    null,
+                    true,
+                    $manifest,
+                    count($items)
+                );
+                $this->log_api_rejections($result);
+                $rejections = array_merge($rejections, $this->extract_api_rejections($result));
+            }
+        }
+
+        return ['rejections' => $rejections, 'skipped' => $skipped, 'error' => $error];
+    }
+
+    /**
+     * Skipped-file entries for the files this sync sent but the API did not take.
+     *
+     * A transport failure, UPLOAD_FAILED, or a rejection without a code is retried.
+     *
+     * @param array $items Items sent, keyed like $expectedfiles.
+     * @param array[] $expectedfiles Manifest entry of each item.
+     * @param array $failures Result of {@see self::upload_chunks()}.
+     * @return array[]
+     */
+    private function skipped_after_upload(array $items, array $expectedfiles, array $failures): array {
+        $failed = [];
+        foreach (array_keys($failures['skipped']) as $key) {
+            $failed[$key] = 'UPLOAD_FAILED';
+        }
+        foreach ($failures['rejections'] as $rejection) {
+            $filename = (string) ($rejection['filename'] ?? '');
+            foreach ($items as $key => $item) {
+                if (!isset($failed[$key]) && $this->item_filename($item) === $filename) {
+                    $failed[$key] = (string) ($rejection['code'] ?? '');
+                    break;
+                }
+            }
+        }
+
+        $entries = [];
+        foreach ($failed as $key => $code) {
+            $manifestentry = $expectedfiles[$key];
+            $entry = [
+                'filename' => $manifestentry['filename'],
+                'hash' => $manifestentry['hash'],
+                'code' => $code,
+                'reason' => self::rejection_reason($code),
+            ];
+            if ($code === '' || in_array($code, self::RETRYABLE_REJECTION_CODES, true)) {
+                $entry['retry'] = true;
+            }
+            $entries[] = $entry;
+        }
+        return $entries;
+    }
+
+    /**
+     * Status-row reason for an API rejection code.
+     *
+     * @param string $code Machine-readable code, or '' when the API sent none.
+     * @return string
+     */
+    private static function rejection_reason(string $code): string {
+        return match ($code) {
+            'FILE_EMPTY' => 'empty',
+            'FILE_TOO_LARGE' => 'toolarge',
+            'FILENAME_MISSING_EXTENSION', 'EXTENSION_NOT_ALLOWED',
+            'MIME_TYPE_MISMATCH', 'MIME_TYPE_UNDETECTABLE' => 'unsupported',
+            'FILE_UNREADABLE' => 'error',
+            default => 'retry',
+        };
+    }
+
+    /**
+     * Whether a chunk failure may come from that chunk's file and pass on a later sync.
+     *
+     * Covers transport errors, timeouts, payloads refused by a gateway, and
+     * server errors. Authentication, credit, rate-limit, and validation errors
+     * concern the whole course and still fail the sync.
+     *
+     * @param api_exception $e
+     * @return bool
+     */
+    private static function is_retryable_failure(api_exception $e): bool {
+        if ($e->get_error_code() === 'connection_error') {
+            return true;
+        }
+        $status = $e->get_http_status();
+        return $status === 408 || $status === 413 || $status >= 500;
+    }
+
+    /**
+     * Stored entry for a manifest file, matched on hash and filename.
+     *
+     * @param array[] $entries Skipped-file entries.
+     * @param array $manifestentry Entry with hash and filename.
+     * @return array|null
+     */
+    private static function find_skipped(array $entries, array $manifestentry): ?array {
+        foreach ($entries as $entry) {
+            if (
+                ($entry['hash'] ?? null) === $manifestentry['hash']
+                && ($entry['filename'] ?? null) === $manifestentry['filename']
+            ) {
+                return $entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Queue a delayed course sync after a failed attempt, using the course backoff.
+     *
+     * The delay follows the course error count ({@see course_ai_repository::get_retry_delay()}),
+     * and nothing is queued once it runs out. A sync already waiting for the course is kept.
+     * A running task is not counted, so a task can queue its own retry.
+     *
+     * @param int $courseid The course ID.
+     * @return bool True when a retry was queued.
+     */
+    public function queue_sync_retry(int $courseid): bool {
+        $delay = $this->repository->get_retry_delay($courseid);
+        if ($delay <= 0) {
+            return false;
+        }
+
+        $classname = '\\local_dixeo\\task\\process_file_sync';
+        foreach (\core\task\manager::get_adhoc_tasks($classname, false, true) as $existing) {
+            $data = $existing->get_custom_data();
+            if (isset($data->courseid) && (int) $data->courseid === $courseid) {
+                return false;
+            }
+        }
+
+        $task = new \local_dixeo\task\process_file_sync();
+        $task->set_custom_data((object) ['courseid' => $courseid]);
+        $task->set_next_run_time(time() + $delay);
+        \core\task\manager::queue_adhoc_task($task);
+        return true;
+    }
+
+    /**
+     * Order upload items by size, largest first, keeping their keys.
+     *
+     * Equal sizes keep their order. The final chunk then holds the smallest files.
+     *
+     * @param array $items Upload items (\stored_file|file_upload_part).
+     * @return array
+     */
+    public function order_largest_first(array $items): array {
+        $sizes = array_map(fn($item): int => $this->item_size($item), $items);
+        uksort($items, static fn($a, $b): int => $sizes[$b] <=> $sizes[$a]);
+        return $items;
+    }
+
+    /**
      * Drop files the API does not index.
      *
      * Files larger than {@see self::MAX_FILE_SIZE} and empty files are omitted.
@@ -769,14 +1052,14 @@ class file_sync_service {
      * SCORM extract parts go through this same size check.
      *
      * @param array $items Upload items (\stored_file|file_upload_part).
-     * @return array Items to upload, in the original order.
+     * @return array Items to upload, in the original order and with their original keys.
      */
     public function select_managed_files(array $items): array {
         $managed = [];
-        foreach ($items as $item) {
+        foreach ($items as $key => $item) {
             $reason = $this->ignored_file_reason($item);
             if ($reason === null) {
-                $managed[] = $item;
+                $managed[$key] = $item;
                 continue;
             }
             debugging(sprintf(
@@ -792,7 +1075,8 @@ class file_sync_service {
      * Per-file API rejections that fail the course sync.
      *
      * Size, type, empty, and unreadable files are ignored, as is an entry
-     * with no machine-readable code. UPLOAD_FAILED still fails the sync.
+     * with no machine-readable code. UPLOAD_FAILED is retried on a later sync.
+     * Only a code this plugin does not know fails the sync.
      *
      * @param array $failedfiles Entries from a chunk upload failedFiles list.
      * @return array[]
@@ -804,7 +1088,11 @@ class file_sync_service {
                 continue;
             }
             $code = (string) ($entry['code'] ?? '');
-            if ($code === '' || in_array($code, self::IGNORABLE_REJECTION_CODES, true)) {
+            if (
+                $code === ''
+                || in_array($code, self::IGNORABLE_REJECTION_CODES, true)
+                || in_array($code, self::RETRYABLE_REJECTION_CODES, true)
+            ) {
                 continue;
             }
             $fatal[] = $entry;
@@ -842,10 +1130,28 @@ class file_sync_service {
      */
     public function build_chunks(array $items): array {
         $chunks = [];
+        foreach ($this->chunk_keys($items) as $keys) {
+            $chunk = [];
+            foreach ($keys as $key) {
+                $chunk[] = $items[$key];
+            }
+            $chunks[] = $chunk;
+        }
+        return $chunks;
+    }
+
+    /**
+     * Keys of each batch built by {@see self::build_chunks()}.
+     *
+     * @param array $items Upload items (\stored_file|file_upload_part).
+     * @return array[] Lists of item keys, in order.
+     */
+    private function chunk_keys(array $items): array {
+        $chunks = [];
         $current = [];
         $currentbytes = 0;
 
-        foreach ($items as $item) {
+        foreach ($items as $key => $item) {
             $size = $this->item_size($item);
             $currentcount = count($current);
             $wouldexceedcount = $currentcount >= self::CHUNK_MAX_FILES;
@@ -858,7 +1164,7 @@ class file_sync_service {
                 $currentbytes = 0;
             }
 
-            $current[] = $item;
+            $current[] = $key;
             $currentbytes += $size;
         }
 
@@ -874,16 +1180,19 @@ class file_sync_service {
      *
      * Stored files are hashed via a streaming handle to keep memory bounded;
      * local upload parts are hashed directly from their on-disk path.
+     * The source id lets the API cite the activity a file comes from.
      *
      * @param array $items Upload items.
+     * @param int[] $sourceids Course module id of each item, same keys as $items.
      * @return array[] File manifest entries in the same order as $items.
      */
-    public function compute_expected_files(array $items): array {
+    public function compute_expected_files(array $items, array $sourceids): array {
         $files = [];
-        foreach ($items as $item) {
+        foreach ($items as $i => $item) {
             $files[] = [
                 'hash' => $this->hash_item($item),
                 'filename' => $this->item_filename($item),
+                'sourceId' => (string) $sourceids[$i],
             ];
         }
         return $files;
@@ -1126,7 +1435,7 @@ class file_sync_service {
                 $context = \context_module::instance($cm->id);
                 $modulefiles = $this->get_module_files($cm->modname, $context, $fs);
                 foreach ($modulefiles as $file) {
-                    $lines[] = $file->get_contenthash() . '|' . $file->get_filename();
+                    $lines[] = 'cm' . $cm->id . '|' . $file->get_contenthash() . '|' . $file->get_filename();
                 }
             } else if ($cm->modname === 'scorm') {
                 if (!$cm->visible) {
@@ -1134,7 +1443,7 @@ class file_sync_service {
                 }
                 $package = $this->scormextract->get_package_file($cm);
                 if ($package) {
-                    $lines[] = 'scorm_cm' . $cm->id . '|' . $package->get_contenthash();
+                    $lines[] = 'cm' . $cm->id . '|scorm|' . $package->get_contenthash();
                 }
             }
         }
@@ -1148,12 +1457,13 @@ class file_sync_service {
      * Empty SCORM extracts are omitted; debugging() records the skip (see scorm_vector_extract_service).
      *
      * @param int $courseid The course ID.
-     * @return array Array of \stored_file|file_upload_part.
+     * @return array [\stored_file|file_upload_part[], int[]] Items and the cmid of each item.
      */
     private function collect_upload_payload(int $courseid): array {
         $modinfo = get_fast_modinfo($courseid);
         $fs = get_file_storage();
         $payload = [];
+        $sourceids = [];
 
         foreach ($modinfo->get_cms() as $cm) {
             if (in_array($cm->modname, self::FILE_MODULE_TYPES, true)) {
@@ -1164,6 +1474,7 @@ class file_sync_service {
                 $modulefiles = $this->get_module_files($cm->modname, $context, $fs);
                 foreach ($modulefiles as $file) {
                     $payload[] = $file;
+                    $sourceids[] = (int) $cm->id;
                 }
             } else if ($cm->modname === 'scorm') {
                 if (!$cm->visible) {
@@ -1172,21 +1483,12 @@ class file_sync_service {
                 $part = $this->scormextract->try_build_upload_part($cm);
                 if ($part !== null) {
                     $payload[] = $part;
+                    $sourceids[] = (int) $cm->id;
                 }
             }
         }
 
-        return $payload;
-    }
-
-    /**
-     * Check if auto-retry should proceed for a course.
-     *
-     * @param int $courseid The course ID.
-     * @return bool True if auto-retry should proceed.
-     */
-    public function should_retry_on_error(int $courseid): bool {
-        return $this->repository->should_auto_retry($courseid);
+        return [$payload, $sourceids];
     }
 
     /**
@@ -1387,6 +1689,7 @@ class file_sync_service {
      * @param string $syncstatus Course sync status.
      * @param int $lastsyncstarted Start of the latest sync, or 0 when none has started.
      * @param int $lastsynccompleted End of the latest completed sync, or 0 when none has finished.
+     * @param string[] $skipped Reason of each file the last sync left out, by upload filename.
      * @return array
      */
     private function classify_one_status_file(
@@ -1394,7 +1697,8 @@ class file_sync_service {
         ?array $remote,
         string $syncstatus,
         int $lastsyncstarted = 0,
-        int $lastsynccompleted = 0
+        int $lastsynccompleted = 0,
+        array $skipped = []
     ): array {
         $filename = (string) $file['filename'];
         $size = (int) ($file['size'] ?? 0);
@@ -1426,6 +1730,14 @@ class file_sync_service {
                     'reason' => 'toolarge',
                 ];
             }
+        }
+
+        if (isset($skipped[$remotename])) {
+            return [
+                'filename' => $filename,
+                'state' => 'problem',
+                'reason' => (string) $skipped[$remotename],
+            ];
         }
 
         $entry = is_array($remote) ? ($remote[$remotename] ?? null) : null;

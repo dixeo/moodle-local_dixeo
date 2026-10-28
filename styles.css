@@ -186,6 +186,12 @@ h2:has(.dixeo-sync-indicator),
     background: #f59e0b;
 }
 
+/* Synchronized with files left out - amber dot with a ring */
+#dixeo-sync-indicator .dixeo-sync-btn--partial .dixeo-sync-btn__dot {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
+
 /* Disabled - gray faded dot. Listed last so it wins over the status colour. */
 .dixeo-sync-btn--disabled .dixeo-sync-btn__dot,
 #dixeo-sync-indicator[data-enabled="0"] .dixeo-sync-btn__dot {

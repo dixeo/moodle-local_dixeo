@@ -54,6 +54,28 @@ final class tutor_service_test extends \advanced_testcase {
         service_factory::set_test_file_sync_service($sync);
     }
 
+    public function test_submit_sends_the_message_when_file_sync_fails(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+
+        $sync = $this->createMock(file_sync_service::class);
+        $sync->expects($this->once())
+            ->method('ensure_enabled_and_synchronized')
+            ->willThrowException(new \moodle_exception('filesync_timeout', 'local_dixeo'));
+        service_factory::set_test_file_sync_service($sync);
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_job')
+            ->willReturn(operation_result::pending('job-sync', 'pending', 0));
+
+        $message = new tutor_message(tutor_message::ROLE_USER, 'Hello', ['schema' => 'page', 'version' => 1]);
+        $result = (new tutor_service($mockjob))->submit((int) $course->id, 2, $message);
+
+        $this->assertSame('job-sync', $result->jobid);
+        $this->assertDebuggingCalled();
+    }
+
     public function test_get_conversation_initial_load_fetches_single_page(): void {
         $page = [];
         for ($i = 1; $i <= 50; $i++) {
@@ -207,6 +229,8 @@ final class tutor_service_test extends \advanced_testcase {
 
     public function test_submit_practice_quiz_review_appends_course_structure(): void {
         $this->resetAfterTest();
+        // The context lists what the current user can see, as for the learner in production.
+        $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
         $this->getDataGenerator()->create_module('page', [
             'course' => $course->id,
@@ -255,6 +279,8 @@ final class tutor_service_test extends \advanced_testcase {
 
     public function test_submit_proactive_system_message_appends_course_structure(): void {
         $this->resetAfterTest();
+        // The context lists what the current user can see, as for the learner in production.
+        $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
         $this->getDataGenerator()->create_module('page', [
             'course' => $course->id,
@@ -359,6 +385,83 @@ final class tutor_service_test extends \advanced_testcase {
 
         $this->assertSame('page', $messages[0]['context']['schema']);
         $this->assertSame('https://example.test/page', $messages[0]['context']['url']);
+    }
+
+    public function test_get_conversation_resolves_only_sources_the_user_can_see(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('enableavailability', 1);
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $student = $generator->create_and_enrol($course, 'student');
+        $visible = $generator->create_module('resource', ['course' => $course->id, 'name' => 'Cours & PDF']);
+        $hidden = $generator->create_module('resource', ['course' => $course->id, 'visible' => 0]);
+        $restricted = $generator->create_module('resource', [
+            'course' => $course->id,
+            'availability' => json_encode(\core_availability\tree::get_root_json([
+                \availability_date\condition::get_json('>=', time() + DAYSECS),
+            ])),
+        ]);
+        $label = $generator->create_module('label', ['course' => $course->id]);
+
+        $messages = $this->conversation_with_sources($course->id, $student, [
+            ['sourceId' => (string) $visible->cmid, 'file' => 'cours.pdf', 'pages' => [5, 3, 5]],
+            ['sourceId' => (string) $hidden->cmid, 'file' => 'hidden.pdf', 'pages' => [1]],
+            ['sourceId' => (string) $restricted->cmid, 'file' => 'later.pdf', 'pages' => [2]],
+            ['sourceId' => (string) $label->cmid, 'file' => null, 'pages' => []],
+            ['sourceId' => '999999', 'file' => 'gone.pdf', 'pages' => [4]],
+            ['sourceId' => null, 'file' => 'unknown.pdf', 'pages' => [6]],
+            ['sourceId' => (string) $visible->cmid, 'file' => null, 'pages' => []],
+        ]);
+
+        $cm = get_fast_modinfo($course->id)->get_cm($visible->cmid);
+        $resolved = [
+            'cmid' => (int) $visible->cmid,
+            'name' => 'Cours & PDF',
+            'url' => (new \moodle_url('/mod/resource/view.php', ['id' => $visible->cmid]))->out(false),
+            'iconurl' => $cm->get_icon_url()->out(false),
+        ];
+        $this->assertSame([
+            $resolved + ['file' => 'cours.pdf', 'pages' => [3, 5]],
+            null,
+            null,
+            null,
+            null,
+            null,
+            $resolved + ['file' => null, 'pages' => []],
+        ], $messages[0]['sources']);
+    }
+
+    public function test_get_conversation_omits_sources_when_none_cited(): void {
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('get')->willReturn([
+            ['id' => 'a1', 'role' => 'assistant', 'content' => 'No citation', 'sources' => []],
+            ['id' => 'a2', 'role' => 'assistant', 'content' => 'No citation either'],
+        ]);
+
+        $messages = (new tutor_service(null, $mockclient))->get_conversation(1, 2);
+
+        $this->assertArrayNotHasKey('sources', $messages[0]);
+        $this->assertArrayNotHasKey('sources', $messages[1]);
+    }
+
+    /**
+     * Load a one-message conversation carrying the given sources, as the given user.
+     *
+     * @param int $courseid
+     * @param \stdClass $user
+     * @param array $sources Raw API source rows.
+     * @return array Mapped messages.
+     */
+    private function conversation_with_sources(int $courseid, \stdClass $user, array $sources): array {
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('get')->willReturn([
+            ['id' => 'a1', 'role' => 'assistant', 'content' => 'Answer', 'sources' => $sources],
+        ]);
+
+        $this->setUser($user);
+        return (new tutor_service(null, $mockclient))->get_conversation($courseid, (int) $user->id);
     }
 
     /**

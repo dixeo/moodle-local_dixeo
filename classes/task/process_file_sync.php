@@ -92,38 +92,24 @@ class process_file_sync extends adhoc_task {
         } catch (api_exception $e) {
             mtrace("process_file_sync: Error syncing course {$courseid}: " . $e->getMessage());
 
-            // Schedule retry if appropriate.
-            if ($service->should_retry_on_error($courseid)) {
-                $this->schedule_retry($courseid, $service);
-            }
+            $this->schedule_retry($courseid, $service);
         } catch (\Throwable $e) {
             mtrace("process_file_sync: Unexpected error for course {$courseid}: " . $e->getMessage());
         }
     }
 
     /**
-     * Schedule a retry task with appropriate backoff.
+     * Schedule a retry task with the course backoff, until the retries run out.
      *
      * @param int $courseid The course ID.
      * @param file_sync_service $service The sync service.
      * @return void
      */
     private function schedule_retry(int $courseid, file_sync_service $service): void {
-        $repository = new \local_dixeo\repository\course_ai_repository();
-        $delay = $repository->get_retry_delay($courseid);
-
-        if ($delay <= 0) {
-            mtrace("process_file_sync: No more retries for course {$courseid}");
+        if (!$service->queue_sync_retry($courseid)) {
+            mtrace("process_file_sync: No retry queued for course {$courseid}");
             return;
         }
-
-        $task = new self();
-        $task->set_custom_data((object) ['courseid' => $courseid]);
-        $task->set_next_run_time(time() + $delay);
-
-        \core\task\manager::queue_adhoc_task($task, true);
-
-        $delayminutes = round($delay / 60);
-        mtrace("process_file_sync: Scheduled retry for course {$courseid} in {$delayminutes} minutes");
+        mtrace("process_file_sync: Scheduled retry for course {$courseid}");
     }
 }

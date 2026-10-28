@@ -122,7 +122,7 @@ final class file_sync_service_chunk_test extends \advanced_testcase {
         self::assertSame([], $service->build_chunks([]));
     }
 
-    public function test_compute_expected_files_matches_hash_file_and_filename(): void {
+    public function test_compute_expected_files_matches_hash_filename_and_source(): void {
         $this->resetAfterTest();
         $service = new file_sync_service();
 
@@ -133,12 +133,12 @@ final class file_sync_service_chunk_test extends \advanced_testcase {
             new file_upload_part($bpath, 'beta.txt'),
         ];
 
-        $manifest = $service->compute_expected_files($items);
+        $manifest = $service->compute_expected_files($items, [12, 34]);
 
         self::assertSame(
             [
-                ['hash' => hash('sha256', 'alpha'), 'filename' => 'alpha.txt'],
-                ['hash' => hash('sha256', 'beta'), 'filename' => 'beta.txt'],
+                ['hash' => hash('sha256', 'alpha'), 'filename' => 'alpha.txt', 'sourceId' => '12'],
+                ['hash' => hash('sha256', 'beta'), 'filename' => 'beta.txt', 'sourceId' => '34'],
             ],
             $manifest
         );

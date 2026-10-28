@@ -68,7 +68,7 @@ class trigger_file_sync extends external_api {
         $service = service_factory::get_file_sync_service();
 
         try {
-            $service->trigger_sync($params['courseid']);
+            $service->trigger_sync($params['courseid'], true);
 
             $status = $service->get_status($params['courseid']);
 

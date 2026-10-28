@@ -620,6 +620,16 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102200, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026102203) {
+        $table = new xmldb_table('local_dixeo_course_ai');
+        $field = new xmldb_field('skippedfiles', XMLDB_TYPE_TEXT, null, null, null, null, null, 'filehash');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026102203, 'local', 'dixeo');
+    }
+
     return true;
 }
 

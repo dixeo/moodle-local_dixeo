@@ -325,10 +325,12 @@ define([
             'filesync_status_outdated',
             'filesync_file_empty',
             'filesync_file_error',
+            'filesync_file_retry',
             'filesync_file_too_large',
             'filesync_file_unmanaged',
             'filesync_file_unsupported',
             'filesync_files_count',
+            'filesync_files_count_partial',
             'filesync_progress',
             'files',
             'last_sync',
@@ -360,6 +362,15 @@ define([
         }
         if (!isOn(status.enabled)) {
             return strings.filesync_status_disabled;
+        }
+        if (status.status === 'synchronized' && hasNumber(status.filestotal) && Number(status.filesskipped) > 0) {
+            // Count the rows listed below so the sentence matches them.
+            const rows = Array.isArray(status.files) ? status.files : [];
+            const synced = rows.length ? rows.filter((row) => row.state === 'synced').length : Number(status.filescompleted);
+            const skipped = rows.length ? rows.filter((row) => row.state === 'problem').length : Number(status.filesskipped);
+            return strings.filesync_files_count_partial
+                .replace('{$a->synced}', String(synced))
+                .replace('{$a->skipped}', String(skipped));
         }
         if (status.status === 'synchronized' && hasNumber(status.filestotal)) {
             return strings.filesync_files_count.replace('{$a}', String(Number(status.filestotal)));
@@ -422,6 +433,9 @@ define([
         }
         if (file.reason === 'unmanaged') {
             return strings.filesync_file_unmanaged;
+        }
+        if (file.reason === 'retry') {
+            return strings.filesync_file_retry;
         }
         return strings.filesync_file_error;
     };

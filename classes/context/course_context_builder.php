@@ -72,6 +72,9 @@ class course_context_builder extends abstract_context_builder {
     /** @var array|null Injected course plan for structure-aware context generation. */
     private ?array $courseplan = null;
 
+    /** @var bool Whether module headings carry their citation reference. */
+    private bool $activityrefs = false;
+
     /**
      * Constructor.
      *
@@ -106,6 +109,20 @@ class course_context_builder extends abstract_context_builder {
      */
     public function with_course_plan(array $plan): static {
         $this->courseplan = $plan;
+        return $this;
+    }
+
+    /**
+     * Tag each module heading with its citation reference, "(ref: A<cmid>)", and each
+     * section heading with its id, "(section id: <id>)".
+     *
+     * Only the tutor opts in: it cites the activities its answers come from and matches
+     * the student's page URL against these ids, while generated content must not copy them.
+     *
+     * @return static Fluent interface.
+     */
+    public function with_activity_refs(): static {
+        $this->activityrefs = true;
         return $this;
     }
 
@@ -211,6 +228,9 @@ class course_context_builder extends abstract_context_builder {
         $heading = str_repeat('#', $headinglevel);
         $sectionnum = (int) $section->section;
         $sectionname = $this->get_section_name($section);
+        if ($this->activityrefs) {
+            $sectionname .= " (section id: {$section->id})";
+        }
         $detaillevel = $this->get_section_detail_level($sectionnum, $targetsection);
 
         // Mark target section clearly (only in teaching mode).
@@ -332,14 +352,17 @@ class course_context_builder extends abstract_context_builder {
      * @return array Lines for the module.
      */
     private function build_module_lines(\cm_info $cm, string $detaillevel): array {
-        $fileannotation = $this->get_file_annotation($cm);
+        $annotation = $this->get_file_annotation($cm);
+        if ($this->activityrefs) {
+            $annotation = " (ref: A{$cm->id})" . $annotation;
+        }
 
         if ($detaillevel === 'titles') {
-            return ["- [{$cm->modname}] {$cm->name}{$fileannotation}"];
+            return ["- [{$cm->modname}] {$cm->name}{$annotation}"];
         }
 
         // Full or preview: include content.
-        $lines = ["**[{$cm->modname}] {$cm->name}**{$fileannotation}"];
+        $lines = ["**[{$cm->modname}] {$cm->name}**{$annotation}"];
 
         // Full level: untruncated content so the tutor and assessment generators
         // see the entire module. Preview level: short excerpt for adjacent sections
