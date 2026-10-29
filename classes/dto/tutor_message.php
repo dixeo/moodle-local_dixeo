@@ -57,7 +57,7 @@ class tutor_message {
     /** @var string|null Course instructions markdown; auto-filled for user when null. */
     public ?string $instructions;
 
-    /** @var bool For system messages: whether the remote should enqueue a reply. */
+    /** @var bool Whether the remote should reply; false stores a system event or an assistant notice as is. */
     public bool $requireresponse;
 
     /**
@@ -98,6 +98,17 @@ class tutor_message {
         bool $requireresponse = true
     ): self {
         return new self(self::ROLE_SYSTEM, $message, $context, $instructions, $requireresponse);
+    }
+
+    /**
+     * Canned tutor message already shown to the learner, stored in the conversation without a reply.
+     *
+     * @param string $text Notice text as shown.
+     * @param array $context Structured context of what the notice is about.
+     * @return self
+     */
+    public static function notice(string $text, array $context): self {
+        return new self(self::ROLE_ASSISTANT, $text, $context, null, false);
     }
 
     /**

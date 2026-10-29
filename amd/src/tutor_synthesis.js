@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Course tutor synthesis block on the usage report.
+ * Course tutor synthesis block on the usage report, for the period the report shows.
  *
  * @module     local_dixeo/tutor_synthesis
  * @copyright  2026 Dixeo
@@ -23,132 +23,30 @@
 
 define([
     'core/ajax',
-    'core/str',
+    'core/templates',
     'core/notification',
-], function(Ajax, Str, Notification) {
+], function(Ajax, Templates, Notification) {
     const POLL_MS = 2000;
     const MAX_POLLS = 90;
 
     /**
-     * Load the strings the block renders after a click.
+     * Render the block body from a web service view model and update the button.
      *
-     * @return {Promise<Object>}
-     */
-    const loadStrings = () => {
-        return Str.get_strings([
-            {key: 'tutor_usage_report_synthesis_button', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_update', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_generating', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_intro', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_unchanged', component: 'local_dixeo'},
-            {key: 'error:tutor_synthesis_unavailable', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_failed', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_empty', component: 'local_dixeo'},
-            {key: 'tutor_usage_report_synthesis_truncated', component: 'local_dixeo'},
-        ]).then((values) => {
-            return {
-                button: values[0],
-                update: values[1],
-                generating: values[2],
-                intro: values[3],
-                unchanged: values[4],
-                unavailable: values[5],
-                failed: values[6],
-                empty: values[7],
-                truncated: values[8],
-            };
-        });
-    };
-
-    /**
-     * Button label for the current result.
-     *
-     * @param {Object} result Synthesis payload.
-     * @param {Object} strings Localised labels.
-     * @return {string}
-     */
-    const buttonLabel = (result, strings) => {
-        if (result.summary || result.empty || result.state === 'ready') {
-            return strings.update;
-        }
-        return strings.button;
-    };
-
-    /**
-     * Append a paragraph.
-     *
-     * @param {HTMLElement} parent Parent node.
-     * @param {string} text Text content.
-     * @param {string} className Optional class.
-     */
-    const addParagraph = (parent, text, className) => {
-        const paragraph = document.createElement('p');
-        if (className) {
-            paragraph.className = className;
-        }
-        paragraph.textContent = text;
-        parent.appendChild(paragraph);
-    };
-
-    /**
-     * Replace the block body from a service result.
-     *
-     * result.summary is HTML already cleaned by the service.
+     * The body comes from the same template as the page, so both renders match.
      *
      * @param {HTMLElement} root Block root.
-     * @param {Object} result Synthesis payload.
-     * @param {Object} strings Localised labels.
+     * @param {Object} view Synthesis view model.
+     * @return {Promise}
      */
-    const render = (root, result, strings) => {
+    const render = (root, view) => {
         const body = root.querySelector('[data-region="synthesis-body"]');
         const button = root.querySelector('[data-action="tutor-synthesis"]');
-        const hasContent = Boolean(result.summary);
-        const showWindow = hasContent && Boolean(result.window);
-        body.textContent = '';
-
-        if (result.state === 'pending' || result.unchanged || result.unavailable || result.state === 'failed' || showWindow) {
-            const row = document.createElement('div');
-            row.className = 'dixeo-tutor-synthesis-meta';
-            if (result.state === 'pending') {
-                const line = document.createElement('p');
-                line.className = 'dixeo-tutor-synthesis-note dixeo-tutor-synthesis-status text-muted mb-0';
-                const spinner = document.createElement('span');
-                spinner.className = 'spinner-border spinner-border-sm';
-                spinner.setAttribute('role', 'status');
-                spinner.setAttribute('aria-hidden', 'true');
-                line.appendChild(spinner);
-                line.appendChild(document.createTextNode(strings.generating));
-                row.appendChild(line);
-            } else if (result.unchanged) {
-                addParagraph(row, strings.unchanged, 'dixeo-tutor-synthesis-note text-muted mb-0');
-            } else if (result.unavailable) {
-                addParagraph(row, strings.unavailable, 'dixeo-tutor-synthesis-note text-muted mb-0');
-            } else if (result.state === 'failed') {
-                addParagraph(row, strings.failed, 'dixeo-tutor-synthesis-note text-danger mb-0');
-            }
-            if (showWindow) {
-                addParagraph(row, result.window, 'dixeo-tutor-synthesis-window text-muted mb-0');
-            }
-            body.appendChild(row);
-        }
-        if (result.state === 'empty' && !result.unavailable) {
-            addParagraph(body, strings.intro, 'text-muted mb-0');
-        }
-        if (result.empty) {
-            addParagraph(body, strings.empty, 'mb-0');
-        }
-        if (hasContent) {
-            const summary = document.createElement('div');
-            summary.className = 'dixeo-tutor-synthesis-summary';
-            summary.innerHTML = result.summary;
-            body.appendChild(summary);
-        }
-        if (result.truncated) {
-            addParagraph(body, strings.truncated, 'text-muted small mb-0');
-        }
-
-        button.textContent = buttonLabel(result, strings);
-        button.disabled = result.state === 'pending';
+        button.textContent = view.buttonlabel;
+        button.disabled = view.pending;
+        return Templates.renderForPromise('local_dixeo/tutor_synthesis', view).then(({html, js}) => {
+            Templates.replaceNodeContents(body, html, js);
+            return view;
+        });
     };
 
     /**
@@ -176,46 +74,44 @@ define([
 
         const args = {
             courseid: Number(root.dataset.courseid),
+            timestart: Number(root.dataset.timestart),
+            timeend: Number(root.dataset.timeend),
         };
         let polls = 0;
-        let strings = null;
 
         const poll = () => {
             polls = polls + 1;
             window.setTimeout(() => {
-                call('local_dixeo_get_tutor_synthesis', args).then((result) => {
-                    render(root, result, strings);
-                    if (result.state === 'pending' && polls < MAX_POLLS) {
+                call('local_dixeo_get_tutor_synthesis', args).then((view) => {
+                    if (!view.pending) {
+                        return render(root, view);
+                    }
+                    // The pending body is already shown: rendering it again would repeat the status.
+                    if (polls < MAX_POLLS) {
                         poll();
                     }
-                    return result;
+                    return view;
                 }).catch(Notification.exception);
             }, POLL_MS);
         };
 
         const button = root.querySelector('[data-action="tutor-synthesis"]');
-        const requestSynthesis = () => {
+        button.addEventListener('click', () => {
             button.disabled = true;
-            return call('local_dixeo_request_tutor_synthesis', args).then((result) => {
-                render(root, result, strings);
-                if (result.state === 'pending') {
+            return call('local_dixeo_request_tutor_synthesis', args).then((view) => {
+                if (view.pending) {
                     polls = 0;
                     poll();
                 }
-                return result;
+                return render(root, view);
             }).catch((error) => {
                 button.disabled = false;
                 Notification.exception(error);
             });
-        };
-        loadStrings().then((loaded) => {
-            strings = loaded;
-            if (root.dataset.pending === '1') {
-                poll();
-            }
-            button.addEventListener('click', requestSynthesis);
-            return loaded;
-        }).catch(Notification.exception);
+        });
+        if (root.dataset.pending === '1') {
+            poll();
+        }
     };
 
     return {

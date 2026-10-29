@@ -1,0 +1,96 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_dixeo/tutor_synthesis
+
+    Body of the course synthesis block. The report page renders it on load and
+    local_dixeo/tutor_synthesis renders it again from the web service view model.
+
+    Example context (json):
+    {
+        "state": "ready",
+        "hasstatus": false,
+        "pending": false,
+        "pendinglabel": "",
+        "failed": false,
+        "unchanged": false,
+        "unavailable": false,
+        "showintro": false,
+        "hasresult": true,
+        "stale": false,
+        "stalelabel": "",
+        "nostudent": false,
+        "toofew": false,
+        "hascoverage": true,
+        "hasshare": true,
+        "coveragelabel": "3 / 25 enrolled students used the tutor",
+        "coveragepercent": 12,
+        "coveragelow": true,
+        "messagelabel": "41 student messages in the period",
+        "hassummary": true,
+        "summary": "<p>Students asked about percentages.</p>",
+        "truncated": false,
+        "buttonlabel": "Update"
+    }
+}}
+{{#hasstatus}}
+    <p class="dixeo-tutor-synthesis-status {{#failed}}text-danger{{/failed}}{{^failed}}text-muted{{/failed}}" role="status">
+        {{#pending}}
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            {{pendinglabel}}
+        {{/pending}}
+        {{#failed}}{{#str}}tutor_usage_report_synthesis_failed, local_dixeo{{/str}}{{/failed}}
+        {{#unchanged}}{{#str}}tutor_usage_report_synthesis_unchanged, local_dixeo{{/str}}{{/unchanged}}
+        {{#unavailable}}{{#str}}error:tutor_synthesis_unavailable, local_dixeo{{/str}}{{/unavailable}}
+    </p>
+{{/hasstatus}}
+{{#showintro}}
+    <p class="text-muted">{{#str}}tutor_usage_report_synthesis_intro, local_dixeo{{/str}}</p>
+{{/showintro}}
+{{#hasresult}}
+    {{#stale}}
+        <div class="alert alert-warning py-2 mb-3">{{stalelabel}}</div>
+    {{/stale}}
+    {{#nostudent}}
+        <p>{{#str}}tutor_usage_report_synthesis_nostudent, local_dixeo{{/str}}</p>
+    {{/nostudent}}
+    {{#hascoverage}}
+        <div class="dixeo-tutor-synthesis-coverage alert {{#coveragelow}}alert-warning{{/coveragelow}}{{^coveragelow}}alert-info{{/coveragelow}} mb-3">
+            <p class="font-weight-bold fw-bold mb-2" id="dixeo-tutor-synthesis-coverage">{{coveragelabel}}</p>
+            {{#hasshare}}
+                <div class="progress mb-2" role="progressbar" aria-labelledby="dixeo-tutor-synthesis-coverage"
+                     aria-valuenow="{{coveragepercent}}" aria-valuemin="0" aria-valuemax="100"
+                     aria-valuetext="{{coveragepercent}} %">
+                    <div class="progress-bar" style="width: {{coveragepercent}}%"></div>
+                </div>
+            {{/hasshare}}
+            {{#coveragelow}}{{#hassummary}}
+                <p class="mb-1">{{#str}}tutor_usage_report_synthesis_coverage_low, local_dixeo{{/str}}</p>
+            {{/hassummary}}{{/coveragelow}}
+            <p class="small mb-0">{{messagelabel}}</p>
+        </div>
+    {{/hascoverage}}
+    {{#toofew}}
+        <p>{{#str}}tutor_usage_report_synthesis_toofew, local_dixeo{{/str}}</p>
+    {{/toofew}}
+    {{#hassummary}}
+        <div class="dixeo-tutor-synthesis-summary">{{{summary}}}</div>
+    {{/hassummary}}
+    {{#truncated}}
+        <p class="text-muted small mt-3 mb-0">{{#str}}tutor_usage_report_synthesis_truncated, local_dixeo{{/str}}</p>
+    {{/truncated}}
+{{/hasresult}}

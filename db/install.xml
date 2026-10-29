@@ -256,14 +256,19 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Course the conversations belong to"/>
         <FIELD NAME="namespace" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="Dixeo namespace that isolates the site"/>
-        <FIELD NAME="timestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Start of the window that was analysed"/>
-        <FIELD NAME="timeend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="End of the window that was analysed"/>
+        <FIELD NAME="timestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Start of the period the stored synthesis covers. 0 until a first result is stored."/>
+        <FIELD NAME="timeend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="End of the period the stored synthesis covers. 0 until a first result is stored."/>
         <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false" COMMENT="pending, ready, or failed"/>
         <FIELD NAME="jobid" TYPE="char" LENGTH="36" NOTNULL="false" SEQUENCE="false" COMMENT="Remote synthesis job id while generation is in flight"/>
         <FIELD NAME="summary" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Aggregate synthesis text. Not tied to one student."/>
         <FIELD NAME="messagecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Dialogue messages covered by this synthesis"/>
         <FIELD NAME="latestmessageat" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false" COMMENT="Newest covered message instant, ISO 8601"/>
-        <FIELD NAME="truncated" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the transcript was cut to the most recent messages"/>
+        <FIELD NAME="truncated" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the synthesis read a sample of each student's most recent exchanges"/>
+        <FIELD NAME="studentcount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Students who wrote to the tutor in the period"/>
+        <FIELD NAME="enrolledcount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Student ids sent with the request"/>
+        <FIELD NAME="pendingtimestart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Start of the period of the running or failed attempt"/>
+        <FIELD NAME="pendingtimeend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="End of the period of the running or failed attempt"/>
+        <FIELD NAME="pendingenrolledcount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Student ids sent with the in-flight request"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Teacher who requested the synthesis. 0 after that user is deleted."/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>

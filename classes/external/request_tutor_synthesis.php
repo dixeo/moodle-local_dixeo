@@ -42,6 +42,8 @@ class request_tutor_synthesis extends external_api {
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'Course id'),
+            'timestart' => new external_value(PARAM_INT, 'Start of the report period'),
+            'timeend' => new external_value(PARAM_INT, 'End of the report period'),
         ]);
     }
 
@@ -49,15 +51,24 @@ class request_tutor_synthesis extends external_api {
      * Request a synthesis for the course.
      *
      * @param int $courseid Course id.
+     * @param int $timestart Start of the report period.
+     * @param int $timeend End of the report period.
      * @return array
      */
-    public static function execute(int $courseid): array {
+    public static function execute(int $courseid, int $timestart, int $timeend): array {
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
+            'timestart' => $timestart,
+            'timeend' => $timeend,
         ]);
+        self::require_period((int) $params['timestart'], (int) $params['timeend']);
         self::require_report_access((int) $params['courseid']);
 
-        $view = (new tutor_synthesis_service())->request((int) $params['courseid']);
+        $view = (new tutor_synthesis_service())->request(
+            (int) $params['courseid'],
+            (int) $params['timestart'],
+            (int) $params['timeend']
+        );
         return tutor_synthesis_response::from_view($view);
     }
 
@@ -83,6 +94,19 @@ class request_tutor_synthesis extends external_api {
         self::validate_context($context);
         if (!tutor_usage_report_service::can_view_course($courseid)) {
             require_capability('local/dixeo:viewtutorusage', $context);
+        }
+    }
+
+    /**
+     * Reject a period that ends before it starts or is longer than the report allows.
+     *
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     */
+    public static function require_period(int $timestart, int $timeend): void {
+        $length = $timeend - $timestart;
+        if ($timestart < 0 || $length <= 0 || $length > tutor_usage_report_service::MAX_CUSTOM_RANGE_SECONDS) {
+            throw new \invalid_parameter_exception('Invalid period');
         }
     }
 }

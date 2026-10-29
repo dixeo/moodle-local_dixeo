@@ -253,54 +253,34 @@ class tutor_usage_report_page implements renderable, templatable {
             'hasperformance' => $performance !== null,
             'performance' => $performance,
             'synthesis' => $request->level === tutor_usage_report_service::LEVEL_COURSE
-                ? $this->synthesis_context($request->courseid)
+                ? $this->synthesis_context($request->courseid, (int) $period['timestart'], (int) $period['timeend'])
                 : null,
         ];
     }
 
     /**
-     * Course-level synthesis block.
+     * Course-level synthesis block for the report period.
      *
      * A failure here must not replace the rest of the report.
      *
      * @param int $courseid Course id.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
      * @return array
      */
-    protected function synthesis_context(int $courseid): array {
+    protected function synthesis_context(int $courseid, int $timestart, int $timeend): array {
         $service = new tutor_synthesis_service();
         try {
-            $synthesis = $service->get_for_course($courseid);
+            $synthesis = $service->get_for_course($courseid, $timestart, $timeend);
         } catch (\moodle_exception $e) {
-            $window = $service->current_window();
-            $synthesis = [
-                'state' => tutor_synthesis_service::STATE_FAILED,
-                'summary' => '',
-                'truncated' => false,
-                'empty' => false,
-                'window' => $service->window_label($window['timestart'], $window['timeend']),
-            ];
+            $synthesis = $service->present(null, $timestart, $timeend, tutor_synthesis_service::FEEDBACK_UNAVAILABLE);
         }
 
-        $stored = $synthesis['summary'] !== '' || !empty($synthesis['empty'])
-            || $synthesis['state'] === tutor_synthesis_service::STATE_READY;
-
-        return [
+        return array_merge($synthesis, [
             'courseid' => $courseid,
-            'pending' => $synthesis['state'] === tutor_synthesis_service::STATE_PENDING,
-            'failed' => $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
-            'hascontent' => $synthesis['summary'] !== '',
-            'showintro' => $synthesis['state'] === tutor_synthesis_service::STATE_EMPTY,
-            'showmeta' => $synthesis['summary'] !== ''
-                || $synthesis['state'] === tutor_synthesis_service::STATE_PENDING
-                || $synthesis['state'] === tutor_synthesis_service::STATE_FAILED,
-            'isempty' => !empty($synthesis['empty']),
-            'summary' => $synthesis['summary'],
-            'truncated' => !empty($synthesis['truncated']),
-            'window' => (string) ($synthesis['window'] ?? ''),
-            'buttonlabel' => $stored
-                ? get_string('tutor_usage_report_synthesis_update', 'local_dixeo')
-                : get_string('tutor_usage_report_synthesis_button', 'local_dixeo'),
-        ];
+            'timestart' => $timestart,
+            'timeend' => $timeend,
+        ]);
     }
 
     /**

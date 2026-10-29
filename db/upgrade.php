@@ -630,6 +630,28 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102203, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026102209) {
+        // The stored synthesis keeps its own period and coverage while a job for another period runs.
+        $table = new xmldb_table('local_dixeo_tutor_synthesis');
+        $fields = [
+            new xmldb_field('studentcount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'truncated'),
+            new xmldb_field('enrolledcount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'studentcount'),
+            new xmldb_field('pendingtimestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'enrolledcount'),
+            new xmldb_field('pendingtimeend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'pendingtimestart'),
+            new xmldb_field('pendingenrolledcount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'pendingtimeend'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        // Rows from the fixed three-month window describe no report period: drop them.
+        $DB->delete_records('local_dixeo_tutor_synthesis');
+
+        upgrade_plugin_savepoint(true, 2026102209, 'local', 'dixeo');
+    }
+
     return true;
 }
 

@@ -24,9 +24,13 @@ use local_dixeo\job_access_mode;
 /**
  * Requests and stores one synthesis of student tutor conversations per course.
  *
- * The window is the past three months at the moment of the request. The Dixeo API
- * reads the messages. This service stops a second request while one is running,
- * and keeps the stored text when the API reports that no new messages arrived.
+ * A synthesis covers the period the report page shows. The row keeps the last
+ * result with the period it covers, and the in-flight job with its own period, so
+ * the previous synthesis stays readable until the new one is ready or has failed.
+ * The pending columns keep the period of the latest attempt, so a running or
+ * failed job is only reported against that period. The watermark that lets the
+ * API answer "unchanged" is only sent for the same period. The API decides whether enough students wrote for an anonymous summary;
+ * this service only reads the counts it returns.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -39,8 +43,8 @@ class tutor_synthesis_service {
     /** @var string API endpoint. */
     public const ENDPOINT = '/v1/tutor/synthesis';
 
-    /** @var string No synthesis has been stored for the course. */
-    public const STATE_EMPTY = 'empty';
+    /** @var string No synthesis has been requested for the course. */
+    public const STATE_NONE = 'none';
 
     /** @var string A job is still running. */
     public const STATE_PENDING = 'pending';
@@ -51,11 +55,14 @@ class tutor_synthesis_service {
     /** @var string The latest attempt failed. A previous synthesis may still be stored. */
     public const STATE_FAILED = 'failed';
 
+    /** @var string The API reported no new message for the same period. */
+    public const FEEDBACK_UNCHANGED = 'unchanged';
+
+    /** @var string The synthesis service cannot be reached. */
+    public const FEEDBACK_UNAVAILABLE = 'unavailable';
+
     /** @var int Matches the API limit on student ids in one request. */
     private const MAX_STUDENT_IDS = 2000;
-
-    /** @var string How far back a synthesis reads, measured from the request. */
-    private const WINDOW = '-3 months';
 
     /** @var client API client. */
     private client $client;
@@ -84,60 +91,40 @@ class tutor_synthesis_service {
     }
 
     /**
-     * The past three months, ending now.
-     *
-     * @return array{timestart: int, timeend: int}
-     */
-    public function current_window(): array {
-        $end = time();
-        $start = (new \DateTimeImmutable('@' . $end))->modify(self::WINDOW)->getTimestamp();
-        return ['timestart' => $start, 'timeend' => $end];
-    }
-
-    /**
-     * Sentence describing the window a synthesis covers.
-     *
-     * @param int $timestart Window start.
-     * @param int $timeend Window end.
-     * @return string
-     */
-    public function window_label(int $timestart, int $timeend): string {
-        $format = get_string('strftimedatefullshort', 'langconfig');
-        return get_string('tutor_usage_report_synthesis_window', 'local_dixeo', (object) [
-            'from' => userdate($timestart, $format),
-            'to' => userdate($timeend, $format),
-        ]);
-    }
-
-    /**
      * Synthesis stored for a course, reconciling an in-flight job first.
      *
      * @param int $courseid Course id.
+     * @param int $timestart Start of the report period.
+     * @param int $timeend End of the report period.
      * @return array View model for the report block.
      */
-    public function get_for_course(int $courseid): array {
+    public function get_for_course(int $courseid, int $timestart, int $timeend): array {
         $record = $this->get_record($courseid);
         if ($record && $record->status === self::STATE_PENDING) {
             $record = $this->reconcile($record);
         }
-        return $this->present($record, false);
+        return $this->present($record, $timestart, $timeend);
     }
 
     /**
-     * Start a synthesis, or report that the stored one is already up to date.
+     * Start a synthesis for the period, or report that the stored one is already up to date.
      *
      * A course that already has a running job returns that job. A second click
      * does not create another one.
      *
      * @param int $courseid Course id.
-     * @return array View model. unchanged is true when no new messages existed.
+     * @param int $timestart Start of the report period.
+     * @param int $timeend End of the report period.
+     * @return array View model.
      */
-    public function request(int $courseid): array {
+    public function request(int $courseid, int $timestart, int $timeend): array {
+        global $DB;
+
         $lock = $this->lock($courseid);
         if ($lock === null) {
             $record = $this->get_record($courseid);
             if ($record && $record->status === self::STATE_PENDING) {
-                return $this->present($record, false);
+                return $this->present($record, $timestart, $timeend);
             }
             throw new \moodle_exception('error:tutor_synthesis_busy', 'local_dixeo');
         }
@@ -147,21 +134,24 @@ class tutor_synthesis_service {
             if ($record && $record->status === self::STATE_PENDING) {
                 $record = $this->reconcile($record);
                 if ($record->status === self::STATE_PENDING) {
-                    return $this->present($record, false);
+                    return $this->present($record, $timestart, $timeend);
                 }
             }
 
-            $window = $this->current_window();
-            $payload = $this->payload($courseid, $window['timestart'], $window['timeend'], $record);
+            $userids = $this->student_ids($courseid);
+            $payload = $this->payload($courseid, $timestart, $timeend, $userids, $record);
             $response = $this->submit($payload);
             if (!empty($response['unavailable'])) {
-                $view = $this->present($record, false);
-                $view['unavailable'] = true;
-                return $view;
+                return $this->present($record, $timestart, $timeend, self::FEEDBACK_UNAVAILABLE);
             }
             if (!empty($response['unchanged'])) {
-                $record = $this->remember_window($record, $window['timestart'], $window['timeend']);
-                return $this->present($record, true);
+                // The stored result is confirmed for this period, which clears an earlier failure.
+                if ($record && $record->status !== self::STATE_READY) {
+                    $record->status = self::STATE_READY;
+                    $record = $this->clear_pending($record);
+                    $DB->update_record(self::TABLE, $record);
+                }
+                return $this->present($record, $timestart, $timeend, self::FEEDBACK_UNCHANGED);
             }
 
             $jobid = trim((string) ($response['id'] ?? ''));
@@ -176,17 +166,123 @@ class tutor_synthesis_service {
                 'block_dixeo_tutor',
                 job_access_mode::COURSE_SHARED
             );
-            $record = $this->save_pending(
-                $courseid,
-                $window['timestart'],
-                $window['timeend'],
-                $jobid,
-                $record
-            );
-            return $this->present($record, false);
+            $record = $this->save_pending($courseid, $timestart, $timeend, count($userids), $jobid, $record);
+            return $this->present($record, $timestart, $timeend);
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * View model for the synthesis block, shared by the page and the web services.
+     *
+     * @param \stdClass|null $record Stored row.
+     * @param int $timestart Start of the report period.
+     * @param int $timeend End of the report period.
+     * @param string $feedback Empty, or one of the FEEDBACK_ constants.
+     * @return array
+     */
+    public function present(?\stdClass $record, int $timestart, int $timeend, string $feedback = ''): array {
+        $state = $record ? (string) $record->status : self::STATE_NONE;
+        $unavailable = $feedback === self::FEEDBACK_UNAVAILABLE;
+        $hasresult = $record !== null && $this->has_result($record);
+        $stale = $hasresult && !$this->covers($record, $timestart, $timeend);
+        $pending = $state === self::STATE_PENDING;
+        $attempthere = $record !== null && (int) $record->pendingtimestart === $timestart
+            && (int) $record->pendingtimeend === $timeend;
+        $failed = $state === self::STATE_FAILED && $attempthere;
+        $unchanged = $feedback === self::FEEDBACK_UNCHANGED;
+        $pendinglabel = '';
+        if ($pending) {
+            $pendinglabel = $attempthere
+                ? get_string('tutor_usage_report_synthesis_generating', 'local_dixeo')
+                : $this->period_label(
+                    'tutor_usage_report_synthesis_pending_other',
+                    (int) $record->pendingtimestart,
+                    (int) $record->pendingtimeend
+                );
+        }
+        $buttonkey = 'tutor_usage_report_synthesis_update';
+        if (!$hasresult) {
+            $buttonkey = 'tutor_usage_report_synthesis_button';
+        } else if ($stale) {
+            $buttonkey = 'tutor_usage_report_synthesis_generate_period';
+        }
+
+        $view = [
+            'state' => $state,
+            'jobid' => (string) ($record->jobid ?? ''),
+            'hasstatus' => $pending || $failed || $unchanged || $unavailable,
+            'pending' => $pending,
+            'pendinglabel' => $pendinglabel,
+            'failed' => $failed,
+            'unchanged' => $unchanged,
+            'unavailable' => $unavailable,
+            'showintro' => !$hasresult && !$pending && !$failed && !$unavailable,
+            'hasresult' => $hasresult,
+            'stale' => $stale,
+            'stalelabel' => $stale
+                ? $this->period_label('tutor_usage_report_synthesis_stale', (int) $record->timestart, (int) $record->timeend)
+                : '',
+            'nostudent' => false,
+            'toofew' => false,
+            'hascoverage' => false,
+            'hasshare' => false,
+            'coveragelabel' => '',
+            'coveragepercent' => 0,
+            'coveragelow' => false,
+            'messagelabel' => '',
+            'hassummary' => false,
+            'summary' => '',
+            'truncated' => false,
+            'buttonlabel' => get_string($buttonkey, 'local_dixeo'),
+        ];
+        if (!$hasresult) {
+            return $view;
+        }
+
+        $students = (int) $record->studentcount;
+        $enrolled = (int) $record->enrolledcount;
+        $summary = $this->clean_summary((string) ($record->summary ?? ''));
+        $view['nostudent'] = $students === 0;
+        $view['toofew'] = $students > 0 && $summary === '';
+        $view['hassummary'] = $summary !== '';
+        $view['summary'] = $summary;
+        $view['truncated'] = $summary !== '' && (int) $record->truncated === 1;
+        if ($students === 0) {
+            return $view;
+        }
+
+        $counts = (object) ['students' => $students, 'enrolled' => $enrolled];
+        $view['hascoverage'] = true;
+        $view['hasshare'] = $enrolled > 0;
+        $view['coveragelabel'] = $enrolled > 0
+            ? get_string('tutor_usage_report_synthesis_coverage', 'local_dixeo', $counts)
+            : get_string('tutor_usage_report_synthesis_coverage_students', 'local_dixeo', $students);
+        $view['coveragepercent'] = $enrolled > 0 ? min(100, (int) round($students * 100 / $enrolled)) : 0;
+        $view['coveragelow'] = $enrolled > 0 && $students * 2 < $enrolled;
+        $view['messagelabel'] = get_string(
+            'tutor_usage_report_synthesis_messages',
+            'local_dixeo',
+            (int) $record->messagecount
+        );
+        return $view;
+    }
+
+    /**
+     * Sentence naming another period than the one the report shows.
+     *
+     * @param string $identifier String with from and to placeholders.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @return string
+     */
+    private function period_label(string $identifier, int $timestart, int $timeend): string {
+        $format = get_string('strftimedate', 'langconfig');
+        return get_string($identifier, 'local_dixeo', (object) [
+            'from' => userdate($timestart, $format),
+            'to' => userdate($timeend, $format),
+        ]);
     }
 
     /**
@@ -225,15 +321,12 @@ class tutor_synthesis_service {
     }
 
     /**
-     * Request body for one course window.
+     * Ids of the students in the course, as many as one request accepts.
      *
      * @param int $courseid Course id.
-     * @param int $timestart Window start.
-     * @param int $timeend Window end.
-     * @param \stdClass|null $record Stored row, when a synthesis already exists.
-     * @return array
+     * @return string[]
      */
-    private function payload(int $courseid, int $timestart, int $timeend, ?\stdClass $record): array {
+    private function student_ids(int $courseid): array {
         $roleids = tutor_usage_report_service::get_roleids_for_scope(
             tutor_usage_report_service::ROLE_SCOPE_STUDENTS
         );
@@ -243,8 +336,20 @@ class tutor_synthesis_service {
             0,
             $roleids
         );
-        $userids = array_slice(array_map('strval', $userids), 0, self::MAX_STUDENT_IDS);
+        return array_slice(array_map('strval', $userids), 0, self::MAX_STUDENT_IDS);
+    }
 
+    /**
+     * Request body for one course period.
+     *
+     * @param int $courseid Course id.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param string[] $userids Student ids.
+     * @param \stdClass|null $record Stored row, when a synthesis already exists.
+     * @return array
+     */
+    private function payload(int $courseid, int $timestart, int $timeend, array $userids, ?\stdClass $record): array {
         $payload = [
             'courseId' => (string) $courseid,
             'namespace' => $this->namespace(),
@@ -253,7 +358,8 @@ class tutor_synthesis_service {
             'userIds' => $userids,
             'language' => current_language(),
         ];
-        if ($record && $this->has_stored_synthesis($record)) {
+        // The watermark only says something about the period it was measured on.
+        if ($record && $this->has_result($record) && $this->covers($record, $timestart, $timeend)) {
             $payload['previousMessageCount'] = (int) $record->messagecount;
             if ($record->latestmessageat !== null && $record->latestmessageat !== '') {
                 $payload['previousLatestMessageAt'] = (string) $record->latestmessageat;
@@ -263,19 +369,25 @@ class tutor_synthesis_service {
     }
 
     /**
-     * A completed synthesis, including one that covered no messages.
-     *
-     * A failed first attempt leaves the summary null, so the retry does not send
-     * a zero watermark and get an unchanged response for a window that has messages.
+     * Whether a completed result is stored, whatever the latest attempt did.
      *
      * @param \stdClass $record Stored row.
      * @return bool
      */
-    private function has_stored_synthesis(\stdClass $record): bool {
-        if ($record->status === self::STATE_READY) {
-            return true;
-        }
-        return $record->summary !== null;
+    private function has_result(\stdClass $record): bool {
+        return (int) $record->timeend > 0;
+    }
+
+    /**
+     * Whether the stored result covers exactly this period.
+     *
+     * @param \stdClass $record Stored row.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @return bool
+     */
+    private function covers(\stdClass $record, int $timestart, int $timeend): bool {
+        return (int) $record->timestart === $timestart && (int) $record->timeend === $timeend;
     }
 
     /**
@@ -306,7 +418,10 @@ class tutor_synthesis_service {
     }
 
     /**
-     * Write a completed job result onto the stored row.
+     * Write a completed job result onto the stored row, with the period it covers.
+     *
+     * An empty summary with students is a valid result: the API declined to
+     * summarise too few students.
      *
      * @param \stdClass $record Pending row.
      * @param array $result Job result.
@@ -315,36 +430,32 @@ class tutor_synthesis_service {
     private function store_result(\stdClass $record, array $result): \stdClass {
         global $DB;
 
-        if (!empty($result['empty'])) {
-            $record->status = self::STATE_READY;
-            $record->summary = null;
-            $record->messagecount = 0;
-            $record->latestmessageat = null;
-            $record->truncated = 0;
-            $record->timemodified = time();
-            $DB->update_record(self::TABLE, $record);
-            return $record;
-        }
-
         $summary = $result['summary'] ?? null;
         if (!is_string($summary)) {
             return $this->mark_failed($record);
         }
 
         $summary = trim($summary);
+        $latest = $result['latestMessageAt'] ?? null;
         $record->status = self::STATE_READY;
+        $record->jobid = null;
+        $record->timestart = (int) $record->pendingtimestart;
+        $record->timeend = (int) $record->pendingtimeend;
+        $record->enrolledcount = (int) $record->pendingenrolledcount;
         $record->summary = $summary === '' ? null : $summary;
         $record->messagecount = max(0, (int) ($result['messageCount'] ?? 0));
-        $latest = $result['latestMessageAt'] ?? null;
+        $record->studentcount = max(0, (int) ($result['studentCount'] ?? 0));
         $record->latestmessageat = is_string($latest) && $latest !== '' ? $latest : null;
         $record->truncated = !empty($result['truncated']) ? 1 : 0;
-        $record->timemodified = time();
+        $record = $this->clear_pending($record);
         $DB->update_record(self::TABLE, $record);
         return $record;
     }
 
     /**
-     * Mark the stored row failed and clear its job id.
+     * Mark the stored row failed and forget the job id.
+     *
+     * The stored result stays, and the pending period records which period failed.
      *
      * @param \stdClass $record Row to mark failed.
      * @return \stdClass
@@ -360,32 +471,26 @@ class tutor_synthesis_service {
     }
 
     /**
-     * The checked window had the same messages, so the stored text now covers it.
+     * Reset the in-flight job fields.
      *
-     * @param \stdClass|null $record Stored row.
-     * @param int $timestart Window start.
-     * @param int $timeend Window end.
-     * @return \stdClass|null
+     * @param \stdClass $record Row.
+     * @return \stdClass
      */
-    private function remember_window(?\stdClass $record, int $timestart, int $timeend): ?\stdClass {
-        global $DB;
-
-        if ($record === null) {
-            return null;
-        }
-        $record->timestart = $timestart;
-        $record->timeend = $timeend;
+    private function clear_pending(\stdClass $record): \stdClass {
+        $record->pendingtimestart = 0;
+        $record->pendingtimeend = 0;
+        $record->pendingenrolledcount = 0;
         $record->timemodified = time();
-        $DB->update_record(self::TABLE, $record);
         return $record;
     }
 
     /**
-     * Store the window and job id while generation is in flight.
+     * Store the job and the period it covers while generation is in flight.
      *
      * @param int $courseid Course id.
-     * @param int $timestart Window start.
-     * @param int $timeend Window end.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int $enrolledcount Student ids sent with the request.
      * @param string $jobid Remote job id.
      * @param \stdClass|null $existing Existing row for this course.
      * @return \stdClass
@@ -394,79 +499,39 @@ class tutor_synthesis_service {
         int $courseid,
         int $timestart,
         int $timeend,
+        int $enrolledcount,
         string $jobid,
         ?\stdClass $existing
     ): \stdClass {
-        global $DB, $USER;
+        global $DB;
 
         $now = time();
-        if ($existing) {
-            $existing->status = self::STATE_PENDING;
-            $existing->jobid = $jobid;
-            $existing->timestart = $timestart;
-            $existing->timeend = $timeend;
-            $existing->userid = (int) ($USER->id ?? 0);
-            $existing->timemodified = $now;
-            $DB->update_record(self::TABLE, $existing);
-            return $existing;
-        }
-
-        $record = (object) [
+        $record = $existing ?? (object) [
             'courseid' => $courseid,
             'namespace' => $this->namespace(),
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-            'status' => self::STATE_PENDING,
-            'jobid' => $jobid,
+            'timestart' => 0,
+            'timeend' => 0,
             'summary' => null,
             'messagecount' => 0,
             'latestmessageat' => null,
             'truncated' => 0,
-            'userid' => (int) ($USER->id ?? 0),
+            'studentcount' => 0,
+            'enrolledcount' => 0,
             'timecreated' => $now,
-            'timemodified' => $now,
         ];
-        $record->id = $DB->insert_record(self::TABLE, $record);
-        return $record;
-    }
-
-    /**
-     * View model for the synthesis block.
-     *
-     * @param \stdClass|null $record Stored row.
-     * @param bool $unchanged True when the API reported no new messages.
-     * @return array
-     */
-    private function present(?\stdClass $record, bool $unchanged): array {
-        $window = $record
-            ? ['timestart' => (int) $record->timestart, 'timeend' => (int) $record->timeend]
-            : $this->current_window();
-        $label = $this->window_label($window['timestart'], $window['timeend']);
-
-        if ($record === null) {
-            return [
-                'state' => self::STATE_EMPTY,
-                'unchanged' => $unchanged,
-                'summary' => '',
-                'truncated' => false,
-                'empty' => false,
-                'jobid' => '',
-                'window' => $label,
-                'unavailable' => false,
-            ];
+        $record->status = self::STATE_PENDING;
+        $record->jobid = $jobid;
+        $record->pendingtimestart = $timestart;
+        $record->pendingtimeend = $timeend;
+        $record->pendingenrolledcount = $enrolledcount;
+        $record->userid = $this->requester_id();
+        $record->timemodified = $now;
+        if ($existing) {
+            $DB->update_record(self::TABLE, $record);
+        } else {
+            $record->id = $DB->insert_record(self::TABLE, $record);
         }
-
-        $summary = (string) ($record->summary ?? '');
-        return [
-            'state' => (string) $record->status,
-            'unchanged' => $unchanged,
-            'summary' => $this->clean_summary($summary),
-            'truncated' => (int) $record->truncated === 1,
-            'empty' => $record->status === self::STATE_READY && $summary === '' && (int) $record->messagecount === 0,
-            'jobid' => (string) ($record->jobid ?? ''),
-            'window' => $label,
-            'unavailable' => false,
-        ];
+        return $record;
     }
 
     /**

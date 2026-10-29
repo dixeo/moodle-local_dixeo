@@ -32,6 +32,7 @@ use local_dixeo\external\service_factory;
 use local_dixeo\service\file_sync_service;
 use local_dixeo\service\job_service;
 use local_dixeo\service\tutor_service;
+use local_dixeo\service\tutor_usage_recorder;
 
 /**
  * Tests for {@see tutor_service} conversation loading and submit payloads.
@@ -74,6 +75,51 @@ final class tutor_service_test extends \advanced_testcase {
 
         $this->assertSame('job-sync', $result->jobid);
         $this->assertDebuggingCalled();
+    }
+
+    public function test_add_message_stores_a_notice_without_reply_sync_or_job(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+
+        $sync = $this->createMock(file_sync_service::class);
+        $sync->expects($this->never())->method('ensure_enabled_and_synchronized');
+        service_factory::set_test_file_sync_service($sync);
+
+        $context = ['schema' => 'proactive', 'version' => 1, 'events' => [['type' => 'course_completed']]];
+        $mockclient = $this->createMock(client::class);
+        $mockclient->expects($this->once())
+            ->method('post')
+            ->with('/v1/tutor/messages', $this->callback(static function (array $payload) use ($course, $context): bool {
+                return $payload['courseId'] === (string) $course->id
+                    && $payload['userId'] === '2'
+                    && $payload['role'] === 'assistant'
+                    && $payload['message'] === 'Well done!'
+                    && $payload['requireResponse'] === false
+                    && $payload['context'] === $context
+                    && $payload['instructions'] === '';
+            }), 'notice-key')
+            ->willReturn(['id' => 'message-1']);
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->never())->method('submit_job');
+
+        (new tutor_service($mockjob, $mockclient))->add_message(
+            (int) $course->id,
+            2,
+            tutor_message::notice('Well done!', $context),
+            'notice-key'
+        );
+
+        $this->assertSame(0, $GLOBALS['DB']->count_records(tutor_usage_recorder::TABLE_EVENT));
+    }
+
+    public function test_add_message_refuses_a_message_that_expects_a_reply(): void {
+        $this->expectException(\coding_exception::class);
+
+        (new tutor_service(null, $this->createMock(client::class)))->add_message(
+            1,
+            2,
+            new tutor_message(tutor_message::ROLE_USER, 'Hello', ['schema' => 'page', 'version' => 1])
+        );
     }
 
     public function test_get_conversation_initial_load_fetches_single_page(): void {

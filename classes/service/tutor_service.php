@@ -112,6 +112,31 @@ class tutor_service {
     }
 
     /**
+     * Store a message in the conversation without asking the tutor to reply: a system event for
+     * its next turn, or a notice the learner already saw from it.
+     *
+     * There is no AI call and no job, so no file sync, job binding or usage record either.
+     *
+     * @param int $courseid The course ID.
+     * @param int $userid The user ID.
+     * @param tutor_message $message A message that requires no response.
+     * @param string|null $idempotencykey Key reused on retries so the message is stored once.
+     * @throws api_exception If the API request fails.
+     */
+    public function add_message(int $courseid, int $userid, tutor_message $message, ?string $idempotencykey = null): void {
+        if ($message->requireresponse) {
+            throw new \coding_exception('add_message() stores messages that require no response; use submit().');
+        }
+        $message->validate();
+
+        $this->client->post(
+            '/v1/tutor/messages',
+            $this->build_submit_payload($courseid, $userid, $message, tutor_message::MODE_NORMAL),
+            $idempotencykey
+        );
+    }
+
+    /**
      * Get conversation history from the API.
      *
      * @param int $courseid The course ID.
@@ -440,7 +465,7 @@ class tutor_service {
         }
         $payload['instructions'] = $instructions ?? '';
 
-        if ($message->role === tutor_message::ROLE_SYSTEM) {
+        if ($message->role !== tutor_message::ROLE_USER) {
             $payload['requireResponse'] = $message->requireresponse;
         }
 
@@ -457,6 +482,10 @@ class tutor_service {
         $brief = ($message->instructions !== null && trim($message->instructions) !== '')
             ? trim($message->instructions)
             : '';
+
+        if (!$message->requireresponse) {
+            return $brief !== '' ? $brief : null;
+        }
 
         if ($this->needs_course_structure_in_instructions($message)) {
             $coursecontext = trim($this->build_instructions($courseid));

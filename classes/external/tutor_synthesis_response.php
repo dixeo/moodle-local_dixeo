@@ -38,33 +38,40 @@ class tutor_synthesis_response {
      */
     public static function returns(): external_single_structure {
         return new external_single_structure([
-            'state' => new external_value(PARAM_ALPHA, 'empty, pending, ready, or failed'),
-            'unchanged' => new external_value(PARAM_BOOL, 'True when the stored synthesis was kept'),
-            'unavailable' => new external_value(PARAM_BOOL, 'True when this API has no synthesis route'),
-            'summary' => new external_value(PARAM_RAW, 'Sanitised synthesis HTML'),
-            'truncated' => new external_value(PARAM_BOOL, 'True when the transcript was cut'),
-            'empty' => new external_value(PARAM_BOOL, 'True when the window had no student messages'),
+            'state' => new external_value(PARAM_ALPHA, 'none, pending, ready, or failed'),
             'jobid' => new external_value(PARAM_TEXT, 'In-flight job id, or an empty string'),
-            'window' => new external_value(PARAM_TEXT, 'Description of the analysed window'),
+            'hasstatus' => new external_value(PARAM_BOOL, 'True when a status line is shown'),
+            'pending' => new external_value(PARAM_BOOL, 'True while a job runs'),
+            'pendinglabel' => new external_value(PARAM_TEXT, 'Status of the running job, naming its period when it is another one'),
+            'failed' => new external_value(PARAM_BOOL, 'True when the latest attempt for this period failed'),
+            'unchanged' => new external_value(PARAM_BOOL, 'True when the stored synthesis was kept'),
+            'unavailable' => new external_value(PARAM_BOOL, 'True when the synthesis service cannot be reached'),
+            'showintro' => new external_value(PARAM_BOOL, 'True when nothing was requested yet'),
+            'hasresult' => new external_value(PARAM_BOOL, 'True when a completed synthesis is stored'),
+            'stale' => new external_value(PARAM_BOOL, 'True when the stored synthesis covers another period'),
+            'stalelabel' => new external_value(PARAM_TEXT, 'Period the stored synthesis covers, when stale'),
+            'nostudent' => new external_value(PARAM_BOOL, 'True when no student used the tutor'),
+            'toofew' => new external_value(PARAM_BOOL, 'True when too few students wrote for an anonymous synthesis'),
+            'hascoverage' => new external_value(PARAM_BOOL, 'True when the coverage line is shown'),
+            'hasshare' => new external_value(PARAM_BOOL, 'True when the enrolled count is known'),
+            'coveragelabel' => new external_value(PARAM_TEXT, 'Students who used the tutor'),
+            'coveragepercent' => new external_value(PARAM_INT, 'Share of enrolled students who used the tutor'),
+            'coveragelow' => new external_value(PARAM_BOOL, 'True when under half the enrolled students used the tutor'),
+            'messagelabel' => new external_value(PARAM_TEXT, 'Analysed student messages'),
+            'hassummary' => new external_value(PARAM_BOOL, 'True when a summary text is stored'),
+            'summary' => new external_value(PARAM_RAW, 'Sanitised synthesis HTML'),
+            'truncated' => new external_value(PARAM_BOOL, 'True when a sample of each student\'s recent exchanges was read'),
+            'buttonlabel' => new external_value(PARAM_TEXT, 'Label of the request button'),
         ]);
     }
 
     /**
-     * Normalise a service view model for the web service.
+     * Keep only the keys the web services return.
      *
      * @param array $view Service view model.
      * @return array
      */
     public static function from_view(array $view): array {
-        return [
-            'state' => (string) $view['state'],
-            'unchanged' => !empty($view['unchanged']),
-            'unavailable' => !empty($view['unavailable']),
-            'summary' => (string) $view['summary'],
-            'truncated' => !empty($view['truncated']),
-            'empty' => !empty($view['empty']),
-            'jobid' => (string) ($view['jobid'] ?? ''),
-            'window' => (string) ($view['window'] ?? ''),
-        ];
+        return array_intersect_key($view, self::returns()->keys);
     }
 }
