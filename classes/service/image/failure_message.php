@@ -76,7 +76,7 @@ final class failure_message {
      * Sentence shown to the current user.
      *
      * A stored code is translated now. A stored sentence is returned as-is.
-     * An empty value uses the generic failure sentence.
+     * An empty value or an unknown code uses the generic failure sentence.
      *
      * @param string|null $stored Code or sentence read from the image job.
      * @return string
@@ -86,7 +86,8 @@ final class failure_message {
             return get_string(self::STRING_KEYS[$stored], 'local_dixeo');
         }
 
-        if ($stored !== null && $stored !== '') {
+        // Older rows and local timeouts store a sentence. A bare token is a code.
+        if ($stored !== null && $stored !== '' && preg_match('/\s/u', $stored) === 1) {
             return $stored;
         }
 

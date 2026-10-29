@@ -23,6 +23,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\apply\registry as apply_registry;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\failure_message;
 use local_dixeo\service\image\image_target;
 use local_dixeo\service\image\poll\engine as poll_engine;
 use local_dixeo\service\image\poll\manager as poll_manager;
@@ -130,7 +131,13 @@ class poll_image_job extends \core\task\adhoc_task {
         }
 
         if ($outcome['failed']) {
-            $this->mark_failed($target, $job, $userid, (string) ($outcome['errormessage'] ?? ''));
+            $this->mark_failed(
+                $target,
+                $job,
+                $userid,
+                (string) ($outcome['errormessage'] ?? ''),
+                (string) ($outcome['errorcode'] ?? '')
+            );
             return;
         }
 
@@ -187,14 +194,23 @@ class poll_image_job extends \core\task\adhoc_task {
      * @param image_target $target
      * @param \stdClass|null $job
      * @param int $userid
-     * @param string $message
+     * @param string $message Diagnostic text for a local failure. Not shown to the user.
+     * @param string $errorcode API failure code when the remote job failed.
      * @return void
      */
-    private function mark_failed(image_target $target, ?\stdClass $job, int $userid, string $message): void {
-        if ($message !== '' && $message !== get_string('dixeo_image_job_failed', 'local_dixeo')) {
+    private function mark_failed(
+        image_target $target,
+        ?\stdClass $job,
+        int $userid,
+        string $message,
+        string $errorcode = ''
+    ): void {
+        $safe = failure_message::for_storage($errorcode !== '' ? $errorcode : null);
+        if ($errorcode !== '') {
+            debugging('Dixeo image job failed: ' . $errorcode, DEBUG_DEVELOPER);
+        } else if ($message !== '' && $message !== $safe) {
             debugging('Dixeo image job failed: ' . $message, DEBUG_DEVELOPER);
         }
-        $safe = get_string('dixeo_image_job_failed', 'local_dixeo');
         if ($job) {
             job_repository::mark_failed((int) $job->id, $safe);
         }
