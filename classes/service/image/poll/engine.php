@@ -48,7 +48,7 @@ final class engine {
      * Single non-blocking status check.
      *
      * @param string $remotejobid
-     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
+     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string, errorcode: string}
      */
     public static function poll_once(string $remotejobid): array {
         try {
@@ -67,20 +67,22 @@ final class engine {
                 'failed' => false,
                 'result' => self::normalise_result($jobstatus->result),
                 'errormessage' => '',
+                'errorcode' => '',
             ];
         }
 
         if ($jobstatus->is_failed()) {
-            $detail = (string) ($jobstatus->errormessage ?? '');
-            if ($detail !== '') {
-                debugging('Dixeo image job failed: ' . $detail, DEBUG_DEVELOPER);
+            $errorcode = (string) ($jobstatus->errorcode ?? '');
+            if ($errorcode !== '') {
+                debugging('Dixeo image job failed: ' . $errorcode, DEBUG_DEVELOPER);
             }
             return [
                 'done' => true,
                 'completed' => false,
                 'failed' => true,
                 'result' => [],
-                'errormessage' => get_string('dixeo_image_job_failed', 'local_dixeo'),
+                'errormessage' => '',
+                'errorcode' => $errorcode,
             ];
         }
 
@@ -90,6 +92,7 @@ final class engine {
             'failed' => false,
             'result' => [],
             'errormessage' => '',
+            'errorcode' => '',
         ];
     }
 
@@ -113,7 +116,7 @@ final class engine {
     /**
      * Build a generic failed poll outcome for transport/configuration errors.
      *
-     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
+     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string, errorcode: string}
      */
     private static function failed_outcome(): array {
         return [
@@ -122,13 +125,14 @@ final class engine {
             'failed' => true,
             'result' => [],
             'errormessage' => get_string('dixeo_image_job_failed', 'local_dixeo'),
+            'errorcode' => '',
         ];
     }
 
     /**
      * Non-terminal outcome so adhoc polling retries after a transient API error.
      *
-     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string}
+     * @return array{done: bool, completed: bool, failed: bool, result: array, errormessage: string, errorcode: string}
      */
     private static function in_progress_outcome(): array {
         return [
@@ -137,6 +141,7 @@ final class engine {
             'failed' => false,
             'result' => [],
             'errormessage' => '',
+            'errorcode' => '',
         ];
     }
 }

@@ -23,6 +23,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\apply\registry as apply_registry;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\failure_message;
 use local_dixeo\service\image\image_target;
 
 /**
@@ -58,14 +59,15 @@ final class client_poll {
         }
 
         if ($jobstatus->is_failed()) {
-            $detail = (string) ($jobstatus->errormessage ?? '');
-            if ($detail !== '') {
-                debugging('Dixeo image job failed: ' . $detail, DEBUG_DEVELOPER);
+            $errorcode = (string) ($jobstatus->errorcode ?? '');
+            if ($errorcode !== '') {
+                debugging('Dixeo image job failed: ' . $errorcode, DEBUG_DEVELOPER);
             }
-            $message = get_string('dixeo_image_job_failed', 'local_dixeo');
+            $stored = failure_message::for_storage($errorcode !== '' ? $errorcode : null);
+            $message = failure_message::for_display($stored);
             $job = job_repository::get_by_target($target);
             if ($job) {
-                job_repository::mark_failed((int) $job->id, $message);
+                job_repository::mark_failed((int) $job->id, $stored);
             }
             // Must apply before adhoc poll sees STATUS_FAILED and exits early.
             if ($target instanceof content_target) {

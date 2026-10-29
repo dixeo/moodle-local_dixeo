@@ -176,8 +176,9 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
      * @param {Element} host
      * @param {'pending'|'failed'} state
      * @param {{generating: string, failed: string}} strings
+     * @param {string} [failedMessage] Specific failure sentence, when the server sent one.
      */
-    const ensureStatus = (host, state, strings) => {
+    const ensureStatus = (host, state, strings, failedMessage = '') => {
         if (host.classList.contains(GENERATING_CLASS)) {
             // Filter owns the generating label on .is-generating wraps.
             host.querySelector(`:scope > .${STATUS_CLASS}`)?.remove();
@@ -192,14 +193,21 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         }
         status.classList.toggle('is-pending', state === 'pending');
         status.classList.toggle('is-failed', state === 'failed');
-        status.textContent = state === 'pending' ? strings.generating : strings.failed;
+        let label = strings.failed;
+        if (state === 'pending') {
+            label = strings.generating;
+        } else if (failedMessage) {
+            label = failedMessage;
+        }
+        status.textContent = label;
     };
 
     /**
      * @param {HTMLImageElement} img
      * @param {{generating: string, failed: string}} strings
+     * @param {string} [failedMessage] Specific failure sentence, when the server sent one.
      */
-    const enhanceImage = (img, strings) => {
+    const enhanceImage = (img, strings, failedMessage = '') => {
         const state = imageState(img);
         if (!state) {
             return;
@@ -209,7 +217,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
 
         const wrap = img.closest(`.${WRAP_CLASS}`);
         if (wrap) {
-            ensureStatus(wrap, state, strings);
+            ensureStatus(wrap, state, strings, failedMessage);
             return;
         }
 
@@ -220,7 +228,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             img.replaceWith(frame);
             frame.appendChild(img);
         }
-        ensureStatus(frame, state, strings);
+        ensureStatus(frame, state, strings, failedMessage);
     };
 
     /**
@@ -301,6 +309,28 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
+     * Collect failed placeholder ids under the top document.
+     *
+     * A reloaded page already has the failed class and would otherwise keep the
+     * generic pill. One status read supplies the stored failure reason.
+     *
+     * @returns {string[]}
+     */
+    const collectFailedPlaceholderIds = () => {
+        const ids = [];
+        document.querySelectorAll('img.dixeo-img-gen-failed').forEach((img) => {
+            if (!isHtmlImage(img)) {
+                return;
+            }
+            const id = placeholderIdFromImg(img);
+            if (id && !ids.includes(id)) {
+                ids.push(id);
+            }
+        });
+        return ids;
+    };
+
+    /**
      * Find a live pending/failed img for a placeholder id.
      *
      * @param {string} placeholderid
@@ -368,6 +398,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             img.removeAttribute('data-dixeo-contenthash');
         }
 
+        const failedMessage = item.status === 'failed' ? (item.errormessage || '').trim() : '';
         if (nextClass.indexOf('dixeo-img-gen-pending') === -1 &&
                 nextClass.indexOf('dixeo-img-gen-failed') === -1) {
             clearImageHost(img);
@@ -382,9 +413,42 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                 editorWrap.querySelectorAll(`:scope > .${STATUS_CLASS}`).forEach((el) => el.remove());
             }
         } else {
-            enhanceImage(img, strings);
+            enhanceImage(img, strings, failedMessage);
         }
         return true;
+    };
+
+    /**
+     * Replace generic failed pills with the reason stored on the image job.
+     *
+     * @param {{generating: string, failed: string}} strings
+     * @returns {Promise<void>}
+     */
+    const refreshFailedLabels = (strings) => {
+        const ids = collectFailedPlaceholderIds();
+        if (!ids.length) {
+            return Promise.resolve();
+        }
+        return Ajax.call([{
+            methodname: 'local_dixeo_get_content_image_status',
+            args: {placeholderids: ids},
+        }])[0].then((response) => {
+            const items = response && response.items ? response.items : [];
+            items.forEach((item) => {
+                if (item.status !== 'failed') {
+                    return;
+                }
+                const img = findPageImage(item.placeholderid, item.filename || '');
+                if (!isHtmlImage(img)) {
+                    return;
+                }
+                const message = (item.errormessage || '').trim();
+                enhanceImage(img, strings, message);
+            });
+            return undefined;
+        }).catch(() => {
+            return undefined;
+        });
     };
 
     /**
@@ -459,6 +523,9 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             if (doc === document && collectPendingPlaceholderIds().length) {
                 startPagePolling(strings);
             }
+            if (doc === document) {
+                return refreshFailedLabels(strings);
+            }
             return undefined;
         });
     };
@@ -477,12 +544,13 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
             if (doc === document && collectPendingPlaceholderIds().length) {
                 startPagePolling(strings);
             }
+            const failedRefresh = doc === document ? refreshFailedLabels(strings) : Promise.resolve();
 
             if (typeof MutationObserver === 'undefined' || !observeRoot) {
-                return undefined;
+                return failedRefresh;
             }
             if (observedDocs.has(doc)) {
-                return undefined;
+                return failedRefresh;
             }
             observedDocs.add(doc);
 
@@ -516,7 +584,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                 }
             });
             observer.observe(observeRoot, {childList: true, subtree: true});
-            return undefined;
+            return failedRefresh;
         });
     };
 

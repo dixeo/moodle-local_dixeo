@@ -18,6 +18,7 @@ namespace local_dixeo\repository\image;
 
 
 use local_dixeo\service\image\content\location;
+use local_dixeo\service\image\failure_message;
 
 /**
  * Tests for job_repository.
@@ -160,5 +161,56 @@ final class job_repository_test extends \advanced_testcase {
         } catch (\moodle_exception $e) {
             $this->assertSame('dixeo_image_job_locked', $e->errorcode);
         }
+    }
+
+    /**
+     * A stored failure code is translated when the status payload is built.
+     */
+    public function test_failed_status_translates_a_stored_failure_code(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $location = new location(3, 'mod_page', 'content', 0, '/', 'refused.png', 2);
+        job_repository::upsert_job(array_merge($location->to_record_fields(), [
+            'jobid' => 'job-refused',
+            'status' => job_repository::STATUS_FAILED,
+            'origin' => job_repository::ORIGIN_MODAL,
+            'errormessage' => failure_message::CODE_CONTENT_REJECTED,
+            'userid' => (int) $USER->id,
+        ]));
+
+        $status = job_repository::get_location_status($location);
+
+        $this->assertSame(job_repository::STATUS_FAILED, $status['status']);
+        $this->assertSame(
+            get_string('dixeo_image_job_content_rejected', 'local_dixeo'),
+            $status['errormessage']
+        );
+    }
+
+    /**
+     * A sentence already stored on the job is shown unchanged.
+     */
+    public function test_failed_status_keeps_a_stored_sentence(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $sentence = get_string('dixeo_image_job_failed', 'local_dixeo');
+        $location = new location(3, 'mod_page', 'content', 0, '/', 'timeout.png', 2);
+        job_repository::upsert_job(array_merge($location->to_record_fields(), [
+            'jobid' => 'job-timeout',
+            'status' => job_repository::STATUS_FAILED,
+            'origin' => job_repository::ORIGIN_MODAL,
+            'errormessage' => $sentence,
+            'userid' => (int) $USER->id,
+        ]));
+
+        $status = job_repository::get_location_status($location);
+
+        $this->assertSame($sentence, $status['errormessage']);
     }
 }
