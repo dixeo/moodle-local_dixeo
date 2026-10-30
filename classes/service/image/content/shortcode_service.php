@@ -17,13 +17,12 @@
 namespace local_dixeo\service\image\content;
 
 
-use local_dixeo\external\service_factory;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\generation_request;
 use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\image\policy;
-use local_dixeo\service\image_generation_service;
 
 /**
  * Processes [img-gen] shortcodes in DSL HTML fields.
@@ -35,17 +34,6 @@ use local_dixeo\service\image_generation_service;
 class shortcode_service {
     /** @var string[] HTML fields that may contain img-gen shortcodes. */
     private const PROCESSABLE_FIELDS = ['intro', 'content', 'definition'];
-
-    /** @var image_generation_service|null */
-    private ?image_generation_service $imageservice;
-
-    /**
-     *   construct.
-     * @param image_generation_service|null $imageservice
-     */
-    public function __construct(?image_generation_service $imageservice = null) {
-        $this->imageservice = $imageservice;
-    }
 
     /**
      * Process HTML for one html_field_target field; returns updated HTML.
@@ -71,13 +59,12 @@ class shortcode_service {
             return shortcode_parser::strip_all($html);
         }
 
-        $imageservice = $this->imageservice ?? service_factory::get_image_generation_service();
         $title = $this->resolve_title($htmlfieldtarget);
 
         return (string) preg_replace_callback(
             shortcode_parser::SHORTCODE_PATTERN,
-            function (array $match) use ($htmlfieldtarget, $userid, $imageservice, $title): string {
-                return $this->replace_shortcode_match($match[0], $htmlfieldtarget, $userid, $imageservice, $title);
+            function (array $match) use ($htmlfieldtarget, $userid, $title): string {
+                return $this->replace_shortcode_match($match[0], $htmlfieldtarget, $userid, $title);
             },
             $html
         );
@@ -213,7 +200,6 @@ class shortcode_service {
      * @param string $shortcode Full shortcode token including brackets.
      * @param html_field_target $htmlfieldtarget
      * @param int $userid
-     * @param image_generation_service $imageservice
      * @param string $title
      * @return string
      */
@@ -221,7 +207,6 @@ class shortcode_service {
         string $shortcode,
         html_field_target $htmlfieldtarget,
         int $userid,
-        image_generation_service $imageservice,
         string $title
     ): string {
         $parsed = shortcode_parser::find_all($shortcode);
@@ -248,43 +233,26 @@ class shortcode_service {
 
         file_service::create_stub($location, $userid);
 
-        try {
-            $result = $imageservice->submit_content_image_generate_job(
-                $htmlfieldtarget->courseid,
-                $title,
-                $spec['prompt'],
-                $spec['size'],
-                $spec['quality'],
-                $this->metadata_for_field_target($htmlfieldtarget)
-            );
-
-            $jobid = trim((string) $result->jobid);
-            if ($jobid === '') {
-                throw new \moodle_exception('dixeo_image_job_empty_result', 'local_dixeo');
-            }
-
-            $contenttarget = content_target::from_location($location);
-            job_orchestrator::submit_and_queue($contenttarget, $jobid, $userid, [
-                'placeholderid' => $placeholderid,
-                'targettable' => $htmlfieldtarget->targettable,
-                'targetfield' => $htmlfieldtarget->targetfield,
-                'targetid' => $htmlfieldtarget->targetid,
-                'cmid' => $htmlfieldtarget->cmid,
-                'origin' => job_repository::ORIGIN_SHORTCODE,
-                'prompt' => $spec['prompt'],
-                'quality' => $spec['quality'],
-                'mode' => $spec['mode'],
-            ]);
-        } catch (\Throwable $e) {
-            // Degrade gracefully: content creation must not fail because an image
-            // could not be generated. Drop the shortcode and the orphaned stub file.
-            debugging('img-gen shortcode job submission failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            $stub = $location->get_stored_file();
-            if ($stub) {
-                $stub->delete();
-            }
-            return '';
-        }
+        $request = generation_request::for_content(
+            'local_dixeo',
+            $htmlfieldtarget->courseid,
+            $title,
+            $spec['prompt'],
+            $spec['size'],
+            $spec['quality'],
+            $this->metadata_for_field_target($htmlfieldtarget)
+        );
+        job_orchestrator::queue_generation(content_target::from_location($location), $userid, $request, [
+            'placeholderid' => $placeholderid,
+            'targettable' => $htmlfieldtarget->targettable,
+            'targetfield' => $htmlfieldtarget->targetfield,
+            'targetid' => $htmlfieldtarget->targetid,
+            'cmid' => $htmlfieldtarget->cmid,
+            'origin' => job_repository::ORIGIN_SHORTCODE,
+            'prompt' => $spec['prompt'],
+            'quality' => $spec['quality'],
+            'mode' => $spec['mode'],
+        ]);
 
         $url = s($location->get_pluginfile_token_src());
         return '<img src="' . $url . '" class="' . html_helper::IMG_CLASS . ' dixeo-img-gen-pending" data-dixeo-img-gen="' .

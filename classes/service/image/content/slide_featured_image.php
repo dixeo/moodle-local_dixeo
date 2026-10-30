@@ -17,12 +17,11 @@
 namespace local_dixeo\service\image\content;
 
 use local_dixeo\dto\job_binding_metadata;
-use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\generation_request;
 use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\image\policy;
-use local_dixeo\service\image_generation_service;
 
 /**
  * Resolves a slideshow featured-image shortcode into the slide image file area.
@@ -35,18 +34,6 @@ use local_dixeo\service\image_generation_service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class slide_featured_image {
-    /** @var image_generation_service|null */
-    private ?image_generation_service $imageservice;
-
-    /**
-     * Create the resolver.
-     *
-     * @param image_generation_service|null $imageservice Image job client, or null to use the shared one.
-     */
-    public function __construct(?image_generation_service $imageservice = null) {
-        $this->imageservice = $imageservice;
-    }
-
     /**
      * Whether the value is one new [img-gen] shortcode.
      *
@@ -108,35 +95,25 @@ class slide_featured_image {
         );
         file_service::create_stub($location, $userid);
 
-        try {
-            $imageservice = $this->imageservice ?? service_factory::get_image_generation_service();
-            $result = $imageservice->submit_content_image_generate_job(
-                $courseid,
-                $title !== '' ? $title : get_string('contentimagetitlefallback', 'local_dixeo'),
-                $spec['prompt'],
-                $spec['size'],
-                $spec['quality'],
-                $cmid > 0 ? job_binding_metadata::for_module('slideshow', $cmid) : null
-            );
-            $jobid = trim((string) $result->jobid);
-            if ($jobid === '') {
-                throw new \moodle_exception('dixeo_image_job_empty_result', 'local_dixeo');
-            }
-            job_orchestrator::submit_and_queue(content_target::from_location($location), $jobid, $userid, [
-                'origin' => job_repository::ORIGIN_SLIDE_FEATURED,
-                'targettable' => 'slideshow_slide',
-                'targetfield' => 'layout',
-                'targetid' => $slideid,
-                'cmid' => $cmid,
-                'prompt' => $spec['prompt'],
-                'quality' => $spec['quality'],
-                'mode' => $spec['mode'],
-            ]);
-        } catch (\Throwable $e) {
-            debugging('Slideshow featured image job submission failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            self::delete_file($location);
-            return false;
-        }
+        $request = generation_request::for_content(
+            'local_dixeo',
+            $courseid,
+            $title !== '' ? $title : get_string('contentimagetitlefallback', 'local_dixeo'),
+            $spec['prompt'],
+            $spec['size'],
+            $spec['quality'],
+            $cmid > 0 ? job_binding_metadata::for_module('slideshow', $cmid) : null
+        );
+        job_orchestrator::queue_generation(content_target::from_location($location), $userid, $request, [
+            'origin' => job_repository::ORIGIN_SLIDE_FEATURED,
+            'targettable' => 'slideshow_slide',
+            'targetfield' => 'layout',
+            'targetid' => $slideid,
+            'cmid' => $cmid,
+            'prompt' => $spec['prompt'],
+            'quality' => $spec['quality'],
+            'mode' => $spec['mode'],
+        ]);
 
         return true;
     }

@@ -17,8 +17,7 @@
 namespace local_dixeo\service\image\content;
 
 
-use local_dixeo\service\image_generation_service;
-use local_dixeo\service\job_service;
+use local_dixeo\task\poll_image_job;
 
 /**
  * Tests for shortcode_service.
@@ -40,7 +39,7 @@ final class shortcode_service_test extends \advanced_testcase {
     }
 
     /**
-     * Test process html creates stub and job.
+     * Test process html creates stub and queues the job without calling the API.
      */
     public function test_process_html_creates_stub_and_job(): void {
         global $DB, $USER;
@@ -54,15 +53,7 @@ final class shortcode_service_test extends \advanced_testcase {
         ]);
         $context = \context_module::instance($page->cmid);
 
-        $jobmock = $this->getMockBuilder(job_service::class)
-            ->onlyMethods(['submit_job'])
-            ->getMock();
-        $jobmock->expects($this->once())
-            ->method('submit_job')
-            ->willReturn(\local_dixeo\dto\operation_result::pending('job-123', 'pending'));
-
-        $imageservice = new image_generation_service($jobmock);
-        $service = new shortcode_service($imageservice);
+        $service = new shortcode_service();
 
         $target = new html_field_target(
             'page',
@@ -85,7 +76,14 @@ final class shortcode_service_test extends \advanced_testcase {
         $this->assertStringNotContainsString('[img-gen', $processed);
         $this->assertStringContainsString('data-dixeo-img-gen=', $processed);
         $this->assertStringContainsString('dixeo-img-gen-pending', $processed);
-        $this->assertSame(1, $DB->count_records('local_dixeo_image_job'));
+        $job = $DB->get_record('local_dixeo_image_job', [], '*', MUST_EXIST);
+        $this->assertSame('', $job->jobid);
+        $this->assertSame('pending', $job->status);
+        $tasks = \core\task\manager::get_adhoc_tasks(poll_image_job::class);
+        $this->assertCount(1, $tasks);
+        $request = reset($tasks)->get_custom_data()->request;
+        $this->assertSame('A diagram of cells', $request->prompt);
+        $this->assertSame('page', $request->binding->moduletype);
     }
 
     /**
@@ -98,7 +96,7 @@ final class shortcode_service_test extends \advanced_testcase {
         $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
         $context = \context_module::instance($page->cmid);
 
-        $service = new shortcode_service(new image_generation_service(new job_service()));
+        $service = new shortcode_service();
         $target = new html_field_target(
             'page',
             'content',
@@ -129,18 +127,7 @@ final class shortcode_service_test extends \advanced_testcase {
         $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
         $context = \context_module::instance($page->cmid);
 
-        $jobmock = $this->getMockBuilder(job_service::class)
-            ->onlyMethods(['submit_job'])
-            ->getMock();
-        $jobmock->expects($this->exactly(3))
-            ->method('submit_job')
-            ->willReturnOnConsecutiveCalls(
-                \local_dixeo\dto\operation_result::pending('job-1', 'pending'),
-                \local_dixeo\dto\operation_result::pending('job-2', 'pending'),
-                \local_dixeo\dto\operation_result::pending('job-3', 'pending')
-            );
-
-        $service = new shortcode_service(new image_generation_service($jobmock));
+        $service = new shortcode_service();
         $target = new html_field_target(
             'page',
             'content',
@@ -161,5 +148,6 @@ final class shortcode_service_test extends \advanced_testcase {
 
         $this->assertSame(3, substr_count($processed, 'data-dixeo-img-gen='));
         $this->assertSame(3, $DB->count_records('local_dixeo_image_job'));
+        $this->assertCount(3, \core\task\manager::get_adhoc_tasks(poll_image_job::class));
     }
 }

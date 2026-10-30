@@ -197,4 +197,29 @@ final class editor_image_codec_test extends \advanced_testcase {
         $this->assertStringContainsString('data-dixeo-draft-file="photo.png"', $result->html);
         $this->assertStringNotContainsString('data-dixeo-img-gen', $result->html);
     }
+
+    /**
+     * A new shortcode becomes a pending placeholder whose generation is queued, not submitted.
+     */
+    public function test_decode_new_shortcode_queues_generation(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+
+        [$ctx] = $this->make_page_context(8);
+        $codec = new editor_image_codec();
+        $result = $codec->decode_html_from_api('[img-gen prompt="A volcano"]', $ctx, (int) get_admin()->id);
+
+        $this->assertCount(1, $result->newplaceholderids);
+        $this->assertStringContainsString('dixeo-img-gen-pending', $result->html);
+        $job = \local_dixeo\repository\image\job_repository::get_by_placeholderid($result->newplaceholderids[0]);
+        $this->assertNotNull($job);
+        $this->assertSame('', $job->jobid);
+        $this->assertSame(\local_dixeo\repository\image\job_repository::ORIGIN_EDITOR_DRAFT, $job->origin);
+
+        $tasks = \core\task\manager::get_adhoc_tasks(\local_dixeo\task\poll_image_job::class);
+        $this->assertCount(1, $tasks);
+        $this->assertSame('local_dixeo_editor', reset($tasks)->get_custom_data()->request->component);
+    }
 }

@@ -86,6 +86,7 @@ class job_service {
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @param job_access_mode $accessmode Persisted access policy for later enforcement.
      * @param \stored_file[] $files Files sent with the payload as multipart.
+     * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      */
@@ -95,9 +96,10 @@ class job_service {
         ?string $component = null,
         ?job_binding_metadata $metadata = null,
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
-        array $files = []
+        array $files = [],
+        ?string $idempotencykey = null
     ): operation_result {
-        $response = $this->post($endpoint, $payload, $files);
+        $response = $this->post($endpoint, $payload, $files, $idempotencykey);
         $jobid = (string) ($response['id'] ?? '');
         $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
 
@@ -425,14 +427,15 @@ class job_service {
      * @param string $endpoint API endpoint.
      * @param array $payload Request payload.
      * @param \stored_file[] $files Files to attach.
+     * @param string|null $idempotencykey Optional idempotency key.
      * @return array Decoded response.
      * @throws api_exception
      */
-    private function post(string $endpoint, array $payload, array $files): array {
+    private function post(string $endpoint, array $payload, array $files, ?string $idempotencykey = null): array {
         if ($files === []) {
-            return $this->client->post($endpoint, $payload);
+            return $this->client->post($endpoint, $payload, $idempotencykey);
         }
-        return $this->client->post_multipart($endpoint, $payload, $files);
+        return $this->client->post_multipart($endpoint, $payload, $files, $idempotencykey);
     }
 
     /**

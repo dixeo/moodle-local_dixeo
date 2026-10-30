@@ -17,13 +17,12 @@
 namespace local_dixeo\service\image\content;
 
 
-use local_dixeo\external\service_factory;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\generation_request;
 use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\image\policy;
-use local_dixeo\service\image_generation_service;
 
 /**
  * Encode/decode img-gen shortcodes for Dixeo editor API round-trip.
@@ -33,17 +32,6 @@ use local_dixeo\service\image_generation_service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class editor_image_codec {
-    /** @var image_generation_service|null */
-    private ?image_generation_service $imageservice;
-
-    /**
-     *   construct.
-     * @param image_generation_service|null $imageservice
-     */
-    public function __construct(?image_generation_service $imageservice = null) {
-        $this->imageservice = $imageservice;
-    }
-
     /**
      * Replace pluginfile images in HTML with [img-gen ref/file] shortcodes for the remote API.
      *
@@ -282,44 +270,26 @@ final class editor_image_codec {
 
         file_service::create_stub($location, $userid);
 
-        $imageservice = $this->imageservice ?? service_factory::get_image_generation_service('local_dixeo_editor');
-        $title = $this->resolve_title($ctx);
-
-        try {
-            $result = $imageservice->submit_content_image_generate_job(
-                $ctx->courseid,
-                $title,
-                (string) $spec['prompt'],
-                (string) $spec['size'],
-                (string) $spec['quality'],
-                job_binding_metadata::for_module($ctx->modname, $ctx->cmid)
-            );
-
-            $jobid = trim((string) $result->jobid);
-            if ($jobid === '') {
-                throw new \moodle_exception('dixeo_image_job_empty_result', 'local_dixeo');
-            }
-
-            $contenttarget = content_target::from_location($location);
-            job_orchestrator::submit_and_queue($contenttarget, $jobid, $userid, [
-                'placeholderid' => $placeholderid,
-                'targettable' => 'local_dixeo_editor_session',
-                'targetfield' => 'draft',
-                'targetid' => $ctx->sessionid,
-                'cmid' => $ctx->cmid,
-                'origin' => job_repository::ORIGIN_EDITOR_DRAFT,
-                'prompt' => (string) $spec['prompt'],
-                'quality' => (string) $spec['quality'],
-                'mode' => (string) $spec['mode'],
-            ]);
-        } catch (\Throwable $e) {
-            debugging('editor img-gen job submission failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            $stub = $location->get_stored_file();
-            if ($stub) {
-                $stub->delete();
-            }
-            return '';
-        }
+        $request = generation_request::for_content(
+            'local_dixeo_editor',
+            $ctx->courseid,
+            $this->resolve_title($ctx),
+            (string) $spec['prompt'],
+            (string) $spec['size'],
+            (string) $spec['quality'],
+            job_binding_metadata::for_module($ctx->modname, $ctx->cmid)
+        );
+        job_orchestrator::queue_generation(content_target::from_location($location), $userid, $request, [
+            'placeholderid' => $placeholderid,
+            'targettable' => 'local_dixeo_editor_session',
+            'targetfield' => 'draft',
+            'targetid' => $ctx->sessionid,
+            'cmid' => $ctx->cmid,
+            'origin' => job_repository::ORIGIN_EDITOR_DRAFT,
+            'prompt' => (string) $spec['prompt'],
+            'quality' => (string) $spec['quality'],
+            'mode' => (string) $spec['mode'],
+        ]);
 
         return $this->build_img_for_location($location, $placeholderid, job_repository::get_by_placeholderid($placeholderid));
     }

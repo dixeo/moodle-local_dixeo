@@ -150,6 +150,7 @@ class image_generation_service {
      * @param int $sectionid The course_sections.id.
      * @param string $size Image dimensions (default 1536x1024 landscape).
      * @param string $quality Quality level (low/medium/high, default medium).
+     * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result Pending operation result with jobid.
      * @throws \moodle_exception If section image generation is disabled by {@see \local_dixeo\service\image\policy}.
      * @throws api_exception If the API request fails.
@@ -158,7 +159,8 @@ class image_generation_service {
     public function submit_section_image_job(
         int $sectionid,
         string $size = self::DEFAULT_SIZE,
-        string $quality = self::DEFAULT_QUALITY
+        string $quality = self::DEFAULT_QUALITY,
+        ?string $idempotencykey = null
     ): operation_result {
         global $DB;
 
@@ -185,7 +187,8 @@ class image_generation_service {
             self::GENERATE_ENDPOINT,
             $payload,
             $this->component,
-            job_binding_metadata::for_course((int) $section->course)
+            job_binding_metadata::for_course((int) $section->course),
+            idempotencykey: $idempotencykey
         );
     }
 
@@ -298,6 +301,7 @@ class image_generation_service {
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
      * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
+     * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result
      */
     public function submit_content_image_generate_job(
@@ -306,7 +310,8 @@ class image_generation_service {
         string $prompt,
         string $size = self::DEFAULT_SIZE,
         string $quality = self::DEFAULT_QUALITY,
-        ?job_binding_metadata $metadata = null
+        ?job_binding_metadata $metadata = null,
+        ?string $idempotencykey = null
     ): operation_result {
         global $DB;
 
@@ -332,7 +337,8 @@ class image_generation_service {
             self::GENERATE_ENDPOINT,
             $payload,
             $this->component,
-            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
+            job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata),
+            idempotencykey: $idempotencykey
         );
     }
 

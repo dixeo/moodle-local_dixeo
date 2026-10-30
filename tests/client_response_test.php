@@ -81,7 +81,7 @@ final class client_response_test extends \advanced_testcase {
 
         $this->assertInstanceOf(rate_limit_exception::class, $e);
         $this->assertSame(429, $e->get_http_status());
-        $this->assertStringContainsString(get_string('error:rate_limit', 'local_dixeo'), $e->getMessage());
+        $this->assertStringContainsString(get_string('error:busy', 'local_dixeo'), $e->getMessage());
     }
 
     public function test_api_rate_limit_problem_is_a_rate_limit(): void {

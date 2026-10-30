@@ -17,9 +17,6 @@
 namespace local_dixeo\dsl;
 
 use local_dixeo\dsl\actions\create_slides_action;
-use local_dixeo\service\image\content\slide_featured_image;
-use local_dixeo\service\image_generation_service;
-use local_dixeo\service\job_service;
 use local_dixeo\service\plugin_installation_service;
 
 /**
@@ -150,24 +147,6 @@ final class create_slides_action_test extends \advanced_testcase {
         set_config('image_generation_enabled', '1', 'local_dixeo');
         set_config('image_generation_content_mode', 'generate', 'local_dixeo');
 
-        $jobmock = $this->getMockBuilder(job_service::class)
-            ->onlyMethods(['submit_job'])
-            ->getMock();
-        $jobmock->expects($this->once())
-            ->method('submit_job')
-            ->with(
-                $this->equalTo('/v1/images/generate'),
-                $this->callback(static function (array $payload): bool {
-                    return ($payload['scope'] ?? '') === 'content'
-                        && ($payload['prompt'] ?? '') === 'A cell membrane'
-                        && ($payload['size'] ?? '') === '1024x1536';
-                })
-            )
-            ->willReturn(\local_dixeo\dto\operation_result::pending('slide-image-1', 'pending'));
-
-        $slidesaction = new create_slides_action(
-            new slide_featured_image(new image_generation_service($jobmock))
-        );
         $slides = $this->create_slideshow('Cells', [
             'name' => 'Cells',
             'intro' => '<p>How cells work.</p>',
@@ -180,7 +159,7 @@ final class create_slides_action_test extends \advanced_testcase {
                     'featuredImage' => '[img-gen prompt="A cell membrane" mode="portrait"]',
                 ],
             ],
-        ], true, $slidesaction);
+        ], true);
 
         $this->assertSame('contentleft', $slides[1]->layout);
         $this->assertStringNotContainsString('[img-gen', $slides[1]->content);
@@ -201,6 +180,14 @@ final class create_slides_action_test extends \advanced_testcase {
             'itemid' => $slides[1]->id,
         ], '*', MUST_EXIST);
         $this->assertSame('slide_featured', $job->origin);
+        $this->assertSame('', $job->jobid);
+        $this->assertSame('pending', $job->status);
+
+        $tasks = \core\task\manager::get_adhoc_tasks(\local_dixeo\task\poll_image_job::class);
+        $this->assertCount(1, $tasks);
+        $request = reset($tasks)->get_custom_data()->request;
+        $this->assertSame('A cell membrane', $request->prompt);
+        $this->assertSame('1024x1536', $request->size);
     }
 
     /**

@@ -185,7 +185,7 @@ final class job_repository_test extends \advanced_testcase {
 
         $this->assertSame(job_repository::STATUS_FAILED, $status['status']);
         $this->assertSame(
-            get_string('dixeo_image_job_content_rejected', 'local_dixeo'),
+            get_string('error:content_rejected', 'local_dixeo'),
             $status['errormessage']
         );
     }

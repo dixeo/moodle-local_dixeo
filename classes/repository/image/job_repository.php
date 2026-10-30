@@ -62,6 +62,9 @@ final class job_repository {
     /** @var int Seconds before a pending lock is marked failed (~1h). */
     public const TIMEOUT_SECONDS = 3600;
 
+    /** @var int Seconds a queued job may wait for the API to accept it (~2h). */
+    public const SUBMIT_TIMEOUT_SECONDS = 2 * HOURSECS;
+
     /**
      * Get by target.
      * @param image_target $target
@@ -110,12 +113,49 @@ final class job_repository {
             return $record;
         }
 
-        if ((time() - (int) $record->timecreated) > self::TIMEOUT_SECONDS) {
+        if (self::is_expired($record, time())) {
             $record->status = self::STATUS_FAILED;
-            $record->errormessage = get_string('dixeo_image_job_failed', 'local_dixeo');
+            $record->errormessage = failure_message::CODE_FAILED;
         }
 
         return $record;
+    }
+
+    /**
+     * Whether an in-flight row is past its deadline.
+     *
+     * A queued row (empty jobid) gets the submit window on top of the poll window;
+     * submission restarts the clock, see {@see self::set_remote_jobid()}.
+     *
+     * @param \stdClass $record Job row.
+     * @param int $now Current time.
+     * @return bool
+     */
+    public static function is_expired(\stdClass $record, int $now): bool {
+        $timeout = trim((string) ($record->jobid ?? '')) === ''
+            ? self::SUBMIT_TIMEOUT_SECONDS + self::TIMEOUT_SECONDS
+            : self::TIMEOUT_SECONDS;
+
+        return ($now - (int) $record->timecreated) > $timeout;
+    }
+
+    /**
+     * SQL condition matching rows past their deadline, as {@see self::is_expired()}.
+     *
+     * @param int $now Current time.
+     * @return array{0: string, 1: array<string, mixed>} Condition and named params.
+     */
+    public static function expired_sql(int $now): array {
+        return [
+            "((jobid <> :expsubmitted AND timecreated < :exppollcutoff)
+                OR (jobid = :expqueued AND timecreated < :expqueuecutoff))",
+            [
+                'expsubmitted' => '',
+                'exppollcutoff' => $now - self::TIMEOUT_SECONDS,
+                'expqueued' => '',
+                'expqueuecutoff' => $now - self::SUBMIT_TIMEOUT_SECONDS - self::TIMEOUT_SECONDS,
+            ],
+        ];
     }
 
     /**
@@ -136,15 +176,15 @@ final class job_repository {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($hashes, SQL_PARAMS_NAMED);
+        [$expiredsql, $expiredparams] = self::expired_sql(time());
         $params['pending'] = self::STATUS_PENDING;
         $params['processing'] = self::STATUS_PROCESSING;
-        $params['cutoff'] = time() - self::TIMEOUT_SECONDS;
 
         return $DB->get_fieldset_select(
             self::TABLE,
             'locationhash',
-            "locationhash {$insql} AND status IN (:pending, :processing) AND timecreated > :cutoff",
-            $params
+            "locationhash {$insql} AND status IN (:pending, :processing) AND NOT {$expiredsql}",
+            $params + $expiredparams
         );
     }
 
@@ -239,7 +279,7 @@ final class job_repository {
         $existing = $DB->get_record(self::TABLE, ['locationhash' => $locationhash], '*', IGNORE_MISSING);
         if (
             $existing && in_array($existing->status, [self::STATUS_PENDING, self::STATUS_PROCESSING], true)
-                && (time() - (int) $existing->timecreated) <= self::TIMEOUT_SECONDS
+                && !self::is_expired($existing, time())
                 && (string) $existing->jobid !== (string) ($fields['jobid'] ?? '')
         ) {
             throw new \moodle_exception('dixeo_image_job_locked', 'local_dixeo');
@@ -280,6 +320,27 @@ final class job_repository {
             'status' => $status,
             'errormessage' => $errormessage,
             'timemodified' => time(),
+        ]);
+    }
+
+    /**
+     * Record the remote job id of a queued job once the API accepted it.
+     *
+     * Restarts the lock window: the poll timeout counts from submission.
+     *
+     * @param int $id Local job row id.
+     * @param string $remotejobid Remote job id.
+     * @return void
+     */
+    public static function set_remote_jobid(int $id, string $remotejobid): void {
+        global $DB;
+
+        $now = time();
+        $DB->update_record(self::TABLE, (object) [
+            'id' => $id,
+            'jobid' => $remotejobid,
+            'timecreated' => $now,
+            'timemodified' => $now,
         ]);
     }
 

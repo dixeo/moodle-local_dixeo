@@ -129,7 +129,7 @@ class api_exception extends \moodle_exception {
 
             // Rate limiting.
             'rate_limit_exceeded', 'too_many_requests', 'too_many_requests_http' => new rate_limit_exception(
-                get_string('error:rate_limit', 'local_dixeo'),
+                get_string('error:busy', 'local_dixeo'),
                 $errordata['retryAfter'] ?? $errordata['retry_after'] ?? null,
                 $details
             ),

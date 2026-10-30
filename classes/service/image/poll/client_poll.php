@@ -48,6 +48,10 @@ final class client_poll {
         int $userid,
         ?callable $imageurlresolver = null
     ): array {
+        // Not submitted yet: the poll task submits it.
+        if (trim($remotejobid) === '') {
+            return ['status' => 'pending'];
+        }
         try {
             $jobstatus = engine::poll_remote_once($remotejobid);
         } catch (rate_limit_exception $e) {
@@ -105,10 +109,10 @@ final class client_poll {
             return ['status' => 'completed', 'imageurl' => $imageurl];
         } catch (\Throwable $e) {
             debugging('Dixeo image apply failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            $message = get_string('dixeo_image_job_failed', 'local_dixeo');
+            $message = failure_message::for_display(failure_message::CODE_FAILED);
             $job = job_repository::get_by_target($target);
             if ($job) {
-                job_repository::mark_failed((int) $job->id, $message);
+                job_repository::mark_failed((int) $job->id, failure_message::CODE_FAILED);
             }
             if ($target instanceof content_target) {
                 apply_content_handler::apply_failure($target, $userid, $job);

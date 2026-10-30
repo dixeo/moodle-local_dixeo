@@ -43,8 +43,9 @@ final class response_factory_test extends \advanced_testcase {
             'validation_error' => 'error:validation_failed',
             'job_not_found' => 'error:job_not_found',
             'authentication' => 'error:authentication',
-            'upstream_ai' => 'error:upstream_ai',
-            'rate_limit_exceeded' => 'error:rate_limit',
+            'upstream_ai' => 'error:unavailable',
+            'rate_limit_exceeded' => 'error:busy',
+            'connection_error' => 'error:unavailable',
         ];
 
         foreach ($cases as $type => $stringkey) {

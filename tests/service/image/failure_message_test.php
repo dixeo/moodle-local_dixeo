@@ -34,15 +34,19 @@ final class failure_message_test extends \advanced_testcase {
         return [
             'content rejected' => [
                 failure_message::CODE_CONTENT_REJECTED,
-                'dixeo_image_job_content_rejected',
+                'error:content_rejected',
             ],
             'unavailable' => [
                 failure_message::CODE_AI_UNAVAILABLE,
-                'dixeo_image_job_unavailable',
+                'error:unavailable',
             ],
             'rate limited' => [
                 failure_message::CODE_RATE_LIMITED,
-                'dixeo_image_job_rate_limited',
+                'error:busy',
+            ],
+            'api payment problem' => [
+                'payment_required',
+                'error:payment_required',
             ],
         ];
     }
@@ -66,20 +70,37 @@ final class failure_message_test extends \advanced_testcase {
     }
 
     /**
-     * An unknown code, and a missing code, become the generic failure sentence.
+     * An unknown or missing code is stored as the failed code and shows the generic sentence.
      */
-    public function test_unknown_code_uses_the_generic_sentence(): void {
+    public function test_unknown_code_is_stored_as_failed(): void {
         $this->resetAfterTest();
         $generic = get_string('dixeo_image_job_failed', 'local_dixeo');
 
         $this->assertFalse(failure_message::is_known('internal'));
         $this->assertFalse(failure_message::is_known(null));
         $this->assertFalse(failure_message::is_known(''));
-        $this->assertSame($generic, failure_message::for_storage('internal'));
-        $this->assertSame($generic, failure_message::for_storage(null));
+        $this->assertSame(failure_message::CODE_FAILED, failure_message::for_storage('internal'));
+        $this->assertSame(failure_message::CODE_FAILED, failure_message::for_storage(null));
+        $this->assertSame($generic, failure_message::for_display(failure_message::CODE_FAILED));
         $this->assertSame($generic, failure_message::for_display('internal'));
         $this->assertSame($generic, failure_message::for_display(null));
         $this->assertSame($generic, failure_message::for_display(''));
+    }
+
+    /**
+     * The HTTP problem type and the job code for one situation show the same sentence.
+     */
+    public function test_problem_type_and_job_code_share_one_message(): void {
+        $this->resetAfterTest();
+
+        $this->assertSame(
+            failure_message::for_display(failure_message::CODE_RATE_LIMITED),
+            failure_message::for_display('rate_limit_exceeded')
+        );
+        $this->assertSame(
+            failure_message::for_display(failure_message::CODE_AI_UNAVAILABLE),
+            failure_message::for_display('upstream_ai')
+        );
     }
 
     /**

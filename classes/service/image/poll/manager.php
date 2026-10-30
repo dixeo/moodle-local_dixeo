@@ -19,7 +19,10 @@ namespace local_dixeo\service\image\poll;
 
 use core\task\manager as core_task_manager;
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\image\failure_message;
+use local_dixeo\service\image\generation_request;
 use local_dixeo\service\image\image_target;
+use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\image\target_factory;
 use local_dixeo\task\poll_image_job;
 
@@ -73,14 +76,15 @@ final class manager {
     }
 
     /**
-     * Whether any poll adhoc (queued or running) exists for this target.
+     * Whether a poll adhoc exists for this target.
      *
      * @param image_target $target
+     * @param bool $includerunning Also count a task that is running now.
      * @return bool
      */
-    public static function has_poll_task(image_target $target): bool {
+    public static function has_poll_task(image_target $target, bool $includerunning = false): bool {
         $hash = $target->get_location_hash();
-        $tasks = core_task_manager::get_adhoc_tasks(self::task_classname(), false, true);
+        $tasks = core_task_manager::get_adhoc_tasks(self::task_classname(), false, !$includerunning);
         foreach ($tasks as $task) {
             $data = $task->get_custom_data();
             if (!is_object($data)) {
@@ -98,6 +102,7 @@ final class manager {
      *
      * Adhoc runners can die after marking the row processing (OOM, timeout, kill)
      * without requeueing, which leaves the UI stuck on generating forever.
+     * A queued job cannot be requeued (its request lived in the task), so it fails.
      *
      * @param \stdClass $job Image job row.
      * @return bool True when a new poll task was queued.
@@ -118,12 +123,14 @@ final class manager {
 
         $remotejobid = trim((string) ($job->jobid ?? ''));
         $userid = (int) ($job->userid ?? 0);
-        if ($remotejobid === '' || $userid < 1) {
+        $target = target_factory::from_job_record($job);
+        if ($remotejobid === '') {
+            if (!self::has_poll_task($target, true)) {
+                job_orchestrator::fail_job($job, failure_message::CODE_FAILED);
+            }
             return false;
         }
-
-        $target = target_factory::from_job_record($job);
-        if (self::has_poll_task($target)) {
+        if ($userid < 1 || self::has_poll_task($target)) {
             return false;
         }
 
@@ -149,16 +156,88 @@ final class manager {
         string $source = 'generated',
         int $delayseconds = 0
     ): void {
-        self::delete_queued($target);
-
-        $task = new poll_image_job();
-        $task->set_custom_data((object) array_merge($target->to_poll_custom_data(), [
+        self::queue_task($target, $userid, [
             'jobid' => $remotejobid,
             'imagejobid' => $remotejobid,
             'userid' => $userid,
             'chainseq' => $chainseq,
             'source' => $source,
-        ]));
+        ], $delayseconds);
+    }
+
+    /**
+     * Queue the task that submits a generation request, then polls it.
+     *
+     * @param image_target $target
+     * @param generation_request $request
+     * @param int $userid
+     * @param string $source
+     * @param int $queuedat When the generation was first queued; bounds the retries.
+     * @param int $delayseconds Run the task no earlier than now + delay (0 = as soon as possible).
+     * @return void
+     */
+    public static function queue_submit_task(
+        image_target $target,
+        generation_request $request,
+        int $userid,
+        string $source,
+        int $queuedat,
+        int $delayseconds = 0
+    ): void {
+        self::queue_task($target, $userid, [
+            'jobid' => '',
+            'imagejobid' => '',
+            'userid' => $userid,
+            'chainseq' => 0,
+            'source' => $source,
+            'request' => $request->to_array(),
+            'queuedat' => $queuedat,
+        ], $delayseconds);
+    }
+
+    /**
+     * Move queued tasks to a new target, keeping their state and schedule.
+     *
+     * @param image_target $from Target the tasks were queued for.
+     * @param image_target $to Target they must now apply to.
+     * @return int Number of tasks moved.
+     */
+    public static function retarget_queued(image_target $from, image_target $to): int {
+        global $DB;
+
+        $hash = $from->get_location_hash();
+        $moved = 0;
+        foreach (core_task_manager::get_adhoc_tasks(self::task_classname(), false, true) as $task) {
+            $data = $task->get_custom_data();
+            if (!is_object($data) || (string) ($data->locationhash ?? '') !== $hash || !$task->get_id()) {
+                continue;
+            }
+
+            $copy = new poll_image_job();
+            $copy->set_custom_data((object) array_merge((array) $data, $to->to_poll_custom_data()));
+            $copy->set_userid((int) $task->get_userid());
+            $copy->set_next_run_time((int) $task->get_next_run_time());
+            $DB->delete_records('task_adhoc', ['id' => $task->get_id()]);
+            core_task_manager::queue_adhoc_task($copy);
+            $moved++;
+        }
+        return $moved;
+    }
+
+    /**
+     * Replace any queued task for the target with a new one.
+     *
+     * @param image_target $target
+     * @param int $userid
+     * @param array $data Custom data on top of the target fields.
+     * @param int $delayseconds
+     * @return void
+     */
+    private static function queue_task(image_target $target, int $userid, array $data, int $delayseconds): void {
+        self::delete_queued($target);
+
+        $task = new poll_image_job();
+        $task->set_custom_data((object) array_merge($target->to_poll_custom_data(), $data));
         $task->set_userid($userid);
         if ($delayseconds > 0) {
             $task->set_next_run_time(time() + $delayseconds);

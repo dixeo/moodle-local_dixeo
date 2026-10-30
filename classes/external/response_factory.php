@@ -28,6 +28,7 @@
 
 namespace local_dixeo\external;
 
+use local_dixeo\api\error_message;
 use local_dixeo\api\exception\api_exception;
 
 /**
@@ -52,7 +53,7 @@ class response_factory {
                 'Dixeo API ' . $exception->get_error_type() . ': ' . $exception->getMessage(),
                 DEBUG_DEVELOPER
             );
-            $stringkey = self::api_error_string_key($exception->get_error_type());
+            $stringkey = error_message::string_key($exception->get_error_type());
             return get_string($stringkey ?? $fallbackkey, 'local_dixeo');
         }
 
@@ -68,24 +69,6 @@ class response_factory {
         }
 
         return get_string($fallbackkey, 'local_dixeo');
-    }
-
-    /**
-     * Language string for a stable Dixeo API error type.
-     *
-     * @param string $errortype RFC 7807 type, or the type stored on the exception.
-     * @return string|null local_dixeo string key, or null when the type is unknown.
-     */
-    private static function api_error_string_key(string $errortype): ?string {
-        return match ($errortype) {
-            'payment_required', 'insufficient_credits' => 'error:payment_required',
-            'validation_error' => 'error:validation_failed',
-            'job_not_found' => 'error:job_not_found',
-            'authentication', 'authentication_error', 'authentication_failed' => 'error:authentication',
-            'upstream_ai', 'upstream_ai_exception' => 'error:upstream_ai',
-            'rate_limit_exceeded', 'too_many_requests', 'too_many_requests_http' => 'error:rate_limit',
-            default => null,
-        };
     }
 
     /**

@@ -250,7 +250,7 @@ class service_factory {
             return self::$testcontentimageshortcodeservice;
         }
 
-        return new shortcode_service(self::get_image_generation_service());
+        return new shortcode_service();
     }
 
     /**

@@ -35,6 +35,22 @@ final class engine {
     /** @var int Max poll attempts before the job is marked failed (~1h at the poll interval). */
     public const MAX_POLL_ATTEMPTS = 240;
 
+    /** @var int Shortest wait before resubmitting a refused generation. */
+    public const SUBMIT_RETRY_MIN_SECONDS = 30;
+
+    /** @var int Longest wait before resubmitting, whatever Retry-After says. */
+    public const SUBMIT_RETRY_MAX_SECONDS = 900;
+
+    /**
+     * Delay before resubmitting a generation the API refused for now.
+     *
+     * @param int|null $retryafter Seconds the API asked to wait, if any.
+     * @return int Seconds, clamped so a bogus value never parks the task for long.
+     */
+    public static function submit_retry_delay(?int $retryafter): int {
+        return min(self::SUBMIT_RETRY_MAX_SECONDS, max(self::SUBMIT_RETRY_MIN_SECONDS, (int) $retryafter));
+    }
+
     /**
      * Poll remote once.
      * @param string $remotejobid

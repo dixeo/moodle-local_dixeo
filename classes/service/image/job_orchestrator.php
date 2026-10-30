@@ -18,6 +18,7 @@ namespace local_dixeo\service\image;
 
 
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\poll\manager as poll_manager;
 
 /**
@@ -46,6 +47,50 @@ final class job_orchestrator {
     ): void {
         job_repository::upsert($target, $remotejobid, $userid, $metadata);
         poll_manager::queue_poll_task($target, $remotejobid, $userid, 0, $source);
+    }
+
+    /**
+     * Queue a generation: the poll task submits it, retrying while the API is busy.
+     *
+     * The row has no remote jobid until the API accepts the request, and shows as pending.
+     *
+     * @param image_target $target
+     * @param int $userid
+     * @param generation_request $request
+     * @param array $metadata Extra job row fields.
+     * @param string $source Poll apply source label.
+     * @return void
+     */
+    public static function queue_generation(
+        image_target $target,
+        int $userid,
+        generation_request $request,
+        array $metadata = [],
+        string $source = 'generated'
+    ): void {
+        job_repository::upsert($target, '', $userid, $metadata);
+        poll_manager::queue_submit_task($target, $request, $userid, $source, time());
+    }
+
+    /**
+     * Mark a job failed and show the failure in place of a content placeholder.
+     *
+     * @param \stdClass $job Image job row.
+     * @param string $code Failure code, see {@see failure_message::for_storage()}.
+     * @return void
+     */
+    public static function fail_job(\stdClass $job, string $code): void {
+        job_repository::mark_failed((int) $job->id, failure_message::for_storage($code));
+
+        $target = target_factory::from_job_record($job);
+        if (!$target instanceof content_target) {
+            return;
+        }
+        try {
+            apply_content_handler::apply_failure($target, (int) $job->userid, $job);
+        } catch (\Throwable $e) {
+            debugging('Dixeo image apply_failure failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
     }
 
     /**

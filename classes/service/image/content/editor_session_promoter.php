@@ -291,9 +291,13 @@ final class editor_session_promoter {
         $DB->update_record(job_repository::TABLE, (object) $newfields);
 
         // Poll adhocs key off locationhash. After promote the draft-hash task can no
-        // longer find this row. Drop it and queue against the module location.
-        \local_dixeo\service\image\poll\manager::delete_queued($oldtarget);
+        // longer find this row. Move it to the module location; a queued generation
+        // carries its request, so it cannot simply be dropped and requeued.
         $updated = $DB->get_record(job_repository::TABLE, ['id' => (int) $job->id], '*', MUST_EXIST);
+        \local_dixeo\service\image\poll\manager::retarget_queued(
+            $oldtarget,
+            \local_dixeo\service\image\target_factory::from_job_record($updated)
+        );
         \local_dixeo\service\image\poll\manager::ensure_poll_for_job($updated);
     }
 

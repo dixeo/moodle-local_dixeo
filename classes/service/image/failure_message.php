@@ -16,19 +16,23 @@
 
 namespace local_dixeo\service\image;
 
+use local_dixeo\api\error_message;
+
 /**
- * Maps a Dixeo API image-job failure code to a translated user message.
+ * Stores an image job failure as a code and translates it for display.
  *
- * The API classifies a failed job with a stable code. The raw provider text
- * stays off the page. A known code is stored as itself and translated when a
- * status payload is built, so the sentence follows the current user's language.
- * Anything else is the generic failure sentence.
+ * The code is translated when a status payload is built, so the sentence
+ * follows the current user's language. A local failure stores CODE_FAILED.
+ * Rows written before codes were stored still hold a sentence.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class failure_message {
+    /** @var string Local failure, or an API error with no dedicated message. */
+    public const CODE_FAILED = 'failed';
+
     /** @var string Prompt or output refused by the model safety filter. */
     public const CODE_CONTENT_REJECTED = 'content_rejected';
 
@@ -38,56 +42,40 @@ final class failure_message {
     /** @var string Provider asked the client to wait. */
     public const CODE_RATE_LIMITED = 'rate_limited';
 
-    /** @var array<string, string> API code to local_dixeo string key. */
-    private const STRING_KEYS = [
-        self::CODE_CONTENT_REJECTED => 'dixeo_image_job_content_rejected',
-        self::CODE_AI_UNAVAILABLE => 'dixeo_image_job_unavailable',
-        self::CODE_RATE_LIMITED => 'dixeo_image_job_rate_limited',
-    ];
-
     /**
-     * Whether the value is a code this map translates.
+     * Whether the value is an API code with a dedicated message.
      *
      * @param string|null $code API error code or a stored job message.
      * @return bool
      */
     public static function is_known(?string $code): bool {
-        return $code !== null && isset(self::STRING_KEYS[$code]);
+        return error_message::string_key($code) !== null;
     }
 
     /**
-     * Value to persist on the image job.
-     *
-     * A known code is stored unchanged. Any other code becomes the generic
-     * failure sentence, which is what older rows and local timeouts already hold.
+     * Code to persist on the image job.
      *
      * @param string|null $errorcode API error code, or null when the job failed locally.
-     * @return string
+     * @return string The code itself when it has a message, otherwise CODE_FAILED.
      */
     public static function for_storage(?string $errorcode): string {
-        if (self::is_known($errorcode)) {
-            return $errorcode;
-        }
-
-        return get_string('dixeo_image_job_failed', 'local_dixeo');
+        return self::is_known($errorcode) ? $errorcode : self::CODE_FAILED;
     }
 
     /**
      * Sentence shown to the current user.
      *
-     * A stored code is translated now. A stored sentence is returned as-is.
-     * An empty value or an unknown code uses the generic failure sentence.
-     *
-     * @param string|null $stored Code or sentence read from the image job.
+     * @param string|null $stored Code or legacy sentence read from the image job.
      * @return string
      */
     public static function for_display(?string $stored): string {
-        if (self::is_known($stored)) {
-            return get_string(self::STRING_KEYS[$stored], 'local_dixeo');
+        $stringkey = error_message::string_key($stored);
+        if ($stringkey !== null) {
+            return get_string($stringkey, 'local_dixeo');
         }
 
-        // Older rows and local timeouts store a sentence. A bare token is a code.
-        if ($stored !== null && $stored !== '' && preg_match('/\s/u', $stored) === 1) {
+        // Legacy rows hold a sentence. A bare token is a code.
+        if ($stored !== null && preg_match('/\s/u', $stored) === 1) {
             return $stored;
         }
 

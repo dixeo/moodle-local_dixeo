@@ -19,9 +19,9 @@ namespace local_dixeo\task;
 
 use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
-use local_dixeo\service\image\apply\content_handler as apply_content_handler;
-use local_dixeo\service\image\content_target;
-use local_dixeo\service\image\target_factory;
+use local_dixeo\service\image\failure_message;
+use local_dixeo\service\image\job_orchestrator;
+use local_dixeo\service\image\poll\manager as poll_manager;
 
 /**
  * Scheduled retention for unified image job records.
@@ -56,42 +56,30 @@ class cleanup_image_jobs extends \core\task\scheduled_task {
         }
 
         $now = time();
+        [$expiredsql, $expiredparams] = job_repository::expired_sql($now);
+        $inflight = [
+            'pending' => job_repository::STATUS_PENDING,
+            'processing' => job_repository::STATUS_PROCESSING,
+        ];
 
         // Revive pending/processing jobs whose adhoc poll chain disappeared.
         $orphans = $DB->get_records_select(
             job_repository::TABLE,
-            'status IN (:pending, :processing) AND timecreated > :cutoff',
-            [
-                'pending' => job_repository::STATUS_PENDING,
-                'processing' => job_repository::STATUS_PROCESSING,
-                'cutoff' => $now - job_repository::TIMEOUT_SECONDS,
-            ]
+            "status IN (:pending, :processing) AND NOT {$expiredsql}",
+            $inflight + $expiredparams
         );
         foreach ($orphans as $job) {
-            \local_dixeo\service\image\poll\manager::ensure_poll_for_job($job);
+            poll_manager::ensure_poll_for_job($job);
         }
 
         // Fail jobs stuck beyond the timeout and swap content placeholders.
         $timedout = $DB->get_records_select(
             job_repository::TABLE,
-            'status IN (:pending, :processing) AND timecreated < :cutoff',
-            [
-                'pending' => job_repository::STATUS_PENDING,
-                'processing' => job_repository::STATUS_PROCESSING,
-                'cutoff' => $now - job_repository::TIMEOUT_SECONDS,
-            ]
+            "status IN (:pending, :processing) AND {$expiredsql}",
+            $inflight + $expiredparams
         );
-        $message = get_string('dixeo_image_job_failed', 'local_dixeo');
         foreach ($timedout as $job) {
-            job_repository::mark_failed((int) $job->id, $message);
-            try {
-                $target = target_factory::from_job_record($job);
-                if ($target instanceof content_target) {
-                    apply_content_handler::apply_failure($target, (int) $job->userid, $job);
-                }
-            } catch (\Throwable $e) {
-                debugging('Dixeo image apply_failure failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            }
+            job_orchestrator::fail_job($job, failure_message::CODE_FAILED);
         }
 
         // Delete terminal rows past the retention period.

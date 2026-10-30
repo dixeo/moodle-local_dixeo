@@ -81,6 +81,35 @@ class job_binding_metadata {
     }
 
     /**
+     * Plain array form, for adhoc task custom data.
+     *
+     * @return array{moduletype: string|null, contextid: int, cmid: int}
+     */
+    public function to_array(): array {
+        return [
+            'moduletype' => $this->moduletype,
+            'contextid' => $this->contextid,
+            'cmid' => $this->cmid,
+        ];
+    }
+
+    /**
+     * Rebuild from {@see self::to_array()} output.
+     *
+     * @param array $data
+     * @return self
+     */
+    public static function from_array(array $data): self {
+        $moduletype = $data['moduletype'] ?? null;
+
+        return new self(
+            moduletype: $moduletype !== null ? (string) $moduletype : null,
+            contextid: (int) ($data['contextid'] ?? 0),
+            cmid: (int) ($data['cmid'] ?? 0),
+        );
+    }
+
+    /**
      * Whether any metadata field is set.
      *
      * @return bool
