@@ -343,6 +343,39 @@ h2:has(.dixeo-sync-indicator),
     background: rgba(176, 42, 55, 0.92);
 }
 
+.dixeo-img-gen-status.is-failed.is-replay {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Specific failure reason. Fades; the bottom-left pill stays the generic sentence. */
+.dixeo-img-gen-notice {
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    z-index: 3;
+    max-width: calc(100% - 1rem);
+    padding: 0.5rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(176, 42, 55, 0.92);
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.35rem);
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+    pointer-events: none;
+}
+
+.dixeo-img-gen-notice.is-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 /* Filter owns the generating label on .is-generating wraps. */
 .dixeo-imageeditor-wrap.is-generating > .dixeo-img-gen-status {
     display: none;
@@ -377,6 +410,10 @@ h2:has(.dixeo-sync-indicator),
     .dixeo-imageeditor-wrap.is-generating::before,
     .dixeo-imageeditor-modal__preview.is-generating::before {
         animation: none;
+    }
+
+    .dixeo-img-gen-notice {
+        transition: none;
     }
 }
 

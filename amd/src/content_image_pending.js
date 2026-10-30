@@ -33,6 +33,12 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     const IMG_SELECTOR = 'img.dixeo-img-gen-pending, img.dixeo-img-gen-failed';
     const FRAME_CLASS = 'dixeo-img-gen-frame';
     const STATUS_CLASS = 'dixeo-img-gen-status';
+    const NOTICE_CLASS = 'dixeo-img-gen-notice';
+    const NOTICE_VISIBLE_CLASS = 'is-visible';
+    const NOTICE_DURATION_MS = 4000;
+
+    /** @type {WeakMap<HTMLElement, number>} */
+    const noticeTimers = new WeakMap();
     const WRAP_CLASS = 'dixeo-imageeditor-wrap';
     const GENERATING_CLASS = 'is-generating';
     const POLL_INTERVAL_MS = 3000;
@@ -173,6 +179,58 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
+     * Show the specific failure sentence at the top centre of the image, then fade it.
+     *
+     * @param {Element} host
+     * @param {string} message
+     */
+    const showFailureNotice = (host, message) => {
+        const text = (message || '').trim();
+        if (!text || !(host instanceof Element)) {
+            return;
+        }
+        let notice = host.querySelector(`:scope > .${NOTICE_CLASS}`);
+        if (!(notice instanceof HTMLElement)) {
+            notice = host.ownerDocument.createElement('div');
+            notice.className = NOTICE_CLASS;
+            notice.setAttribute('role', 'status');
+            host.appendChild(notice);
+        }
+        notice.textContent = text;
+        notice.classList.remove(NOTICE_VISIBLE_CLASS);
+        // Restart the fade when the same notice is shown again.
+        void notice.offsetWidth;
+        notice.classList.add(NOTICE_VISIBLE_CLASS);
+        const existing = noticeTimers.get(notice);
+        if (existing) {
+            window.clearTimeout(existing);
+        }
+        noticeTimers.set(notice, window.setTimeout(() => {
+            notice.classList.remove(NOTICE_VISIBLE_CLASS);
+            noticeTimers.delete(notice);
+        }, NOTICE_DURATION_MS));
+    };
+
+    /**
+     * @param {Element} host
+     */
+    const removeFailureNotice = (host) => {
+        host.querySelectorAll(`:scope > .${NOTICE_CLASS}`).forEach((notice) => {
+            if (notice instanceof HTMLElement) {
+                const timer = noticeTimers.get(notice);
+                if (timer) {
+                    window.clearTimeout(timer);
+                    noticeTimers.delete(notice);
+                }
+            }
+            notice.remove();
+        });
+    };
+
+    /**
+     * Keep the bottom-left pill generic. A distinct reason fades in at the top centre
+     * and can be shown again by activating that pill.
+     *
      * @param {Element} host
      * @param {'pending'|'failed'} state
      * @param {{generating: string, failed: string}} strings
@@ -193,13 +251,47 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         }
         status.classList.toggle('is-pending', state === 'pending');
         status.classList.toggle('is-failed', state === 'failed');
-        let label = strings.failed;
+
         if (state === 'pending') {
-            label = strings.generating;
-        } else if (failedMessage) {
-            label = failedMessage;
+            status.textContent = strings.generating;
+            status.classList.remove('is-replay');
+            delete status.dataset.dixeoFailureMessage;
+            removeFailureNotice(host);
+            return;
         }
-        status.textContent = label;
+
+        status.textContent = strings.failed;
+        const specific = (failedMessage || '').trim();
+        const replay = specific !== '' && specific !== strings.failed;
+        status.classList.toggle('is-replay', replay);
+        if (!replay) {
+            delete status.dataset.dixeoFailureMessage;
+            status.removeAttribute('role');
+            status.removeAttribute('tabindex');
+            return;
+        }
+
+        status.dataset.dixeoFailureMessage = specific;
+        status.setAttribute('role', 'button');
+        status.tabIndex = 0;
+        if (status.dataset.dixeoFailureBound !== '1') {
+            status.dataset.dixeoFailureBound = '1';
+            const replayNotice = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                showFailureNotice(host, status.dataset.dixeoFailureMessage || '');
+            };
+            status.addEventListener('click', replayNotice);
+            status.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    replayNotice(event);
+                }
+            });
+        }
+        if (status.dataset.dixeoFailureShown !== specific) {
+            status.dataset.dixeoFailureShown = specific;
+            showFailureNotice(host, specific);
+        }
     };
 
     /**
@@ -257,6 +349,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         const frame = img.closest(`.${FRAME_CLASS}`);
         if (frame) {
             frame.querySelectorAll(`.${STATUS_CLASS}`).forEach((el) => el.remove());
+            removeFailureNotice(frame);
             removeStatusNode(frame.previousElementSibling);
             removeStatusNode(frame.nextElementSibling);
             if (frame.contains(img)) {
@@ -270,6 +363,7 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         const parent = img.parentElement;
         if (parent) {
             parent.querySelectorAll(`:scope > .${STATUS_CLASS}`).forEach((el) => el.remove());
+            removeFailureNotice(parent);
         }
     };
 
@@ -513,17 +607,33 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     /**
      * Enhance pending/failed images under root (document or element).
      *
+     * A failedMessage is the sentence already shown for this failure (the filter
+     * modal uses the same string). It is painted on failed images here and is not
+     * replaced by a later placeholder lookup.
+     *
      * @param {ParentNode|Document|null|undefined} [root]
+     * @param {string} [failedMessage]
      * @returns {Promise<void>}
      */
-    const refresh = (root) => {
+    const refresh = (root, failedMessage = '') => {
         return loadLabels().then((strings) => {
             const {searchRoot, doc} = resolveRoots(root);
-            enhanceTree(searchRoot, strings);
+            const message = typeof failedMessage === 'string' ? failedMessage.trim() : '';
+            if (message) {
+                searchRoot.querySelectorAll(IMG_SELECTOR).forEach((img) => {
+                    if (!isHtmlImage(img)) {
+                        return;
+                    }
+                    const specific = img.classList.contains('dixeo-img-gen-failed') ? message : '';
+                    enhanceImage(img, strings, specific);
+                });
+            } else {
+                enhanceTree(searchRoot, strings);
+            }
             if (doc === document && collectPendingPlaceholderIds().length) {
                 startPagePolling(strings);
             }
-            if (doc === document) {
+            if (doc === document && !message) {
                 return refreshFailedLabels(strings);
             }
             return undefined;

@@ -17,6 +17,7 @@
 namespace local_dixeo\repository\image;
 
 
+use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\failure_message;
 
@@ -212,5 +213,39 @@ final class job_repository_test extends \advanced_testcase {
         $status = job_repository::get_location_status($location);
 
         $this->assertSame($sentence, $status['errormessage']);
+    }
+
+    /**
+     * A modal retry keeps the reason on the stub filename after placeholderid is cleared.
+     */
+    public function test_placeholder_lookup_finds_a_modal_job_by_stub_filename(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $placeholderid = '1cf2912f-dbc3-452d-a4dc-f7d14fe452ed';
+        $location = new location(
+            3,
+            'mod_page',
+            'content',
+            0,
+            '/',
+            file_service::stub_filename_for_placeholder($placeholderid),
+            2
+        );
+        job_repository::upsert_job(array_merge($location->to_record_fields(), [
+            'jobid' => 'job-modal-retry',
+            'status' => job_repository::STATUS_FAILED,
+            'origin' => job_repository::ORIGIN_MODAL,
+            'placeholderid' => null,
+            'errormessage' => failure_message::CODE_CONTENT_REJECTED,
+            'userid' => (int) $USER->id,
+        ]));
+
+        $job = job_repository::get_by_placeholderid($placeholderid);
+
+        $this->assertNotNull($job);
+        $this->assertSame(failure_message::CODE_CONTENT_REJECTED, $job->errormessage);
     }
 }
