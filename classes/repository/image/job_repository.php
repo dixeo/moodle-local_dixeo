@@ -17,6 +17,7 @@
 namespace local_dixeo\repository\image;
 
 
+use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\content\url_helper;
 use local_dixeo\service\image\content_target;
@@ -81,14 +82,25 @@ final class job_repository {
     }
 
     /**
-     * Get by placeholderid.
+     * Job for a placeholder id, including a modal retry stored only by stub filename.
+     *
+     * A modal job clears placeholderid. The page image still carries that id in
+     * dixeo-gen-{id}.png, so the stored failure reason can be shown after reload.
+     *
      * @param string $placeholderid
      * @return \stdClass|null
      */
     public static function get_by_placeholderid(string $placeholderid): ?\stdClass {
         global $DB;
         $record = $DB->get_record(self::TABLE, ['placeholderid' => $placeholderid], '*', IGNORE_MISSING);
-        return $record ?: null;
+        if ($record) {
+            return $record;
+        }
+
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        $records = $DB->get_records(self::TABLE, ['filename' => $filename], 'timemodified DESC', '*', 0, 1);
+        $found = $records ? reset($records) : false;
+        return $found ?: null;
     }
 
     /**
