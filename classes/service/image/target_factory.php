@@ -43,6 +43,9 @@ final class target_factory {
 
         $courseid = (int) ($params['courseid'] ?? 0);
         $objectid = (int) ($params['objectid'] ?? 0);
+        if ($kind === image_target::KIND_H5P_CARD) {
+            return new h5p_card_target($courseid, $objectid, (int) ($params['cardindex'] ?? -1));
+        }
         return new structure_target($kind, $courseid, $objectid);
     }
 
@@ -55,6 +58,9 @@ final class target_factory {
         $kind = (string) ($record->target_kind ?? image_target::KIND_CONTENT);
         if ($kind === image_target::KIND_CONTENT) {
             return content_target::from_location(location::from_job_record($record));
+        }
+        if ($kind === image_target::KIND_H5P_CARD) {
+            return new h5p_card_target((int) $record->courseid, (int) $record->objectid, (int) $record->itemid);
         }
         return new structure_target($kind, (int) $record->courseid, (int) $record->objectid);
     }

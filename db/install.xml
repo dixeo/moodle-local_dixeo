@@ -91,13 +91,13 @@
 <TABLE NAME="local_dixeo_image_job" COMMENT="Unified async image jobs (content + structure)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="target_kind" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="content" SEQUENCE="false" COMMENT="content|course_overview|format_section"/>
-        <FIELD NAME="objectid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Course or section id for structure jobs"/>
+        <FIELD NAME="target_kind" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="content" SEQUENCE="false" COMMENT="content|course_overview|format_section|h5p_card"/>
+        <FIELD NAME="objectid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Course or section id for structure jobs; cmid for h5p_card jobs"/>
         <FIELD NAME="placeholderid" TYPE="char" LENGTH="36" NOTNULL="false" SEQUENCE="false" COMMENT="UUID for shortcode images; null for modal-only"/>
         <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store 0"/>
         <FIELD NAME="component" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store empty string"/>
         <FIELD NAME="filearea" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store empty string"/>
-        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store 0"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store 0, h5p_card jobs the card index"/>
         <FIELD NAME="filepath" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store /"/>
         <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="File location; structure jobs store empty string"/>
         <FIELD NAME="locationhash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>

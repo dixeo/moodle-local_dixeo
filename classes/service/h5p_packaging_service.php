@@ -22,6 +22,7 @@
  *   and a main library identifier, returning the absolute path to a temp file.
  * - create_activity(): build the package and create a mod_h5pactivity course
  *   module that uses it.
+ * - replace_package(): store a changed package for an existing activity and redeploy it.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -33,7 +34,6 @@ namespace local_dixeo\service;
 
 use coding_exception;
 use stdClass;
-use ZipArchive;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -69,17 +69,10 @@ class h5p_packaging_service {
      * @param array $content Content structure to serialize as content.json (already library-shaped).
      * @param string $title Human-readable activity title (stored in h5p.json metadata).
      * @param string $language Two-letter language code stored as h5p.json defaultLanguage.
-     * @param array $files Content-relative path to file bytes, stored under content/ in the archive.
      * @return string Absolute path to a temporary .h5p file.
      * @throws coding_exception If no compatible library is installed or the package cannot be written.
      */
-    public function build_package(
-        string $mainlibrary,
-        array $content,
-        string $title = '',
-        string $language = 'en',
-        array $files = []
-    ): string {
+    public function build_package(string $mainlibrary, array $content, string $title = '', string $language = 'en'): string {
         $resolved = h5p_library_service::resolve_installed_version($mainlibrary);
         if ($resolved === null) {
             throw new coding_exception("No installed H5P library satisfies '{$mainlibrary}'");
@@ -104,46 +97,12 @@ class h5p_packaging_service {
         $tempdir = make_request_directory();
         $packagepath = $tempdir . DIRECTORY_SEPARATOR . 'package.h5p';
 
-        $zip = new ZipArchive();
-        if ($zip->open($packagepath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new coding_exception("Failed to open .h5p archive for writing: {$packagepath}");
-        }
-
-        $zip->addFromString('h5p.json', json_encode($h5pjson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-        $zip->addFromString('content/content.json', json_encode($content, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-        foreach ($files as $path => $bytes) {
-            if (!is_string($path) || !is_string($bytes)) {
-                $zip->close();
-                throw new coding_exception('H5P content file path and bytes must be strings');
-            }
-            try {
-                $this->assert_content_relative_path($path);
-            } catch (coding_exception $e) {
-                $zip->close();
-                throw $e;
-            }
-            $zip->addFromString('content/' . $path, $bytes);
-        }
-        $zip->close();
+        h5p_package_archive::write($packagepath, [
+            'h5p.json' => json_encode($h5pjson, JSON_PRETTY_PRINT | h5p_package_archive::JSON_FLAGS),
+            h5p_package_archive::CONTENT_JSON => json_encode($content, h5p_package_archive::JSON_FLAGS),
+        ]);
 
         return $packagepath;
-    }
-
-    /**
-     * Reject a content file path that could escape the content directory.
-     *
-     * @param string $path Content-relative path, e.g. images/card-1.jpeg.
-     * @throws coding_exception When the path is absolute or contains a parent segment.
-     */
-    private function assert_content_relative_path(string $path): void {
-        if (
-            $path === ''
-            || str_contains($path, '\\')
-            || str_starts_with($path, '/')
-            || str_contains($path, '..')
-        ) {
-            throw new coding_exception('Invalid H5P content file path');
-        }
     }
 
     /**
@@ -162,7 +121,6 @@ class h5p_packaging_service {
      * @param array $content Content structure already shaped for the target H5P library.
      * @param string $language ISO 639-1 code for the .h5p defaultLanguage; falls back to current_language() when empty.
      * @param int|null $beforemod Optional cmid to insert before; null appends to the section.
-     * @param array $files Content-relative path to file bytes included in the package. Empty keeps a content-only archive.
      * @return array Two-key array: ['cmid' => int, 'id' => int (instance id)].
      * @throws coding_exception If mod_h5pactivity is missing or any step of the creation pipeline fails.
      */
@@ -175,15 +133,14 @@ class h5p_packaging_service {
         string $mainlibrary,
         array $content,
         string $language = '',
-        ?int $beforemod = null,
-        array $files = []
+        ?int $beforemod = null
     ): array {
         global $CFG, $DB;
 
         $moduleid = module_addinstance_service::require_for_course($courseid, self::MODULE_NAME);
 
         $resolvedlanguage = $language !== '' ? $language : current_language();
-        $packagepath = $this->build_package($mainlibrary, $content, $name, $resolvedlanguage, $files);
+        $packagepath = $this->build_package($mainlibrary, $content, $name, $resolvedlanguage);
 
         require_once($CFG->dirroot . '/mod/h5pactivity/lib.php');
 
@@ -229,6 +186,22 @@ class h5p_packaging_service {
         } finally {
             @unlink($packagepath);
         }
+    }
+
+    /**
+     * Replace the package of an existing activity and redeploy it.
+     *
+     * The file keeps its name, so core_h5p finds its h5p row by pathnamehash and
+     * redeploys it because the contenthash changed.
+     *
+     * @param int $cmid The course module ID.
+     * @param string $packagepath Absolute path to the new .h5p file, named like the stored one.
+     * @return void
+     * @throws coding_exception If the file cannot be stored.
+     */
+    public function replace_package(int $cmid, string $packagepath): void {
+        $this->store_package_file($cmid, $packagepath);
+        $this->register_h5p_content($cmid);
     }
 
     /**

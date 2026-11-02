@@ -31,6 +31,8 @@ interface image_target {
     public const KIND_COURSE_OVERVIEW = 'course_overview';
     /** @var string Constant KIND_FORMAT_SECTION. */
     public const KIND_FORMAT_SECTION = 'format_section';
+    /** @var string One card image of an H5P flashcards package. */
+    public const KIND_H5P_CARD = 'h5p_card';
 
     /**
      * Get target kind.

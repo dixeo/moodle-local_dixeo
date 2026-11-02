@@ -652,6 +652,13 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102209, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026102212) {
+        // Generated quizzes get the top question category their course restore needs.
+        local_dixeo_repair_question_categories();
+
+        upgrade_plugin_savepoint(true, 2026102212, 'local', 'dixeo');
+    }
+
     return true;
 }
 
@@ -731,6 +738,45 @@ function local_dixeo_copy_filesync_settings(): void {
             'component' => 'local_dixeo',
             'name' => 'filesync_enabled',
             'value' => $value,
+        ]);
+    }
+}
+
+/**
+ * Put the question categories of generated quizzes under the top category Moodle requires.
+ *
+ * Quiz generation used to create its category with no parent and the missing string
+ * [[defaultcategory]] as its name, which breaks the restore of any course holding such a quiz.
+ * Each one becomes the default category of its quiz: a top category is added to the quiz context
+ * and the category moves under it with the name and description Moodle gives a default category.
+ * Its questions stay where they are.
+ */
+function local_dixeo_repair_question_categories(): void {
+    global $DB;
+
+    $categories = $DB->get_records('question_categories', ['parent' => 0, 'name' => '[[defaultcategory]]']);
+
+    foreach ($categories as $category) {
+        $context = context::instance_by_id($category->contextid, IGNORE_MISSING);
+        if (!$context) {
+            continue;
+        }
+
+        $topid = $DB->insert_record('question_categories', (object) [
+            'name' => 'top',
+            'info' => '',
+            'contextid' => $context->id,
+            'parent' => 0,
+            'sortorder' => 0,
+            'stamp' => make_unique_id_code(),
+        ]);
+
+        $contextname = $context->get_context_name(false, true);
+        $DB->update_record('question_categories', (object) [
+            'id' => $category->id,
+            'parent' => $topid,
+            'name' => shorten_text(get_string('defaultfor', 'question', $contextname), 255),
+            'info' => get_string('defaultinfofor', 'question', $contextname),
         ]);
     }
 }

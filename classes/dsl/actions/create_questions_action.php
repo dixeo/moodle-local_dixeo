@@ -114,10 +114,13 @@ class create_questions_action {
         );
         $cmid = (int) $cm->id;
         $context = $resolver->get_context();
-        $courseid = (int) $context['courseid'];
 
-        // Get or create the question category for this quiz.
-        $categoryid = $this->ensure_question_category($cmid, $courseid);
+        // The quiz's default category, created under the top category Moodle requires for backup and restore.
+        // Moodle 4.5 has no $createifnotexists and returns false, so it makes the categories the older way.
+        $modulecontext = context_module::instance($cmid);
+        $category = question_get_default_category($modulecontext->id, true)
+            ?: question_make_default_categories([$modulecontext]);
+        $categoryid = (int) $category->id;
 
         // Resolve the questions collection.
         $foreachpath = $action['foreach'];
@@ -192,43 +195,6 @@ class create_questions_action {
      */
     protected function validate_action(array $action): void {
         $this->require_action_fields($action, ['module_ref', 'foreach'], 'create_questions');
-    }
-
-    /**
-     * Ensure a question category exists for the quiz.
-     *
-     * Creates a new category if one doesn't exist.
-     *
-     * @param int $cmid The course module ID.
-     * @param int $courseid The course ID.
-     * @return int The question category ID.
-     */
-    protected function ensure_question_category(int $cmid, int $courseid): int {
-        global $DB;
-
-        $modulecontext = context_module::instance($cmid);
-
-        // Check if a category already exists for this context.
-        $existingcategory = $DB->get_record('question_categories', [
-            'contextid' => $modulecontext->id,
-        ]);
-
-        if ($existingcategory) {
-            return $existingcategory->id;
-        }
-
-        // Create a new category.
-        $category = new \stdClass();
-        $category->name = get_string('defaultcategory', 'question');
-        $category->info = '';
-        $category->infoformat = FORMAT_HTML;
-        $category->contextid = $modulecontext->id;
-        $category->parent = 0;
-        $category->sortorder = 999;
-        $category->stamp = make_unique_id_code();
-        $category->idnumber = null;
-
-        return $DB->insert_record('question_categories', $category);
     }
 
     /**

@@ -19,11 +19,12 @@ namespace local_dixeo\service\image\apply;
 
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\h5p_card_target;
 use local_dixeo\service\image\image_target;
 use local_dixeo\service\image\structure\structure_target;
 
 /**
- * Routes completed poll results to content or structure apply handlers.
+ * Routes completed poll results to content, structure or H5P card apply handlers.
  *
  * @package    local_dixeo
  * @copyright  2026 Dixeo
@@ -85,6 +86,11 @@ final class registry {
     ): void {
         if ($target instanceof structure_target) {
             structure_handler::apply($target, $result, $userid);
+            return;
+        }
+
+        if ($target instanceof h5p_card_target) {
+            h5p_card_handler::apply($target, $result);
             return;
         }
 
