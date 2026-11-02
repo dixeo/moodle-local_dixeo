@@ -659,6 +659,13 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102212, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026102213) {
+        // A repair that stopped after inserting the top category can leave extra empty tops.
+        local_dixeo_remove_empty_duplicate_top_categories();
+
+        upgrade_plugin_savepoint(true, 2026102213, 'local', 'dixeo');
+    }
+
     return true;
 }
 
@@ -752,31 +759,97 @@ function local_dixeo_copy_filesync_settings(): void {
  * Its questions stay where they are.
  */
 function local_dixeo_repair_question_categories(): void {
-    global $DB;
+    global $CFG, $DB;
 
     $categories = $DB->get_records('question_categories', ['parent' => 0, 'name' => '[[defaultcategory]]']);
 
-    foreach ($categories as $category) {
-        $context = context::instance_by_id($category->contextid, IGNORE_MISSING);
-        if (!$context) {
-            continue;
+    // A context name is the activity title passed through format_string(). The activity-names
+    // filter then loads the course module list, which Moodle refuses while an upgrade is running.
+    $filterall = $CFG->filterall;
+    $CFG->filterall = 0;
+    try {
+        foreach ($categories as $category) {
+            $context = context::instance_by_id($category->contextid, IGNORE_MISSING);
+            if (!$context) {
+                continue;
+            }
+
+            $tops = $DB->get_records('question_categories', [
+                'contextid' => $context->id,
+                'parent' => 0,
+                'name' => 'top',
+            ], 'id ASC', 'id', 0, 1);
+            $top = $tops ? reset($tops) : null;
+            if ($top && (int) $top->id !== (int) $category->id) {
+                $topid = $top->id;
+            } else {
+                $topid = $DB->insert_record('question_categories', (object) [
+                    'name' => 'top',
+                    'info' => '',
+                    'contextid' => $context->id,
+                    'parent' => 0,
+                    'sortorder' => 0,
+                    'stamp' => make_unique_id_code(),
+                ]);
+            }
+
+            $contextname = $context->get_context_name(false, true);
+            $DB->update_record('question_categories', (object) [
+                'id' => $category->id,
+                'parent' => $topid,
+                'name' => shorten_text(get_string('defaultfor', 'question', $contextname), 255),
+                'info' => get_string('defaultinfofor', 'question', $contextname),
+            ]);
         }
+        local_dixeo_remove_empty_duplicate_top_categories();
+    } finally {
+        $CFG->filterall = $filterall;
+    }
+}
 
-        $topid = $DB->insert_record('question_categories', (object) [
-            'name' => 'top',
-            'info' => '',
-            'contextid' => $context->id,
+/**
+ * Delete extra empty top question categories left in one context.
+ *
+ * One top category is kept. A top that still has a child category is kept as well.
+ *
+ * @return void
+ */
+function local_dixeo_remove_empty_duplicate_top_categories(): void {
+    global $DB;
+
+    $contexts = $DB->get_records_sql(
+        "SELECT contextid
+           FROM {question_categories}
+          WHERE parent = 0
+            AND name = :name
+       GROUP BY contextid
+         HAVING COUNT(1) > 1",
+        ['name' => 'top']
+    );
+    foreach ($contexts as $row) {
+        $tops = $DB->get_records('question_categories', [
+            'contextid' => $row->contextid,
             'parent' => 0,
-            'sortorder' => 0,
-            'stamp' => make_unique_id_code(),
-        ]);
-
-        $contextname = $context->get_context_name(false, true);
-        $DB->update_record('question_categories', (object) [
-            'id' => $category->id,
-            'parent' => $topid,
-            'name' => shorten_text(get_string('defaultfor', 'question', $contextname), 255),
-            'info' => get_string('defaultinfofor', 'question', $contextname),
-        ]);
+            'name' => 'top',
+        ], 'id ASC');
+        $keep = null;
+        foreach ($tops as $top) {
+            if ($DB->record_exists('question_categories', ['parent' => $top->id])) {
+                $keep = $top;
+                break;
+            }
+        }
+        if (!$keep) {
+            $keep = reset($tops);
+        }
+        foreach ($tops as $top) {
+            if ((int) $top->id === (int) $keep->id) {
+                continue;
+            }
+            if ($DB->record_exists('question_categories', ['parent' => $top->id])) {
+                continue;
+            }
+            $DB->delete_records('question_categories', ['id' => $top->id]);
+        }
     }
 }
