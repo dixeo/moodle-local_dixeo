@@ -157,7 +157,14 @@ final class h5p_card_handler_test extends \advanced_testcase {
      */
     public function test_apply_skips_a_deleted_activity(): void {
         $target = $this->target(0);
-        \core_courseformat\formatactions::cm((int) $this->course->id)->delete((int) $this->activity->cmid);
+        if (method_exists(\core_courseformat\local\cmactions::class, 'delete')) {
+            \core_courseformat\formatactions::cm((int) $this->course->id)->delete((int) $this->activity->cmid);
+        } else {
+            // Moodle 4.5 has no cmactions::delete().
+            global $CFG;
+            require_once($CFG->dirroot . '/course/lib.php');
+            course_delete_module((int) $this->activity->cmid);
+        }
 
         registry::apply($target, $this->image_result(2, 2), 0);
 

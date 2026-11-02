@@ -45,7 +45,7 @@ final class h5p_package_archive {
      * Write entries into the archive, creating it when missing and replacing entries with the same name.
      *
      * @param string $path Absolute path of the .h5p file.
-     * @param array<string, string> $entries Archive path to bytes.
+     * @param string[] $entries Bytes keyed by archive path.
      * @return void
      * @throws coding_exception If the archive cannot be written.
      */
