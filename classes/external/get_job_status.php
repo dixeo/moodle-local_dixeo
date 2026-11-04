@@ -81,7 +81,7 @@ class get_job_status extends external_api {
                 (int) $USER->id
             );
 
-            $data = $status->to_array();
+            $data = response_factory::client_job_status($status);
             // Encode result as JSON since it has dynamic structure.
             if (isset($data['result']) && is_array($data['result'])) {
                 $data['result'] = json_encode($data['result']);

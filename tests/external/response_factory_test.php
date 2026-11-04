@@ -18,6 +18,7 @@ namespace local_dixeo\external;
 
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\dto\job_status;
 
 /**
  * Unit tests for the client-facing error messages built by response_factory.
@@ -136,5 +137,95 @@ final class response_factory_test extends \advanced_testcase {
 
         $this->assertStringContainsString('connection refused', $message);
         $this->assertDebuggingCalled();
+    }
+
+    /**
+     * Failed job status as returned by the API.
+     *
+     * @param string|null $type Error type, or null for a job without error.
+     * @param string $detail Provider detail.
+     * @return job_status
+     */
+    private function job_status(?string $type, string $detail = ''): job_status {
+        $data = [
+            'id' => '5f38d9aa-f40c-4992-9727-982f050ff9fd',
+            'type' => 'module',
+            'status' => $type === null ? 'completed' : 'failed',
+            'createdAt' => '2026-01-01T00:00:00Z',
+            'namespace' => 'tenant-namespace',
+        ];
+        if ($type !== null) {
+            $data['error'] = ['type' => $type, 'detail' => $detail];
+        }
+        return job_status::from_array($data);
+    }
+
+    /**
+     * A known job error code maps to its string, and the provider detail and namespace are dropped.
+     */
+    public function test_client_job_status_maps_known_code(): void {
+        $this->resetAfterTest();
+        set_debugging(DEBUG_NONE);
+        $crafted = 'provider stack trace /srv/secret';
+
+        $data = response_factory::client_job_status($this->job_status('rate_limited', $crafted));
+
+        $this->assertArrayNotHasKey('namespace', $data);
+        $this->assertSame('rate_limited', $data['error']['type']);
+        $this->assertSame(get_string('error:busy', 'local_dixeo'), $data['error']['title']);
+        $this->assertSame(get_string('error:busy', 'local_dixeo'), $data['error']['detail']);
+        $this->assertSame(500, $data['error']['status']);
+        $this->assertStringNotContainsString($crafted, json_encode($data));
+    }
+
+    /**
+     * An unknown job error code maps to the fallback string of the given component.
+     */
+    public function test_client_job_status_maps_unknown_code_to_fallback(): void {
+        $this->resetAfterTest();
+        set_debugging(DEBUG_NONE);
+        $crafted = 'internal provider message';
+
+        $default = response_factory::client_job_status($this->job_status('internal_diagnostics', $crafted));
+        $this->assertSame('api_error', $default['error']['type']);
+        $this->assertSame(get_string('error:unexpected', 'local_dixeo'), $default['error']['detail']);
+        $this->assertStringNotContainsString($crafted, json_encode($default));
+
+        $custom = response_factory::client_job_status(
+            $this->job_status('internal_diagnostics', $crafted),
+            'error:job_not_found',
+            'local_dixeo'
+        );
+        $this->assertSame(get_string('error:job_not_found', 'local_dixeo'), $custom['error']['title']);
+    }
+
+    /**
+     * A job without error keeps its fields and loses only the namespace.
+     */
+    public function test_client_job_status_without_error(): void {
+        $data = response_factory::client_job_status($this->job_status(null));
+
+        $this->assertArrayNotHasKey('error', $data);
+        $this->assertArrayNotHasKey('namespace', $data);
+        $this->assertSame('completed', $data['status']);
+    }
+
+    /**
+     * safe_message() uses the fallback component for an unknown API type.
+     */
+    public function test_safe_message_fallback_component(): void {
+        $this->resetAfterTest();
+        set_debugging(DEBUG_NONE);
+        $exception = api_exception::from_response(['type' => 'internal_diagnostics', 'detail' => 'x'], 500);
+
+        $this->assertSame(
+            get_string('error:job_not_found', 'local_dixeo'),
+            response_factory::safe_message($exception, 'error:job_not_found', 'local_dixeo')
+        );
+        $known = api_exception::from_response(['type' => 'rate_limit_exceeded', 'detail' => 'x'], 429);
+        $this->assertSame(
+            get_string('error:busy', 'local_dixeo'),
+            response_factory::safe_message($known, 'nonexistent', 'block_unknown')
+        );
     }
 }

@@ -30,6 +30,7 @@ namespace local_dixeo\external;
 
 use local_dixeo\api\error_message;
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\dto\job_status;
 
 /**
  * Factory class for building standardized API responses.
@@ -42,10 +43,15 @@ class response_factory {
      * to the developer log. Other failures use the same log and a generic string.
      *
      * @param \Throwable $exception The exception to describe.
-     * @param string $fallbackkey The local_dixeo string key used when the detail is withheld.
+     * @param string $fallbackkey The string key used when the detail is withheld.
+     * @param string $fallbackcomponent The component owning $fallbackkey.
      * @return string The client-facing message.
      */
-    public static function safe_message(\Throwable $exception, string $fallbackkey = 'error:unexpected'): string {
+    public static function safe_message(
+        \Throwable $exception,
+        string $fallbackkey = 'error:unexpected',
+        string $fallbackcomponent = 'local_dixeo'
+    ): string {
         global $CFG;
 
         if ($exception instanceof api_exception) {
@@ -54,7 +60,10 @@ class response_factory {
                 DEBUG_DEVELOPER
             );
             $stringkey = error_message::string_key($exception->get_error_type());
-            return get_string($stringkey ?? $fallbackkey, 'local_dixeo');
+            if ($stringkey !== null) {
+                return get_string($stringkey, 'local_dixeo');
+            }
+            return get_string($fallbackkey, $fallbackcomponent);
         }
 
         $detail = get_class($exception) . ': ' . $exception->getMessage();
@@ -68,7 +77,53 @@ class response_factory {
             return $detail;
         }
 
-        return get_string($fallbackkey, 'local_dixeo');
+        return get_string($fallbackkey, $fallbackcomponent);
+    }
+
+    /**
+     * Job status shaped for a browser.
+     *
+     * The namespace is dropped. A job error is logged at DEBUG_DEVELOPER and replaced by
+     * ['type' => known code or 'api_error', 'title' => message, 'status' => int, 'detail' => message],
+     * where the message is the local_dixeo string of a known code, else $fallbackkey in
+     * $fallbackcomponent. The title and detail sent by the provider never reach the client.
+     *
+     * @param job_status $status Job status from the API.
+     * @param string $fallbackkey The string key used for an unknown error code.
+     * @param string $fallbackcomponent The component owning $fallbackkey.
+     * @return array Job status array, as {@see job_status::to_array()} without namespace.
+     */
+    public static function client_job_status(
+        job_status $status,
+        string $fallbackkey = 'error:unexpected',
+        string $fallbackcomponent = 'local_dixeo'
+    ): array {
+        $data = $status->to_array();
+        unset($data['namespace']);
+
+        if (!empty($data['error']) && is_array($data['error'])) {
+            $error = $data['error'];
+            $type = (string) ($error['type'] ?? '');
+            debugging(
+                'Dixeo job ' . $status->jobid . ' error: type=' . $type
+                    . ' title=' . (string) ($error['title'] ?? '')
+                    . ' detail=' . (string) ($error['detail'] ?? ''),
+                DEBUG_DEVELOPER
+            );
+
+            $stringkey = error_message::string_key($type);
+            $message = $stringkey !== null
+                ? get_string($stringkey, 'local_dixeo')
+                : get_string($fallbackkey, $fallbackcomponent);
+            $data['error'] = [
+                'type' => $stringkey !== null ? $type : 'api_error',
+                'title' => $message,
+                'status' => (int) ($error['status'] ?? 500),
+                'detail' => $message,
+            ];
+        }
+
+        return $data;
     }
 
     /**
