@@ -212,6 +212,32 @@ final class tutor_service_test extends \advanced_testcase {
         $this->assertSame('m2', $messages[1]['id']);
     }
 
+    /**
+     * Contexts read back from the API have their HTML fields cleaned, as arrays or JSON strings.
+     */
+    public function test_get_conversation_cleans_context_html(): void {
+        $hostile = [
+            'schema' => 'custom_lesson',
+            'contenthtml' => '<p>Lesson</p><script>alert(1)</script>',
+            'questions' => [['feedbackHtml' => '<img src="x" onerror="alert(1)">']],
+        ];
+        $first = $this->raw_message('m1', 1);
+        $first['context'] = $hostile;
+        $second = $this->raw_message('m2', 2);
+        $second['context'] = json_encode($hostile);
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('get')->willReturn([$first, $second]);
+
+        $messages = (new tutor_service(null, $mockclient))->get_conversation(3, 4, '', 50, 0);
+
+        foreach ($messages as $message) {
+            $this->assertStringContainsString('Lesson', $message['context']['contenthtml']);
+            $this->assertStringNotContainsString('<script', $message['context']['contenthtml']);
+            $this->assertStringNotContainsString('onerror', $message['context']['questions'][0]['feedbackHtml']);
+            $this->assertSame('custom_lesson', $message['context']['schema']);
+        }
+    }
+
     public function test_submit_user_message_includes_mode_instructions_and_context(): void {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();

@@ -547,7 +547,7 @@ class tutor_service {
      */
     private static function passthrough_context(mixed $context, string $role): ?array {
         if (is_array($context) && $context !== []) {
-            return $context;
+            return tutor_context_cleaner::clean($context);
         }
 
         if (!is_string($context) || trim($context) === '') {
@@ -556,7 +556,7 @@ class tutor_service {
 
         $decoded = json_decode($context, true);
         if (is_array($decoded)) {
-            return $decoded;
+            return tutor_context_cleaner::clean($decoded);
         }
 
         $trimmed = trim($context);
