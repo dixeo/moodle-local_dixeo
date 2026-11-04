@@ -258,6 +258,7 @@ $string['error:dixeo_disabled'] = 'Dixeo ist ausgeschaltet.';
 $string['error:job_not_found'] = 'Der angeforderte Auftrag wurde nicht gefunden.';
 $string['error:notslideshow'] = 'Das Kursmodul ist keine Slideshow-Aktivität.';
 $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Credits auf, um fortzufahren.';
+$string['error:scope_unavailable'] = 'Dieses Thema ist nicht verfügbar. Wählen Sie einen anderen Abschnitt oder eine andere Aktivität.';
 $string['error:slidenotinslideshow'] = 'Die angeforderte Folie gehört nicht zu dieser Slideshow.';
 $string['error:tutor_synthesis_busy'] = 'Eine Synthese wird bereits angefordert. Versuchen Sie es gleich noch einmal.';
 $string['error:tutor_synthesis_unavailable'] = 'Dieser Dienst ist nicht verfügbar. Wenden Sie sich an Ihre Administration.';

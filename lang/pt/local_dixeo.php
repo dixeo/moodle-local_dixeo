@@ -258,6 +258,7 @@ $string['error:dixeo_disabled'] = 'O Dixeo está desligado.';
 $string['error:job_not_found'] = 'O trabalho solicitado não foi encontrado.';
 $string['error:notslideshow'] = 'O módulo da disciplina não é uma atividade de apresentação.';
 $string['error:payment_required'] = 'Créditos insuficientes. Adicione créditos para continuar.';
+$string['error:scope_unavailable'] = 'Este tópico não está disponível. Escolha outra secção ou outra atividade.';
 $string['error:slidenotinslideshow'] = 'O diapositivo solicitado não pertence a esta apresentação.';
 $string['error:tutor_synthesis_busy'] = 'Já está a ser pedida uma síntese. Tente novamente dentro de momentos.';
 $string['error:tutor_synthesis_unavailable'] = 'Este serviço não está disponível. Contacte o administrador.';

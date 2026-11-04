@@ -104,12 +104,70 @@ trait scoped_ephemeral_generation_trait {
     }
 
     /**
+     * Normalise a course/section/activity scope and require it to be visible and available to the current user.
+     *
+     * Section scope: section number above 0 and uservisible. Activity scope: course module
+     * uservisible, not in section 0, and its module name not in $excludedmodnames. The ids that do
+     * not belong to the scope are returned as 0, so a missing id never falls back to another scope.
+     *
+     * @param int $courseid Course id.
+     * @param string $scope course, section or activity.
+     * @param int $sectionnum Section number for the section scope.
+     * @param int $cmid Course module id for the activity scope.
+     * @param string[] $excludedmodnames Module names that cannot be a topic.
+     * @return array{0: string, 1: int, 2: int} Scope, section number and cmid.
+     * @throws \invalid_parameter_exception When the scope is unknown.
+     * @throws \moodle_exception error:scope_unavailable, without saying whether the item exists.
+     */
+    public function require_visible_scope(
+        int $courseid,
+        string $scope,
+        int $sectionnum,
+        int $cmid,
+        array $excludedmodnames = []
+    ): array {
+        $scope = $this->normalize_scope($scope);
+        if ($scope === self::SCOPE_COURSE) {
+            return [$scope, 0, 0];
+        }
+
+        $modinfo = get_fast_modinfo($courseid);
+
+        if ($scope === self::SCOPE_SECTION) {
+            $section = $sectionnum > 0 ? $modinfo->get_section_info($sectionnum, IGNORE_MISSING) : null;
+            if (!$section || !$section->uservisible) {
+                throw new \moodle_exception('error:scope_unavailable', 'local_dixeo');
+            }
+            return [$scope, (int) $section->section, 0];
+        }
+
+        $cm = null;
+        if ($cmid > 0) {
+            try {
+                $cm = $modinfo->get_cm($cmid);
+            } catch (\moodle_exception $e) {
+                $cm = null;
+            }
+        }
+        if (
+            !$cm
+            || !$cm->uservisible
+            || (int) $cm->sectionnum === 0
+            || in_array($cm->modname, $excludedmodnames, true)
+        ) {
+            throw new \moodle_exception('error:scope_unavailable', 'local_dixeo');
+        }
+        return [$scope, 0, (int) $cm->id];
+    }
+
+    /**
      * Normalize and validate a scope value.
      *
      * @param string $scope
      * @return string
+     * @throws \invalid_parameter_exception When the scope is unknown.
      */
-    protected function normalize_scope(string $scope): string {
+    private function normalize_scope(string $scope): string {
         $scope = strtolower(trim($scope));
         if (
             !in_array($scope, [

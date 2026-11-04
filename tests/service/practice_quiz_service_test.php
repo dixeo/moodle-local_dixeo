@@ -29,6 +29,7 @@ use local_dixeo\context\context_builder_factory;
 use local_dixeo\dto\job_status;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\job_service;
+use local_dixeo\service\module_generation_service;
 use local_dixeo\service\practice_quiz_service;
 
 
@@ -70,6 +71,84 @@ final class practice_quiz_service_test extends \advanced_testcase {
 
         $this->expectException(\invalid_parameter_exception::class);
         $service->submit_from_setup(1, 'invalid');
+    }
+
+    /**
+     * Practice quiz service whose generation must never be reached.
+     *
+     * @return practice_quiz_service
+     */
+    private function service_without_generation(): practice_quiz_service {
+        $generation = $this->createMock(module_generation_service::class);
+        $generation->expects($this->never())->method('submit_generate_job');
+        return new practice_quiz_service($generation, $this->createMock(job_service::class));
+    }
+
+    /**
+     * Run a call and assert it is refused with the scope error, without saying whether the item exists.
+     *
+     * @param callable $call The call.
+     */
+    private function assert_scope_refused(callable $call): void {
+        try {
+            $call();
+            $this->fail('The scope must be refused.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:scope_unavailable', $e->errorcode);
+            $this->assertSame('local_dixeo', $e->module);
+        }
+    }
+
+    /**
+     * Hidden sections, section-0 and excluded or unknown activities are refused before any generation call.
+     */
+    public function test_submit_from_setup_refuses_unavailable_scopes(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['numsections' => 2]);
+        $student = $gen->create_and_enrol($course, 'student');
+        $hidden = $gen->create_module('page', ['course' => $course->id, 'section' => 1, 'visible' => 0]);
+        $intro = $gen->create_module('page', ['course' => $course->id, 'section' => 0]);
+        $quiz = $gen->create_module('quiz', ['course' => $course->id, 'section' => 1]);
+        $other = $gen->create_course();
+        $foreign = $gen->create_module('page', ['course' => $other->id]);
+        set_section_visible((int) $course->id, 2, 0);
+        $courseid = (int) $course->id;
+        $service = $this->service_without_generation();
+
+        $this->setUser($student);
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'section', 2));
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'section', 0, (int) $hidden->cmid));
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'activity', 0, (int) $hidden->cmid));
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'activity', 0, (int) $intro->cmid));
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'activity', 0, (int) $foreign->cmid));
+        $this->assert_scope_refused(fn() => $service->submit_from_setup($courseid, 'activity', 0, 999999));
+        $this->assert_scope_refused(
+            fn() => $service->submit_from_setup($courseid, 'activity', 0, (int) $quiz->cmid, 5, 'medium', '', '', ['quiz'])
+        );
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->submit_from_setup($courseid, 'unknown');
+    }
+
+    /**
+     * A visible activity is accepted and only its cmid is kept; a visible section keeps only its number.
+     */
+    public function test_require_visible_scope_accepts_visible_items(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['numsections' => 2]);
+        $student = $gen->create_and_enrol($course, 'student');
+        $page = $gen->create_module('page', ['course' => $course->id, 'section' => 1]);
+        $service = new practice_quiz_service();
+
+        $this->setUser($student);
+        $this->assertSame(
+            ['activity', 0, (int) $page->cmid],
+            $service->require_visible_scope((int) $course->id, ' Activity ', 2, (int) $page->cmid, ['quiz'])
+        );
+        $this->assertSame(['section', 1, 0], $service->require_visible_scope((int) $course->id, 'section', 1, (int) $page->cmid));
+        $this->assertSame(['course', 0, 0], $service->require_visible_scope((int) $course->id, 'course', 1, (int) $page->cmid));
     }
 
     /**

@@ -258,6 +258,7 @@ $string['error:dixeo_disabled'] = 'Dixeo est désactivé.';
 $string['error:job_not_found'] = 'Le travail demandé n\'a pas été trouvé.';
 $string['error:notslideshow'] = 'Le module de cours n\'est pas une activité diaporama.';
 $string['error:payment_required'] = 'Crédits insuffisants. Veuillez ajouter des crédits pour continuer.';
+$string['error:scope_unavailable'] = 'Ce sujet n\'est pas disponible. Choisissez une autre section ou une autre activité.';
 $string['error:slidenotinslideshow'] = 'La diapositive demandée n\'appartient pas à ce diaporama.';
 $string['error:tutor_synthesis_busy'] = 'Une synthèse est déjà en cours de demande. Réessayez dans un instant.';
 $string['error:tutor_synthesis_unavailable'] = 'Ce service n\'est pas disponible. Contactez votre administrateur.';

@@ -74,8 +74,10 @@ class practice_quiz_service {
      * @param string $difficulty easy|medium|hard
      * @param string $topictitle Human-readable topic label.
      * @param string $language Moodle language code for generated content.
+     * @param string[] $excludedmodnames Module names that cannot be an activity topic.
      * @return operation_result
      * @throws api_exception
+     * @throws \moodle_exception When the section or activity is not available to the current user.
      */
     public function submit_from_setup(
         int $courseid,
@@ -85,9 +87,16 @@ class practice_quiz_service {
         int $count = 5,
         string $difficulty = 'medium',
         string $topictitle = '',
-        string $language = ''
+        string $language = '',
+        array $excludedmodnames = []
     ): operation_result {
-        $scope = $this->normalize_scope($scope);
+        [$scope, $sectionnum, $cmid] = $this->require_visible_scope(
+            $courseid,
+            $scope,
+            $sectionnum,
+            $cmid,
+            $excludedmodnames
+        );
         $contextmarkdown = $this->build_context(
             $courseid,
             $scope,
