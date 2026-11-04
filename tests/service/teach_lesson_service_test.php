@@ -88,6 +88,26 @@ final class teach_lesson_service_test extends \advanced_testcase {
     }
 
     /**
+     * Oversized titles and learner requests are refused before any generation call.
+     */
+    public function test_submit_from_setup_refuses_oversized_input(): void {
+        $this->resetAfterTest();
+        $generation = $this->createMock(module_generation_service::class);
+        $generation->expects($this->never())->method('submit_generate_job');
+        $service = new teach_lesson_service($generation, $this->createMock(job_service::class));
+
+        try {
+            $service->submit_from_setup(SITEID + 1, 'course', 0, 0, str_repeat('a', 256), 'Teach me');
+            $this->fail('A 256-byte title must be refused.');
+        } catch (\invalid_parameter_exception $e) {
+            $this->assertStringContainsString('topictitle is too long', $e->getMessage());
+        }
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->submit_from_setup(SITEID + 1, 'course', 0, 0, 'Topic', str_repeat('a', 2001));
+    }
+
+    /**
      * submit_from_setup rejects invalid scope values.
      */
     public function test_submit_from_setup_rejects_invalid_scope(): void {

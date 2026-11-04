@@ -132,6 +132,17 @@ final class practice_quiz_service_test extends \advanced_testcase {
     }
 
     /**
+     * A title longer than 255 bytes is refused before any generation call.
+     */
+    public function test_submit_from_setup_refuses_long_title(): void {
+        $this->resetAfterTest();
+        $service = $this->service_without_generation();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->submit_from_setup(SITEID + 1, 'course', 0, 0, 5, 'medium', str_repeat('a', 256));
+    }
+
+    /**
      * A visible activity is accepted and only its cmid is kept; a visible section keeps only its number.
      */
     public function test_require_visible_scope_accepts_visible_items(): void {

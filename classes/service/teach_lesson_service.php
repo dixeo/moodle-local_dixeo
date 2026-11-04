@@ -24,6 +24,7 @@
 
 namespace local_dixeo\service;
 
+use local_dixeo\util\input_limits;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\operation_result;
@@ -88,6 +89,8 @@ class teach_lesson_service {
         string $language = '',
         array $excludedmodnames = []
     ): operation_result {
+        input_limits::require_max_bytes($topictitle, input_limits::MAX_TITLE_BYTES, 'topictitle');
+        input_limits::require_max_bytes($learnerrequest, input_limits::MAX_REQUEST_BYTES, 'learnerrequest');
         [$scope, $sectionnum, $cmid] = $this->require_visible_scope(
             $courseid,
             $scope,
