@@ -252,6 +252,7 @@ $string['error:activity_not_available'] = 'El tipo de actividad {$a} no está in
 $string['error:api_url_https_required'] = 'La URL de la API Dixeo debe ser una dirección HTTPS absoluta (por ejemplo https://api.dixeo.com).';
 $string['error:authentication'] = 'Error de autenticación. Compruebe su clave API.';
 $string['error:busy'] = 'El servicio de IA está ocupado. Inténtelo de nuevo dentro de unos minutos.';
+$string['error:consentrequired'] = 'Acepte las Condiciones de uso actuales de Dixeo en la página del curso para continuar.';
 $string['error:content_rejected'] = 'El modelo rechazó la indicación. Reformúlela e inténtelo de nuevo.';
 $string['error:dixeo_disabled'] = 'Dixeo está desactivado.';
 $string['error:job_not_found'] = 'No se encontró el trabajo solicitado.';

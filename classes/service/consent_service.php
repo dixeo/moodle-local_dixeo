@@ -79,6 +79,54 @@ class consent_service {
     }
 
     /**
+     * Stop a request that would send this user's data while the current Terms of Use are not accepted.
+     *
+     * Uses {@see self::gate_required()}: guests, contexts outside a course and courses with Dixeo
+     * off never stop.
+     *
+     * @param int $userid Acting user.
+     * @param \context $context Request context.
+     * @param string $errorkey Language string of the error.
+     * @param string $component Component owning the error string.
+     * @return void
+     * @throws \moodle_exception $errorkey in $component when the terms are not accepted.
+     */
+    public function require_accepted(
+        int $userid,
+        \context $context,
+        string $errorkey = 'error:consentrequired',
+        string $component = 'local_dixeo'
+    ): void {
+        if ($this->gate_required($userid, $context)) {
+            throw new \moodle_exception($errorkey, $component);
+        }
+    }
+
+    /**
+     * Whether a background path (observer, task) may send data about this user for this course.
+     *
+     * Requires a real, non-guest user, an existing course above SITEID with Dixeo enabled, and
+     * acceptance of the current Terms of Use. No acceptance can be stored for a guest.
+     *
+     * @param int $userid User the data is about.
+     * @param int $courseid Course.
+     * @return bool
+     */
+    public function may_process_for(int $userid, int $courseid): bool {
+        if ($userid <= 0 || $courseid <= SITEID || isguestuser($userid)) {
+            return false;
+        }
+        $context = \context_course::instance($courseid, IGNORE_MISSING);
+        if (!$context instanceof \context_course) {
+            return false;
+        }
+        if (!(new \local_dixeo\settings\config())->enabled_for($context)) {
+            return false;
+        }
+        return $this->terms_current($userid);
+    }
+
+    /**
      * Whether My preferences should offer the terms and privacy row.
      *
      * @param int $userid User id.

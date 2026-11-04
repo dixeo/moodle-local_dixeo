@@ -160,6 +160,68 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * require_accepted() throws the given error until the terms are accepted, and never for guests or Dixeo off.
+     */
+    public function test_require_accepted(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $service = new consent_service();
+
+        try {
+            $service->require_accepted((int) $user->id, $context);
+            $this->fail('Unaccepted terms must stop the request.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:consentrequired', $e->errorcode);
+            $this->assertSame('local_dixeo', $e->module);
+        }
+
+        try {
+            $service->require_accepted((int) $user->id, $context, 'consentrequired', 'block_dixeo_tutor');
+            $this->fail('Unaccepted terms must stop the request.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('consentrequired', $e->errorcode);
+            $this->assertSame('block_dixeo_tutor', $e->module);
+        }
+
+        $service->require_accepted((int) guest_user()->id, $context);
+        $service->require_accepted((int) $user->id, \context_system::instance());
+
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', $context, '0');
+        $service->require_accepted((int) $user->id, $context);
+
+        (new config())->set('local_dixeo', 'enabled', $context, '1');
+        $service->accept((int) $user->id);
+        $service->require_accepted((int) $user->id, $context);
+        $this->assertTrue($service->terms_current((int) $user->id));
+    }
+
+    /**
+     * may_process_for() needs a real user, an existing course with Dixeo on and current terms.
+     */
+    public function test_may_process_for(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $offcourse = $this->getDataGenerator()->create_course();
+        $service = new consent_service();
+        $service->accept((int) $user->id);
+
+        $this->assertTrue($service->may_process_for((int) $user->id, (int) $course->id));
+        $this->assertFalse($service->may_process_for((int) guest_user()->id, (int) $course->id));
+        $this->assertFalse($service->may_process_for(0, (int) $course->id));
+        $this->assertFalse($service->may_process_for((int) $user->id, SITEID));
+        $this->assertFalse($service->may_process_for((int) $user->id, (int) $course->id + 1000));
+
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', \context_course::instance($offcourse->id), '0');
+        $this->assertFalse($service->may_process_for((int) $user->id, (int) $offcourse->id));
+
+        $service->withdraw_terms((int) $user->id);
+        $this->assertFalse($service->may_process_for((int) $user->id, (int) $course->id));
+    }
+
+    /**
      * Consent rows are exported and deleted with the system context.
      */
     public function test_privacy_export_and_delete(): void {

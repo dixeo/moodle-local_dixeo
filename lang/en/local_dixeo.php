@@ -252,6 +252,7 @@ $string['error:activity_not_available'] = 'The activity type {$a} is not install
 $string['error:api_url_https_required'] = 'The Dixeo API URL must be an absolute HTTPS address (for example https://api.dixeo.com).';
 $string['error:authentication'] = 'Authentication failed. Please check your API key.';
 $string['error:busy'] = 'The AI service is busy. Please try again in a few minutes.';
+$string['error:consentrequired'] = 'Accept the current Dixeo Terms of Use on the course page to continue.';
 $string['error:content_rejected'] = 'The prompt was refused by the model. Try rewording it.';
 $string['error:dixeo_disabled'] = 'Dixeo is turned off.';
 $string['error:job_not_found'] = 'The requested job was not found.';
