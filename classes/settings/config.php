@@ -320,6 +320,39 @@ final class config {
     }
 
     /**
+     * Dixeo-layer value a new course starts with for a retained course setting.
+     *
+     * @param string $component Frankenstyle component.
+     * @param string $name Catalogue key of the retained course setting.
+     * @return string The value of its retainparent at the Dixeo layer, else its shipped default.
+     * @throws \coding_exception When the setting is not retained at course level.
+     */
+    public function new_course_default_value(string $component, string $name): string {
+        return $this->retained_parent_value($this->retained_course_definition($component, $name));
+    }
+
+    /**
+     * Write the new-course default of a retained setting on a new course.
+     *
+     * The Dixeo setting authorises the write, so no capability is checked. A later change to the
+     * default does not rewrite the stored value.
+     *
+     * @param string $component Frankenstyle component.
+     * @param string $name Catalogue key of the retained course setting.
+     * @param \context_course $context The new course.
+     * @return string|null The value written, or null when Dixeo is off for the course.
+     * @throws \coding_exception When the setting is not retained at course level.
+     */
+    public function apply_new_course_default(string $component, string $name, \context_course $context): ?string {
+        $value = $this->new_course_default_value($component, $name);
+        if (!$this->enabled_for($context)) {
+            return null;
+        }
+        $this->set($component, $name, $context, $value, false);
+        return $value;
+    }
+
+    /**
      * Context that carries the Dixeo switch for a course id.
      *
      * @param int $courseid Course id, or SITEID or 0 for the site.
@@ -664,6 +697,22 @@ final class config {
         }
         $parent = $this->get($definition->get_component(), $definition->get_key(), \context_system::instance());
         return $parent->get_value() !== '1';
+    }
+
+    /**
+     * Catalogue entry of a setting retained at course level.
+     *
+     * @param string $component Frankenstyle component.
+     * @param string $name Catalogue key.
+     * @return definition
+     * @throws \coding_exception When the setting is not retained, or has no course level.
+     */
+    private function retained_course_definition(string $component, string $name): definition {
+        $definition = $this->definition($component, $name);
+        if (!$definition->retains_value() || !in_array(resolver::LAYER_COURSE, $definition->get_levels(), true)) {
+            throw new \coding_exception("Dixeo setting \"{$component}/{$name}\" is not retained at course level.");
+        }
+        return $definition;
     }
 
     /**

@@ -164,6 +164,53 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * A new course receives the Dixeo value of the retained setting's parent, On or Off.
+     */
+    public function test_apply_new_course_default_copies_the_parent(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $system = \context_system::instance();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+
+        $config->set('local_dixeo', 'filesync_enabled_default', $system, '1');
+        $this->assertSame('1', $config->new_course_default_value('local_dixeo', 'filesync_enabled'));
+        $this->assertSame('1', $config->apply_new_course_default('local_dixeo', 'filesync_enabled', $context));
+        $this->assertSame('1', $config->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+
+        $config->set('local_dixeo', 'filesync_enabled_default', $system, '0');
+        $this->assertSame('0', $config->apply_new_course_default('local_dixeo', 'filesync_enabled', $context));
+        $this->assertSame('0', $config->get('local_dixeo', 'filesync_enabled', $context)->get_value());
+    }
+
+    /**
+     * Nothing is written while Dixeo is off for the course.
+     */
+    public function test_apply_new_course_default_is_a_no_op_when_dixeo_is_off(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $config->set('local_dixeo', 'enabled', $context, '0');
+        $DB->delete_records(config::TABLE, ['contextid' => $context->id, 'name' => 'filesync_enabled']);
+
+        $this->assertNull($config->apply_new_course_default('local_dixeo', 'filesync_enabled', $context));
+        $this->assertFalse($DB->record_exists(config::TABLE, ['contextid' => $context->id, 'name' => 'filesync_enabled']));
+    }
+
+    /**
+     * A setting that is not retained at course level is refused.
+     */
+    public function test_apply_new_course_default_rejects_a_non_retained_setting(): void {
+        $course = $this->getDataGenerator()->create_course();
+
+        $this->expectException(\coding_exception::class);
+        (new config())->apply_new_course_default('local_dixeo', 'learning_intent', \context_course::instance($course->id));
+    }
+
+    /**
      * The course helpers resolve a real course to its context and anything else to the site.
      */
     public function test_course_helpers(): void {

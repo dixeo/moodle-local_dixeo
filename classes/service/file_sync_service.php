@@ -188,11 +188,7 @@ class file_sync_service {
             return;
         }
 
-        $default = (new config())->get(
-            'local_dixeo',
-            'filesync_enabled_default',
-            \context_system::instance()
-        )->get_value();
+        $default = (new config())->new_course_default_value('local_dixeo', 'filesync_enabled');
         $enabled = $default === '1';
         $this->write_filesync_setting($courseid, $enabled ? '1' : '0');
         $this->apply_course_filesync($courseid, $userid, $enabled);
@@ -209,11 +205,7 @@ class file_sync_service {
      * @return void
      */
     public function apply_new_course_default(int $courseid, int $userid): void {
-        $default = (new config())->get(
-            'local_dixeo',
-            'filesync_enabled_default',
-            \context_system::instance()
-        )->get_value();
+        $default = (new config())->new_course_default_value('local_dixeo', 'filesync_enabled');
         if ($default === '1') {
             return;
         }
