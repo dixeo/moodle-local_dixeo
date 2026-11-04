@@ -191,6 +191,92 @@ final class create_slides_action_test extends \advanced_testcase {
     }
 
     /**
+     * Generated titles and content are cleaned by the slideshow builder.
+     */
+    public function test_generated_active_content_is_removed(): void {
+        $slides = $this->create_slideshow('Cells', [
+            'name' => 'Cells',
+            'intro' => '<p>How cells work.</p>',
+            'openingTitle' => '<b>Opening</b><script>alert(1)</script>',
+            'slides' => [
+                [
+                    'title' => '<i>Membrane</i>',
+                    'content' => '<p onclick="alert(2)">The boundary.</p><script>alert(3)</script>',
+                ],
+            ],
+        ], false);
+
+        $this->assertStringNotContainsString('<', $slides[0]->name);
+        $this->assertStringContainsString('Opening', $slides[0]->name);
+        $this->assertSame('Membrane', $slides[1]->name);
+        $this->assertStringContainsString('The boundary.', $slides[1]->content);
+        $this->assertStringNotContainsString('onclick', $slides[1]->content);
+        $this->assertStringNotContainsString('<script', $slides[1]->content);
+    }
+
+    /**
+     * An inline image shortcode survives the cleaning and is turned into an image job.
+     */
+    public function test_inline_image_shortcode_survives_cleaning(): void {
+        global $DB;
+
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+
+        $slides = $this->create_slideshow('Cells', [
+            'name' => 'Cells',
+            'intro' => '<p>How cells work.</p>',
+            'slides' => [
+                [
+                    'title' => 'Membrane',
+                    'content' => '<p>The boundary.</p>[img-gen prompt="A cell membrane" mode="landscape"]'
+                        . '<script>alert(1)</script>',
+                ],
+            ],
+        ], false);
+
+        $this->assertStringNotContainsString('[img-gen', $slides[1]->content);
+        $this->assertStringNotContainsString('<script', $slides[1]->content);
+        $jobs = $DB->get_records('local_dixeo_image_job', ['component' => 'mod_slideshow']);
+        $this->assertNotEmpty($jobs);
+        $tasks = \core\task\manager::get_adhoc_tasks(\local_dixeo\task\poll_image_job::class);
+        $prompts = array_map(static fn($task): string => (string) $task->get_custom_data()->request->prompt, $tasks);
+        $this->assertContains('A cell membrane', $prompts);
+    }
+
+    /**
+     * A queued featured image keeps the requested layout from the insert; no later layout write happens.
+     */
+    public function test_queued_featured_image_keeps_the_inserted_layout(): void {
+        $featured = $this->getMockBuilder(\local_dixeo\service\image\content\slide_featured_image::class)
+            ->onlyMethods(['queue'])
+            ->getMock();
+        $featured->expects($this->exactly(2))->method('queue')->willReturnOnConsecutiveCalls(true, false);
+
+        $slides = $this->create_slideshow('Cells', [
+            'name' => 'Cells',
+            'intro' => '<p>How cells work.</p>',
+            'slides' => [
+                [
+                    'title' => 'Membrane',
+                    'content' => '<p>The boundary.</p>',
+                    'layout' => 'contentleft',
+                    'featuredImage' => '[img-gen prompt="A cell membrane" mode="portrait"]',
+                ],
+                [
+                    'title' => 'Nucleus',
+                    'content' => '<p>The control centre.</p>',
+                    'layout' => 'contentright',
+                    'featuredImage' => '[img-gen prompt="A nucleus" mode="portrait"]',
+                ],
+            ],
+        ], true, new create_slides_action($featured));
+
+        $this->assertSame('contentleft', $slides[1]->layout);
+        $this->assertSame('background', $slides[2]->layout);
+    }
+
+    /**
      * Create a slideshow from DSL and return its slides in sort order.
      *
      * @param string $activityname Activity name.

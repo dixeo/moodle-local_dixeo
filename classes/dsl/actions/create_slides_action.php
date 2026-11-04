@@ -29,7 +29,6 @@
 namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
-use local_dixeo\dsl\generated_html;
 use local_dixeo\dsl\value_resolver;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\image\content\slide_featured_image;
@@ -100,8 +99,14 @@ class create_slides_action {
             (int) $moduledata['cmid']
         );
 
-        // Layout constants are only needed once the parent module is accepted.
+        // The slide builder and layout constants are only needed once the parent module is accepted.
         require_once($CFG->dirroot . '/mod/slideshow/locallib.php');
+        if (!function_exists('slideshow_build_new_slide_record')) {
+            throw new dsl_exception(
+                'mod_slideshow does not provide slideshow_build_new_slide_record(); upgrade mod_slideshow',
+                'add_slides'
+            );
+        }
 
         $cmid = (int) $cm->id;
         $slideshowinstanceid = (int) $cm->instance;
@@ -127,16 +132,11 @@ class create_slides_action {
             }
         }
         $createdids = [];
-        $now = time();
         $modulecontext = \context_module::instance($cmid);
         $shortcodeservice = service_factory::get_content_image_shortcode_service();
         $userid = (int) ($resolver->get_context()['userid'] ?? $USER->id);
 
-        $createdids[] = $this->insert_opening_slide(
-            $resolver,
-            $slideshowinstanceid,
-            $now
-        );
+        $createdids[] = $this->insert_opening_slide($resolver, $slideshowinstanceid);
 
         $sortorder = 1;
         foreach ($slides as $index => $slideitem) {
@@ -155,17 +155,15 @@ class create_slides_action {
             $resolvedfields = $itemresolver->resolve_fields($fieldsspec);
             $resolvedfields += $itemresolver->resolve_fields($optionalfields, true);
 
-            // Build the slide record.
-            $record = new \stdClass();
-            $record->slideshow = $slideshowinstanceid;
-            $record->name = $resolvedfields['title'] ?? '';
-            $record->content = generated_html::strip_active_content((string) ($resolvedfields['content'] ?? ''));
-            $record->contentformat = FORMAT_HTML;
-            $record->layout = $this->layout_for_content_slide($resolvedfields);
-            $record->hidetitle = 0;
-            $record->hidden = 0;
-            $record->sortorder = $sortorder;
-            $record->timemodified = $now;
+            // The slideshow builder cleans the title and content and settles the layout before the insert.
+            $record = slideshow_build_new_slide_record($slideshowinstanceid, [
+                'name' => (string) ($resolvedfields['title'] ?? ''),
+                'content' => (string) ($resolvedfields['content'] ?? ''),
+                'contentformat' => FORMAT_HTML,
+                'layout' => $this->layout_for_content_slide($resolvedfields),
+                'hidetitle' => 0,
+                'hidden' => 0,
+            ], $sortorder);
             $sortorder++;
 
             // Insert the slide.
@@ -193,6 +191,7 @@ class create_slides_action {
                     $userid
                 );
                 if (!$queued) {
+                    // The image cannot be generated, so the slide falls back to the light background layout.
                     $DB->set_field(
                         'slideshow_slide',
                         'layout',
@@ -216,14 +215,9 @@ class create_slides_action {
      *
      * @param value_resolver $resolver Resolver holding the full AI response.
      * @param int $slideshowinstanceid Slideshow instance id.
-     * @param int $now Modification time.
      * @return int Created slide id.
      */
-    private function insert_opening_slide(
-        value_resolver $resolver,
-        int $slideshowinstanceid,
-        int $now
-    ): int {
+    private function insert_opening_slide(value_resolver $resolver, int $slideshowinstanceid): int {
         global $DB;
 
         $aidata = $resolver->get_ai_data();
@@ -233,37 +227,29 @@ class create_slides_action {
             $opening = (string) $slideshow->name;
         }
 
-        $record = new \stdClass();
-        $record->slideshow = $slideshowinstanceid;
-        $record->name = $opening;
-        $record->content = '';
-        $record->contentformat = FORMAT_HTML;
-        $record->layout = MOD_SLIDESHOW_LAYOUT_TITLEONLY;
-        $record->hidetitle = 0;
-        $record->hidden = 0;
-        $record->sortorder = 0;
-        $record->timemodified = $now;
+        $record = slideshow_build_new_slide_record($slideshowinstanceid, [
+            'name' => $opening,
+            'content' => '',
+            'contentformat' => FORMAT_HTML,
+            'layout' => MOD_SLIDESHOW_LAYOUT_TITLEONLY,
+        ], 0);
 
         return $DB->insert_record('slideshow_slide', $record);
     }
 
     /**
-     * Choose a content-slide layout.
+     * Choose a content-slide layout before the slideshow builder normalises it.
      *
-     * A missing layout, an unknown layout, and a content layout without a
-     * featured-image shortcode are stored as background.
+     * A layout that shows an image needs a featured-image shortcode, and a content slide never
+     * hides its body behind the title-only layout: both fall back to background. A missing or
+     * unknown layout is turned into background by slideshow_normalize_layout().
      *
      * @param array $resolvedfields Resolved slide fields.
-     * @return string One of the MOD_SLIDESHOW_LAYOUT_* values.
+     * @return string Requested layout.
      */
     private function layout_for_content_slide(array $resolvedfields): string {
         $raw = isset($resolvedfields['layout']) ? trim((string) $resolvedfields['layout']) : '';
-        $known = slideshow_get_layouts();
-        if (
-            !$this->featured_image_is_present($resolvedfields)
-            || !isset($known[$raw])
-            || $raw === MOD_SLIDESHOW_LAYOUT_TITLEONLY
-        ) {
+        if (!$this->featured_image_is_present($resolvedfields) || $raw === MOD_SLIDESHOW_LAYOUT_TITLEONLY) {
             return MOD_SLIDESHOW_LAYOUT_BACKGROUND;
         }
 
