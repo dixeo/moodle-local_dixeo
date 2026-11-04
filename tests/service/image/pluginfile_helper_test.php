@@ -66,4 +66,43 @@ final class pluginfile_helper_test extends \advanced_testcase {
         $this->assertSame($filename, $file->get_filename());
         $this->assertSame(0, (int) $file->get_itemid());
     }
+
+    /**
+     * get_owned_file() only resolves a file in the exact context, component, area, item and MIME type.
+     */
+    public function test_get_owned_file_requires_an_exact_match(): void {
+        global $CFG;
+
+        $system = \context_system::instance();
+        $user = \context_user::instance((int) get_admin()->id);
+        $fs = get_file_storage();
+        $record = [
+            'contextid' => $system->id,
+            'component' => 'local_dixeo',
+            'filearea' => 'ownedtest',
+            'itemid' => 7,
+            'filepath' => '/',
+        ];
+        $fs->create_file_from_string($record + ['filename' => 'image.png'], 'fakepng');
+        $fs->create_file_from_string($record + ['filename' => 'notes.txt'], 'text');
+        $fs->create_file_from_string(['contextid' => $user->id] + $record + ['filename' => 'image.png'], 'fakepng');
+
+        $url = $CFG->wwwroot . '/pluginfile.php/' . $system->id . '/local_dixeo/ownedtest/7/image.png';
+        $owned = pluginfile_helper::get_owned_file($url, $system->id, 'local_dixeo', 'ownedtest', 7);
+        $this->assertNotNull($owned);
+        $this->assertSame('image.png', $owned->get_filename());
+
+        $this->assertNull(pluginfile_helper::get_owned_file($url, $user->id, 'local_dixeo', 'ownedtest', 7));
+        $this->assertNull(pluginfile_helper::get_owned_file($url, $system->id, 'block_other', 'ownedtest', 7));
+        $this->assertNull(pluginfile_helper::get_owned_file($url, $system->id, 'local_dixeo', 'otherarea', 7));
+        $this->assertNull(pluginfile_helper::get_owned_file($url, $system->id, 'local_dixeo', 'ownedtest', 8));
+
+        $usercopy = $CFG->wwwroot . '/pluginfile.php/' . $user->id . '/local_dixeo/ownedtest/7/image.png';
+        $this->assertNull(pluginfile_helper::get_owned_file($usercopy, $system->id, 'local_dixeo', 'ownedtest', 7));
+
+        $text = $CFG->wwwroot . '/pluginfile.php/' . $system->id . '/local_dixeo/ownedtest/7/notes.txt';
+        $this->assertNull(pluginfile_helper::get_owned_file($text, $system->id, 'local_dixeo', 'ownedtest', 7));
+        $this->assertNotNull(pluginfile_helper::get_owned_file($text, $system->id, 'local_dixeo', 'ownedtest', 7, ''));
+        $this->assertNull(pluginfile_helper::get_owned_file('', $system->id, 'local_dixeo', 'ownedtest', 7));
+    }
 }

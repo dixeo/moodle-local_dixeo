@@ -26,6 +26,41 @@ namespace local_dixeo\service\image;
  */
 final class pluginfile_helper {
     /**
+     * Stored file behind a pluginfile URL, only when it is in one exact file area and item.
+     *
+     * Use it for user-supplied URLs: any URL pointing elsewhere is never resolved to file bytes.
+     *
+     * @param string $url Full or relative pluginfile URL.
+     * @param int $contextid Expected context id.
+     * @param string $component Expected component.
+     * @param string $filearea Expected file area.
+     * @param int $itemid Expected item id.
+     * @param string $mimeprefix Required MIME type prefix, or '' for any type.
+     * @return \stored_file|null The file, or null when any of context, component, area, item or MIME type differs.
+     */
+    public static function get_owned_file(
+        string $url,
+        int $contextid,
+        string $component,
+        string $filearea,
+        int $itemid,
+        string $mimeprefix = 'image/'
+    ): ?\stored_file {
+        $file = self::get_stored_file_from_pluginfile_url($url);
+        if (
+            !$file
+            || (int) $file->get_contextid() !== $contextid
+            || $file->get_component() !== $component
+            || $file->get_filearea() !== $filearea
+            || (int) $file->get_itemid() !== $itemid
+            || ($mimeprefix !== '' && strpos((string) $file->get_mimetype(), $mimeprefix) !== 0)
+        ) {
+            return null;
+        }
+        return $file;
+    }
+
+    /**
      * Resolve a wwwroot-relative or absolute pluginfile URL to a stored file.
      *
      * Handles revision-as-itemid URLs used by mod_page / mod_resource / etc.
