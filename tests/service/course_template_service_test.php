@@ -98,4 +98,40 @@ final class course_template_service_test extends \advanced_testcase {
         $this->assertSame([], $service->get_cached_templates());
         $this->assertSame([], $service->get_cached_choices());
     }
+
+    /**
+     * Names are stored as plain text, and a name that is empty once cleaned is skipped.
+     */
+    public function test_template_names_are_stored_as_plain_text(): void {
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('is_configured')->willReturn(true);
+        $mockclient->method('get')->willReturn([
+            ['id' => 'tpl-a', 'name' => '<b>Bold</b> <script>alert(1)</script>plan'],
+            ['id' => 'tpl-b', 'name' => '<img src=x onerror=alert(1)>'],
+        ]);
+
+        $choices = (new course_template_service($mockclient))->get_cached_choices();
+
+        $this->assertCount(1, $choices);
+        $this->assertStringNotContainsString('<', $choices['tpl-a']);
+        $this->assertStringContainsString('Bold', $choices['tpl-a']);
+        $this->assertStringContainsString('plan', $choices['tpl-a']);
+    }
+
+    /**
+     * peek_cached_choices() never calls the API: empty on a cold cache, the cached choices once warm.
+     */
+    public function test_peek_cached_choices_reads_the_cache_only(): void {
+        $mockclient = $this->createMock(client::class);
+        $mockclient->method('is_configured')->willReturn(true);
+        $mockclient->expects($this->once())->method('get')->willReturn([
+            ['id' => 'tpl-a', 'name' => 'Template A'],
+        ]);
+        $service = new course_template_service($mockclient);
+
+        $this->assertSame([], $service->peek_cached_choices());
+
+        $service->get_cached_choices();
+        $this->assertSame(['tpl-a' => 'Template A'], $service->peek_cached_choices());
+    }
 }

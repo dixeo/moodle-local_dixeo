@@ -673,6 +673,13 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026110400, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026110401) {
+        // Cached template names were stored before they were cleaned as plain text.
+        cache_helper::purge_by_definition('local_dixeo', 'coursetemplates');
+
+        upgrade_plugin_savepoint(true, 2026110401, 'local', 'dixeo');
+    }
+
     return true;
 }
 

@@ -103,7 +103,33 @@ class course_template_service {
     }
 
     /**
+     * Course template choices (id => plain-text name) from the cache only.
+     *
+     * Never calls the API, so it is safe where a remote call is too slow, such as while the
+     * settings catalogue loads.
+     *
+     * @return array Map of template id => name, empty when the cache is cold.
+     */
+    public function peek_cached_choices(): array {
+        $cached = cache::make('local_dixeo', 'coursetemplates')->get(self::CACHE_KEY_TEMPLATES);
+        if (!is_array($cached)) {
+            return [];
+        }
+
+        $choices = [];
+        foreach ($cached as $template) {
+            if (is_array($template) && isset($template['id'], $template['name'])) {
+                $choices[(string) $template['id']] = (string) $template['name'];
+            }
+        }
+        return $choices;
+    }
+
+    /**
      * Normalises template arrays into UI records.
+     *
+     * Names come from the API and are stored as plain text, so every consumer can print them
+     * as such. A template whose name is empty once cleaned is skipped.
      *
      * @param array $templates List of template arrays from the API.
      * @return array List of records with id, name, and description.
@@ -115,7 +141,7 @@ class course_template_service {
                 continue;
             }
             $id = (string) ($template['id'] ?? '');
-            $name = trim((string) ($template['name'] ?? ''));
+            $name = trim(clean_param((string) ($template['name'] ?? ''), PARAM_TEXT));
             if ($id === '' || $name === '') {
                 continue;
             }
