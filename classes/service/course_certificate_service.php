@@ -47,6 +47,24 @@ class course_certificate_service {
     }
 
     /**
+     * Whether certificates can be generated on this site.
+     *
+     * @return bool True when mod_coursecertificate and tool_certificate are installed and the template table exists.
+     */
+    public static function is_available(): bool {
+        global $DB;
+
+        $pluginmanager = \core_plugin_manager::instance();
+        if (
+            $pluginmanager->get_plugin_info('mod_coursecertificate') === null
+                || $pluginmanager->get_plugin_info('tool_certificate') === null
+        ) {
+            return false;
+        }
+        return $DB->get_manager()->table_exists('tool_certificate_templates');
+    }
+
+    /**
      * Try to add a course certificate activity.
      *
      * @param int $courseid
@@ -73,11 +91,7 @@ class course_certificate_service {
             return false;
         }
 
-        $pluginmanager = \core_plugin_manager::instance();
-        if (
-            $pluginmanager->get_plugin_info('mod_coursecertificate') === null
-                || $pluginmanager->get_plugin_info('tool_certificate') === null
-        ) {
+        if (!self::is_available()) {
             return false;
         }
 

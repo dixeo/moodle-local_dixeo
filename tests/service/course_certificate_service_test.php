@@ -26,6 +26,7 @@
 namespace local_dixeo;
 
 use local_dixeo\service\course_certificate_service;
+use local_dixeo\service\plugin_installation_service;
 
 /**
  * Unit tests for course certificate service.
@@ -51,5 +52,24 @@ final class course_certificate_service_test extends \advanced_testcase {
         $this->assertSame('coursecompleted', $data['c'][0]['type']);
         $this->assertSame('1', $data['c'][0]['id']);
         $this->assertSame(0, $data['c'][0]['courseid']);
+    }
+
+    /**
+     * Availability requires both certificate plugins and the template table.
+     */
+    public function test_is_available_requires_both_plugins(): void {
+        global $DB;
+
+        $expected = \core_plugin_manager::instance()->get_plugin_info('mod_coursecertificate') !== null
+            && \core_plugin_manager::instance()->get_plugin_info('tool_certificate') !== null
+            && $DB->get_manager()->table_exists('tool_certificate_templates');
+
+        $this->assertSame($expected, course_certificate_service::is_available());
+        if (!plugin_installation_service::is_plugin_installed('tool_certificate')) {
+            $this->assertFalse(course_certificate_service::is_available());
+        }
+        if (!plugin_installation_service::is_plugin_installed('mod_coursecertificate')) {
+            $this->assertFalse(course_certificate_service::is_available());
+        }
     }
 }
