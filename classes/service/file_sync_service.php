@@ -452,6 +452,68 @@ class file_sync_service {
     }
 
     /**
+     * Replace every file Dixeo holds under a key with the given files.
+     *
+     * The key is a job id or a course id. A failed pre-delete is logged, not thrown, so the
+     * upload still runs; an upload failure is thrown.
+     *
+     * @param string $key Remote file key.
+     * @param array $files stored_file or file_upload_part items to upload.
+     * @return void
+     * @throws api_exception When the upload fails.
+     */
+    public function replace_remote_files(string $key, array $files): void {
+        try {
+            $this->client->delete_files($key);
+        } catch (\Throwable $e) {
+            debugging('Dixeo files under ' . $key . ' were not deleted before the upload: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+
+        if (!empty($files)) {
+            $this->client->upload_files($key, $files);
+        }
+    }
+
+    /**
+     * Delete every file Dixeo holds under a key.
+     *
+     * @param string $key Remote file key (a job id or a course id).
+     * @return void
+     * @throws api_exception When the call fails, so a remote erasure task retries.
+     */
+    public function delete_remote_files(string $key): void {
+        $this->client->delete_files($key);
+    }
+
+    /**
+     * Sync status for a polling UI.
+     *
+     * The local row is refreshed from the API only while a sync is in progress and no outbound
+     * upload is still running: the status is not synchronized or none, and every byte of the
+     * current upload has been sent. The local-only states outdated and pending_deletion are
+     * never overwritten by a poll.
+     *
+     * @param int $courseid The course ID.
+     * @return \stdClass Status as returned by {@see self::get_status()}.
+     */
+    public function get_live_status(int $courseid): \stdClass {
+        $status = $this->get_status($courseid);
+        $current = (string) ($status->status ?? 'none');
+        if (in_array($current, ['synchronized', 'none', 'outdated', 'pending_deletion'], true)) {
+            return $status;
+        }
+
+        $record = $this->repository->get_by_courseid($courseid);
+        $uploadbytes = (int) ($record->uploadbytes ?? 0);
+        $uploadtotal = (int) ($record->uploadbytestotal ?? 0);
+        if ($uploadbytes < $uploadtotal) {
+            return $status;
+        }
+
+        return $this->poll_status($courseid);
+    }
+
+    /**
      * Retry a pending remote file deletion for a course.
      *
      * Idempotent: no-ops unless syncstatus is pending_deletion.

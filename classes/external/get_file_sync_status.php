@@ -65,13 +65,7 @@ class get_file_sync_status extends external_api {
 
         $service = service_factory::get_file_sync_service();
 
-        // If currently syncing, poll API for real-time status update.
-        $localstatus = $service->get_status($params['courseid']);
-        if ($localstatus->status === 'syncing') {
-            $status = $service->poll_status($params['courseid']);
-        } else {
-            $status = $localstatus;
-        }
+        $status = $service->get_live_status($params['courseid']);
 
         return [
             'enabled' => $status->enabled,
