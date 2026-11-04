@@ -666,7 +666,43 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102213, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026110400) {
+        // The record of a first transfer to Dixeo moves from the tutor block to local_dixeo.
+        local_dixeo_migrate_transfer_marker();
+
+        upgrade_plugin_savepoint(true, 2026110400, 'local', 'dixeo');
+    }
+
     return true;
+}
+
+/**
+ * Record whether this site has ever sent data to Dixeo, for sites upgraded from earlier releases.
+ *
+ * The tutor block's own marker is kept when present. Otherwise a configured API client, or any
+ * job or file sync row, shows that data may have been sent, so the time of the upgrade is stored.
+ * An existing local_dixeo marker is left untouched.
+ *
+ * @return void
+ */
+function local_dixeo_migrate_transfer_marker(): void {
+    global $DB;
+
+    if (!empty(get_config('local_dixeo', 'hastransferred'))) {
+        return;
+    }
+
+    $value = get_config('block_dixeo_tutor', 'hastransferred');
+    if (empty($value)) {
+        $configured = (new \local_dixeo\api\client())->is_configured();
+        $hasrows = $DB->record_exists('local_dixeo_jobs', []) || $DB->record_exists('local_dixeo_course_ai', []);
+        if ($configured || $hasrows) {
+            $value = time();
+        }
+    }
+    if (!empty($value)) {
+        set_config('hastransferred', $value, 'local_dixeo');
+    }
 }
 
 /**

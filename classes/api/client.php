@@ -20,6 +20,7 @@ use local_dixeo\dto\file_upload_part;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\api\exception\authentication_exception;
 use local_dixeo\api\exception\rate_limit_exception;
+use local_dixeo\privacy\remote_state;
 
 /**
  * HTTP client for communicating with the Dixeo API.
@@ -117,6 +118,7 @@ class client {
         require_once($CFG->libdir . '/filelib.php');
 
         $this->validate_configuration();
+        remote_state::record_transfer();
 
         $jsonpayload = json_encode($data);
         if ($jsonpayload === false) {
@@ -181,6 +183,9 @@ class client {
         require_once($CFG->libdir . '/filelib.php');
 
         $this->validate_configuration();
+        if ($method === 'POST' || $method === 'PUT') {
+            remote_state::record_transfer();
+        }
 
         $curl = $this->create_curl($this->timeout);
         $url = rtrim($this->baseurl, '/') . '/' . ltrim($endpoint, '/');
@@ -457,6 +462,7 @@ class client {
         if (empty($files)) {
             return ['uploaded' => 0, 'files' => []];
         }
+        remote_state::record_transfer();
 
         $namespace = $this->resolve_namespace($namespace);
 

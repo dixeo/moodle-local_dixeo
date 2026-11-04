@@ -1152,7 +1152,7 @@ class provider implements
      * @return api_exception|null Failure to rethrow after every context is attempted.
      */
     private static function export_user_conversation(\context $context, int $userid, int $courseid): ?api_exception {
-        if ($courseid <= 0 || !self::conversations_available()) {
+        if ($courseid <= 0 || remote_state::current() !== remote_state::READY) {
             return null;
         }
 
@@ -1212,7 +1212,7 @@ class provider implements
      * @return api_exception|null The failure to rethrow once local erasure is done.
      */
     private static function erase_tutor_conversations(?int $courseid, ?int $userid): ?api_exception {
-        if (!self::conversations_available()) {
+        if (remote_state::current() !== remote_state::READY) {
             return null;
         }
 
@@ -1225,14 +1225,5 @@ class provider implements
             }
             return $e;
         }
-    }
-
-    /**
-     * Whether this site has sent tutor data to Dixeo.
-     *
-     * @return bool
-     */
-    private static function conversations_available(): bool {
-        return service_factory::get_client()->is_configured();
     }
 }
