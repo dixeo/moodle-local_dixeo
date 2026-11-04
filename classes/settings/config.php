@@ -320,6 +320,43 @@ final class config {
     }
 
     /**
+     * Context that carries the Dixeo switch for a course id.
+     *
+     * @param int $courseid Course id, or SITEID or 0 for the site.
+     * @return \context Course context for $courseid > SITEID when the course exists, else the system context.
+     */
+    public function context_for_course(int $courseid): \context {
+        if ($courseid > SITEID) {
+            $context = \context_course::instance($courseid, IGNORE_MISSING);
+            if ($context instanceof \context_course) {
+                return $context;
+            }
+        }
+        return \context_system::instance();
+    }
+
+    /**
+     * Whether Dixeo features may run for a course, or for the site.
+     *
+     * @param int $courseid Course id, or SITEID or 0 for the site.
+     * @return bool {@see self::enabled_for()} on {@see self::context_for_course()}.
+     */
+    public function enabled_for_course(int $courseid): bool {
+        return $this->enabled_for($this->context_for_course($courseid));
+    }
+
+    /**
+     * Stop when Dixeo features must not run for a course, or for the site.
+     *
+     * @param int $courseid Course id, or SITEID or 0 for the site.
+     * @return void
+     * @throws \moodle_exception error:dixeo_disabled when {@see self::enabled_for_course()} is false.
+     */
+    public function require_enabled_for_course(int $courseid): void {
+        $this->require_enabled($this->context_for_course($courseid));
+    }
+
+    /**
      * Editing-mode text for a block that is hidden because Dixeo is off.
      *
      * The Dixeo layer asks for an administrator. A course that is off while the

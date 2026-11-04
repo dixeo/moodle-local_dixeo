@@ -164,6 +164,34 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
+     * The course helpers resolve a real course to its context and anything else to the site.
+     */
+    public function test_course_helpers(): void {
+        $this->setAdminUser();
+        $config = new config();
+        $course = $this->getDataGenerator()->create_course();
+        $coursecontext = \context_course::instance($course->id);
+        $system = \context_system::instance();
+
+        $this->assertSame($coursecontext->id, $config->context_for_course((int) $course->id)->id);
+        $this->assertSame($system->id, $config->context_for_course(SITEID)->id);
+        $this->assertSame($system->id, $config->context_for_course(0)->id);
+        $this->assertSame($system->id, $config->context_for_course((int) $course->id + 1000)->id);
+        $this->assertTrue($config->enabled_for_course((int) $course->id));
+        $config->require_enabled_for_course((int) $course->id);
+
+        $config->set('local_dixeo', 'enabled', $coursecontext, '0');
+        $this->assertFalse($config->enabled_for_course((int) $course->id));
+        $this->assertTrue($config->enabled_for_course(SITEID));
+        $this->assertTrue($config->enabled_for_course((int) $course->id + 1000));
+
+        $config->set('local_dixeo', 'enabled', $system, '0');
+        $this->assertFalse($config->enabled_for_course(SITEID));
+        $this->expectException(\moodle_exception::class);
+        $config->require_enabled_for_course(0);
+    }
+
+    /**
      * Saving On at the Dixeo layer removes the plugin-config row.
      */
     public function test_setting_dixeo_on_deletes_the_plugin_config_row(): void {
