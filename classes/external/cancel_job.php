@@ -25,6 +25,7 @@
 
 namespace local_dixeo\external;
 
+use local_dixeo\api\job_id;
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
@@ -60,8 +61,7 @@ class cancel_job extends external_api {
      * @return array The cancellation result.
      */
     public static function execute(string $jobid, int $courseid): array {
-        global $CFG, $USER;
-        require_once($CFG->dirroot . '/local/dixeo/lib.php');
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'jobid' => $jobid,
@@ -70,9 +70,7 @@ class cancel_job extends external_api {
 
         self::validate_course_capability($params['courseid']);
 
-        if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
-            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
-        }
+        job_id::require_valid($params['jobid']);
 
         try {
             $service = service_factory::get_job_service();

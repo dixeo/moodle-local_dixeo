@@ -155,7 +155,7 @@ class tutor_synthesis_service {
             }
 
             $jobid = trim((string) ($response['id'] ?? ''));
-            if (!\local_dixeo_is_valid_job_uuid($jobid)) {
+            if (!\local_dixeo\api\job_id::is_valid($jobid)) {
                 throw new \moodle_exception('error:unexpected', 'local_dixeo');
             }
 
@@ -398,7 +398,7 @@ class tutor_synthesis_service {
      */
     private function reconcile(\stdClass $record): \stdClass {
         $jobid = trim((string) ($record->jobid ?? ''));
-        if (!\local_dixeo_is_valid_job_uuid($jobid)) {
+        if (!\local_dixeo\api\job_id::is_valid($jobid)) {
             return $this->mark_failed($record);
         }
 

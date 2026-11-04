@@ -27,6 +27,7 @@
 
 namespace local_dixeo\external;
 
+use local_dixeo\api\job_id;
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
@@ -87,7 +88,7 @@ class create_module_from_job extends external_api {
         ?string $name = null,
         ?string $intro = null
     ): array {
-        global $CFG, $USER;
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'jobid' => $jobid,
@@ -100,10 +101,7 @@ class create_module_from_job extends external_api {
 
         self::validate_course_capability($params['courseid'], true);
 
-        require_once($CFG->dirroot . '/local/dixeo/lib.php');
-        if (!\local_dixeo_is_valid_job_uuid($params['jobid'])) {
-            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
-        }
+        job_id::require_valid($params['jobid']);
 
         try {
             $jobservice = service_factory::get_job_service();

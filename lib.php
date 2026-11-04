@@ -102,16 +102,13 @@ function local_dixeo_get_configured_namespace(): string {
 /**
  * Whether a job id looks like a UUID (canonical 8-4-4-4-12 hex form).
  *
- * Used by hub externals before course-shared job operations.
+ * Kept for plugins that call it; {@see \local_dixeo\api\job_id} holds the rule.
  *
  * @param string $jobid Candidate job UUID.
  * @return bool True when the string matches a UUID pattern.
  */
 function local_dixeo_is_valid_job_uuid(string $jobid): bool {
-    return (bool) preg_match(
-        '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
-        $jobid
-    );
+    return \local_dixeo\api\job_id::is_valid($jobid);
 }
 
 /**
