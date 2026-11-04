@@ -127,6 +127,15 @@ class create_questions_simplequiz2_action {
             );
         }
 
+        $maxquestions = simplequiz2_question_transformer::max_questions();
+        if (count($questions) > $maxquestions) {
+            throw new dsl_exception(
+                "SimpleQuiz accepts at most $maxquestions questions",
+                'create_questions_simplequiz2',
+                ['question_count' => count($questions)]
+            );
+        }
+
         $fieldsspec = $action['fields'] ?? [];
         $simplequiz2questions = [];
 

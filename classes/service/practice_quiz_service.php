@@ -247,7 +247,14 @@ class practice_quiz_service {
         try {
             $questions = simplequiz2_question_transformer::transform_job_questions($rawquestions);
         } catch (dsl_exception $e) {
-            return $this->practice_quiz_result(false, '', '', '[]', $e->getMessage());
+            debugging('Practice quiz job ' . $jobid . ' returned invalid questions: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            return $this->practice_quiz_result(
+                false,
+                '',
+                '',
+                '[]',
+                get_string('practice_quiz_error_invalid_result', 'local_dixeo')
+            );
         }
 
         $title = trim((string) ($data['name'] ?? ''));

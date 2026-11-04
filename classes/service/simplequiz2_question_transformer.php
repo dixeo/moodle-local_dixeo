@@ -31,6 +31,57 @@ use local_dixeo\dsl\dsl_exception;
  * Shared transformer for simplequiz2 question JSON.
  */
 class simplequiz2_question_transformer {
+    /** @var int Questions accepted per activity when mod_simplequiz2 is not on disk. */
+    private const DEFAULT_MAX_QUESTIONS = 25;
+
+    /** @var int Answers accepted per question when mod_simplequiz2 is not on disk. */
+    private const DEFAULT_MAX_ANSWERS = 5;
+
+    /** @var array{0: int, 1: int}|null Question and answer limits resolved for this request. */
+    private static ?array $limits = null;
+
+    /**
+     * Questions accepted per activity.
+     *
+     * @return int MOD_SIMPLEQUIZ2_MAX_QUESTION_NB when mod_simplequiz2 is on disk, else 25.
+     */
+    public static function max_questions(): int {
+        return self::limits()[0];
+    }
+
+    /**
+     * Answers accepted per question.
+     *
+     * @return int MOD_SIMPLEQUIZ2_MAX_ANSWER_NB when mod_simplequiz2 is on disk, else 5.
+     */
+    public static function max_answers(): int {
+        return self::limits()[1];
+    }
+
+    /**
+     * Resolve the limits once per request from mod_simplequiz2, which owns them.
+     *
+     * @return array{0: int, 1: int} Maximum questions and maximum answers.
+     */
+    private static function limits(): array {
+        if (self::$limits !== null) {
+            return self::$limits;
+        }
+
+        if (!defined('MOD_SIMPLEQUIZ2_MAX_QUESTION_NB') || !defined('MOD_SIMPLEQUIZ2_MAX_ANSWER_NB')) {
+            $dir = \core_component::get_component_directory('mod_simplequiz2');
+            if ($dir !== null && is_readable($dir . '/lib.php')) {
+                require_once($dir . '/lib.php');
+            }
+        }
+
+        self::$limits = [
+            defined('MOD_SIMPLEQUIZ2_MAX_QUESTION_NB') ? (int) MOD_SIMPLEQUIZ2_MAX_QUESTION_NB : self::DEFAULT_MAX_QUESTIONS,
+            defined('MOD_SIMPLEQUIZ2_MAX_ANSWER_NB') ? (int) MOD_SIMPLEQUIZ2_MAX_ANSWER_NB : self::DEFAULT_MAX_ANSWERS,
+        ];
+        return self::$limits;
+    }
+
     /**
      * Transform resolved DSL field values to SimpleQuiz format.
      *
@@ -50,11 +101,18 @@ class simplequiz2_question_transformer {
                 ['options_count' => is_array($options) ? count($options) : 0]
             );
         }
+        if (count($options) > self::max_answers()) {
+            throw new dsl_exception(
+                'SimpleQuiz question accepts at most ' . self::max_answers() . ' options',
+                'simplequiz2_question_transformer',
+                ['options_count' => count($options)]
+            );
+        }
 
         $correctindex = is_numeric($correctanswer) ? (int) $correctanswer : 0;
 
         $question = new \stdClass();
-        $question->text = is_string($questiontext) ? $questiontext : (string) $questiontext;
+        $question->text = self::clean_html(is_string($questiontext) ? $questiontext : (string) $questiontext);
         $question->correctfeedback = self::feedback_or_default(
             (string) ($fields['correctfeedback'] ?? ''),
             'feedback_correct'
@@ -71,7 +129,7 @@ class simplequiz2_question_transformer {
 
         foreach ($options as $index => $optiontext) {
             $answer = new \stdClass();
-            $answer->text = is_string($optiontext) ? $optiontext : (string) $optiontext;
+            $answer->text = self::clean_html(is_string($optiontext) ? $optiontext : (string) $optiontext);
             $answer->iscorrect = ($index === $correctindex) ? 1 : 0;
             $question->answers[] = $answer;
         }
@@ -82,11 +140,14 @@ class simplequiz2_question_transformer {
     /**
      * Transform a list of API question objects from a completed generation job.
      *
+     * The list is refused when it holds more questions than an activity accepts.
+     *
      * @param array $apiquestions List of question arrays from job result data.
      * @return array<int, \stdClass> Indexed simplequiz2 question objects.
      * @throws dsl_exception
      */
     public static function transform_job_questions(array $apiquestions): array {
+        self::require_question_count(count($apiquestions));
         $out = [];
         foreach ($apiquestions as $index => $questionitem) {
             $itemdata = is_object($questionitem) ? (array) $questionitem : $questionitem;
@@ -103,7 +164,26 @@ class simplequiz2_question_transformer {
     }
 
     /**
+     * Stop when a generated question list is longer than an activity accepts.
+     *
+     * @param int $count Number of generated questions.
+     * @return void
+     * @throws dsl_exception When $count exceeds {@see self::max_questions()}.
+     */
+    private static function require_question_count(int $count): void {
+        if ($count > self::max_questions()) {
+            throw new dsl_exception(
+                'SimpleQuiz accepts at most ' . self::max_questions() . ' questions',
+                'simplequiz2_question_transformer',
+                ['question_count' => $count]
+            );
+        }
+    }
+
+    /**
      * Use localized placeholder feedback when the API omits or sends empty content.
+     *
+     * Generated feedback is cleaned; the placeholder strings are trusted and returned as they are.
      *
      * @param string $value Raw feedback from the generation payload.
      * @param string $stringkey local_dixeo lang string key.
@@ -111,9 +191,19 @@ class simplequiz2_question_transformer {
      */
     private static function feedback_or_default(string $value, string $stringkey): string {
         if (trim($value) !== '') {
-            return $value;
+            return self::clean_html($value);
         }
 
         return get_string($stringkey, 'local_dixeo');
+    }
+
+    /**
+     * Clean generated HTML before it is stored or sent to the embed player.
+     *
+     * @param string $value Generated HTML.
+     * @return string
+     */
+    private static function clean_html(string $value): string {
+        return clean_text($value, FORMAT_HTML);
     }
 }

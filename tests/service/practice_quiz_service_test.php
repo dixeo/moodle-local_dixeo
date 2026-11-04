@@ -242,6 +242,39 @@ final class practice_quiz_service_test extends \advanced_testcase {
     }
 
     /**
+     * A generated question with more answers than the player accepts fails with the generic invalid-result string.
+     */
+    public function test_finalize_from_job_refuses_oversize_answer_list(): void {
+        $this->resetAfterTest(true);
+
+        $mockjob = $this->getMockBuilder(job_service::class)
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+        $mockjob->method('get_job_status')->willReturn(new job_status(
+            jobid: 'test-job-id',
+            type: 'generate_module',
+            status: job_status::STATUS_COMPLETED,
+            progress: 100,
+            createdat: time(),
+            result: [
+                'moduleType' => 'simplequiz2',
+                'data' => [
+                    'questions' => [
+                        ['text' => 'Q', 'options' => ['1', '2', '3', '4', '5', '6'], 'answer' => 0],
+                    ],
+                ],
+            ]
+        ));
+
+        $result = (new practice_quiz_service(null, $mockjob))->finalize_from_job('test-job-id');
+        $this->assertDebuggingCalled();
+
+        $this->assertFalse($result['success']);
+        $this->assertSame(get_string('practice_quiz_error_invalid_result', 'local_dixeo'), $result['error']);
+        $this->assertSame('[]', $result['questions']);
+    }
+
+    /**
      * Practice-quiz intro HTML is cleaned before it is returned for display.
      */
     public function test_finalize_from_job_strips_active_content_from_intro(): void {

@@ -25,6 +25,7 @@
 
 namespace local_dixeo;
 
+use local_dixeo\dsl\dsl_exception;
 use local_dixeo\service\simplequiz2_question_transformer;
 
 
@@ -113,5 +114,79 @@ final class simplequiz2_question_transformer_test extends \advanced_testcase {
         $this->assertCount(2, $out);
         $this->assertEquals('Q1', $out[0]->text);
         $this->assertEquals('Q2', $out[1]->text);
+    }
+
+    /** @var string Markup with an allowed paragraph and two script vectors. */
+    private const HOSTILE = '<p>ok</p><img src="x" onerror="alert(1)"><script>x</script>';
+
+    /**
+     * Script vectors are removed from the question, every feedback and every answer.
+     */
+    public function test_transform_cleans_every_html_field(): void {
+        $question = simplequiz2_question_transformer::transform_api_question([
+            'text' => self::HOSTILE,
+            'options' => [self::HOSTILE, 'Plain'],
+            'answer' => 0,
+            'correctfeedback' => self::HOSTILE,
+            'partiallycorrectfeedback' => self::HOSTILE,
+            'incorrectfeedback' => self::HOSTILE,
+        ]);
+
+        $values = [
+            $question->text,
+            $question->correctfeedback,
+            $question->partiallycorrectfeedback,
+            $question->incorrectfeedback,
+            $question->answers[0]->text,
+        ];
+        foreach ($values as $value) {
+            $this->assertStringContainsString('<p>ok</p>', $value);
+            $this->assertStringNotContainsStringIgnoringCase('<script', $value);
+            $this->assertStringNotContainsStringIgnoringCase('onerror', $value);
+        }
+        $this->assertSame('Plain', $question->answers[1]->text);
+        $this->assertSame(1, $question->answers[0]->iscorrect);
+    }
+
+    /**
+     * Default feedback strings are returned as they are.
+     */
+    public function test_default_feedback_is_unchanged(): void {
+        $question = simplequiz2_question_transformer::transform_api_question([
+            'text' => 'Q',
+            'options' => ['A', 'B'],
+        ]);
+
+        $this->assertSame(get_string('feedback_correct', 'local_dixeo'), $question->correctfeedback);
+        $this->assertSame(get_string('feedback_incorrect', 'local_dixeo'), $question->incorrectfeedback);
+    }
+
+    /**
+     * The limits match what the simplequiz2 embed player accepts, with or without the module.
+     */
+    public function test_limits(): void {
+        $this->assertSame(5, simplequiz2_question_transformer::max_answers());
+        $this->assertSame(25, simplequiz2_question_transformer::max_questions());
+    }
+
+    /**
+     * A question with more options than the player accepts is refused.
+     */
+    public function test_too_many_options_are_rejected(): void {
+        $this->expectException(dsl_exception::class);
+        simplequiz2_question_transformer::transform_api_question([
+            'text' => 'Q',
+            'options' => ['1', '2', '3', '4', '5', '6'],
+        ]);
+    }
+
+    /**
+     * A job with more questions than an activity accepts is refused.
+     */
+    public function test_too_many_questions_are_rejected(): void {
+        $questions = array_fill(0, 26, ['text' => 'Q', 'options' => ['A', 'B'], 'answer' => 0]);
+
+        $this->expectException(dsl_exception::class);
+        simplequiz2_question_transformer::transform_job_questions($questions);
     }
 }
