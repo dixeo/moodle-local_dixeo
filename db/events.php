@@ -19,7 +19,8 @@
  *
  * Defines event handlers for file sync. A new course stores the course file sync
  * setting from the Dixeo default. Saving that setting updates the operational flag.
- * Module changes queue a sync when that course already has sync on.
+ * Module changes queue a sync when that course already has sync on. Deleting a course
+ * or a user queues the erasure of its tutor conversations at Dixeo.
  *
  * This plugin also emits custom events (not observed here) for audit logging:
  * file_sync_enabled, file_sync_disabled, file_sync_triggered, job_cancelled,
@@ -75,5 +76,22 @@ $observers = [
         'callback' => '\local_dixeo\observer\file_sync_observer::course_module_deleted',
         'internal' => true,
         'priority' => 0,
+    ],
+
+    // Queues the erasure at Dixeo of the tutor conversations of a deleted course.
+    // Internal: the observer only queues a task, so it belongs in the deletion transaction
+    // and is rolled back with it. The remote call happens later, from the task.
+    [
+        'eventname' => '\core\event\course_deleted',
+        'callback' => '\local_dixeo\observer\tutor_conversation_observer::course_deleted',
+        'internal' => true,
+    ],
+
+    // Queues the erasure at Dixeo of the tutor conversations of a deleted user, including
+    // accounts deleted outside a privacy request. Internal for the same reason.
+    [
+        'eventname' => '\core\event\user_deleted',
+        'callback' => '\local_dixeo\observer\tutor_conversation_observer::user_deleted',
+        'internal' => true,
     ],
 ];

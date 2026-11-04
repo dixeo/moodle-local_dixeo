@@ -34,13 +34,15 @@ use core_privacy\local\request\writer;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\generation_language_helper;
+use local_dixeo\task\erase_tutor_conversations;
 
 /**
  * Privacy provider for course AI sync records and Dixeo API transfers.
  *
  * Local personal data is limited to operational user IDs on sync configuration rows.
- * Content, messages and files sent to Dixeo are declared as external locations; retention
- * and deletion of remote copies are controlled by the Dixeo processor, not by this plugin.
+ * Content, messages and files sent to Dixeo are declared as external locations. Tutor
+ * conversations held by the Dixeo API are found, exported and erased here, for every
+ * plugin that sends them; a failed erasure is queued for retry and reported.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -375,7 +377,69 @@ class provider implements
             'userid' => $userid,
         ]);
 
+        self::add_conversation_contexts($contextlist, $userid);
+
         return $contextlist;
+    }
+
+    /**
+     * Add the course contexts in which the Dixeo API holds a tutor conversation of the user.
+     *
+     * Shared by export and erasure: erasing on what may be an export request would be
+     * destructive, so an unreachable API is reported and adds nothing.
+     *
+     * @param contextlist $contextlist Context list to populate.
+     * @param int $userid User id.
+     */
+    private static function add_conversation_contexts(contextlist $contextlist, int $userid): void {
+        global $DB;
+
+        $courseids = self::remote_conversation_field('courseid', null, $userid, $userid);
+        if ($courseids === []) {
+            return;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'convcourse');
+        $params['convlevel'] = CONTEXT_COURSE;
+        $contextlist->add_from_sql(
+            "SELECT ctx.id
+               FROM {context} ctx
+              WHERE ctx.contextlevel = :convlevel AND ctx.instanceid {$insql}",
+            $params
+        );
+    }
+
+    /**
+     * Distinct ids of one field of the conversations the Dixeo API lists for a scope.
+     *
+     * Nothing is asked of a site that never sent data. A site that did, but lost its key,
+     * and an API failure, are reported to the site administrators and list nothing.
+     *
+     * @param string $field courseid or userid.
+     * @param int|null $courseid Course filter, or null.
+     * @param int|null $userid User filter, or null.
+     * @param int $subjectid Subject of the request for the report, or 0 for a whole context.
+     * @return int[]
+     */
+    private static function remote_conversation_field(string $field, ?int $courseid, ?int $userid, int $subjectid): array {
+        $state = remote_state::current();
+        if ($state === remote_state::NEVER) {
+            return [];
+        }
+        if ($state === remote_state::UNREACHABLE) {
+            failure_reporter::report('local_dixeo', $subjectid, failure_reporter::REASON_NOKEY);
+            return [];
+        }
+
+        try {
+            $conversations = service_factory::get_tutor_service()->list_conversations($courseid, $userid);
+        } catch (api_exception $e) {
+            failure_reporter::report('local_dixeo', $subjectid, failure_reporter::REASON_UNREACHABLE, $e);
+            return [];
+        }
+
+        $ids = array_map('intval', array_column($conversations, $field));
+        return array_values(array_unique(array_filter($ids, static fn(int $id): bool => $id > 0)));
     }
 
     /**
@@ -392,6 +456,7 @@ class provider implements
 
         $userid = (int) $contextlist->get_user()->id;
         $failure = null;
+        $reported = false;
 
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel === CONTEXT_SYSTEM) {
@@ -441,7 +506,7 @@ class provider implements
             self::export_user_image_jobs($context, $userid, $courseid);
             self::export_user_tutor_usage($context, $userid, $courseid);
             self::export_user_tutor_synthesis($context, $userid, $courseid);
-            $error = self::export_user_conversation($context, $userid, $courseid);
+            $error = self::export_user_conversation($context, $userid, $courseid, $reported);
             $failure ??= $error;
         }
 
@@ -1015,6 +1080,7 @@ class provider implements
               WHERE ts.courseid = :courseid AND ts.userid > 0",
             $params
         );
+        $userlist->add_users(self::remote_conversation_field('userid', (int) $context->instanceid, null, 0));
     }
 
     /**
@@ -1146,19 +1212,43 @@ class provider implements
     /**
      * Export one user's tutor conversation for a course when the API is configured.
      *
+     * An export archive is assembled only once, so a failure cannot be retried. It is reported
+     * to the site administrators at most once per request; the other courses are still exported.
+     *
      * @param \context $context Course context receiving the export.
      * @param int $userid User id.
      * @param int $courseid Course id.
+     * @param bool $reported Whether this request already reported a failure; set when this call reports one.
      * @return api_exception|null Failure to rethrow after every context is attempted.
      */
-    private static function export_user_conversation(\context $context, int $userid, int $courseid): ?api_exception {
-        if ($courseid <= 0 || remote_state::current() !== remote_state::READY) {
+    private static function export_user_conversation(
+        \context $context,
+        int $userid,
+        int $courseid,
+        bool &$reported
+    ): ?api_exception {
+        if ($courseid <= 0) {
+            return null;
+        }
+        $state = remote_state::current();
+        if ($state === remote_state::NEVER) {
+            return null;
+        }
+        if ($state === remote_state::UNREACHABLE) {
+            if (!$reported) {
+                failure_reporter::report('local_dixeo', $userid, failure_reporter::REASON_NOKEY);
+                $reported = true;
+            }
             return null;
         }
 
         try {
             $messages = service_factory::get_tutor_service()->export_conversation($courseid, $userid);
         } catch (api_exception $e) {
+            if (!$reported) {
+                failure_reporter::report('local_dixeo', $userid, failure_reporter::REASON_UNREACHABLE, $e);
+                $reported = true;
+            }
             return $e;
         }
 
@@ -1204,25 +1294,32 @@ class provider implements
     /**
      * Erase tutor conversations for a course, a user, or both.
      *
-     * A failed call is queued for retry when the tutor block provides that task, then
-     * returned so the privacy callback does not finish as a success.
+     * {@see \core_privacy\manager} catches everything a provider throws and still marks the
+     * request complete, so a failed call is queued as {@see erase_tutor_conversations} for retry,
+     * then returned so the privacy callback does not finish as a success. A missing API key on a
+     * site that sent data counts as unreachable: the retry waits for the key, and the site
+     * administrators are told.
      *
      * @param int|null $courseid Course id, or null for every course.
      * @param int|null $userid User id, or null for every user.
      * @return api_exception|null The failure to rethrow once local erasure is done.
      */
     private static function erase_tutor_conversations(?int $courseid, ?int $userid): ?api_exception {
-        if (remote_state::current() !== remote_state::READY) {
+        $state = remote_state::current();
+        if ($state === remote_state::NEVER) {
             return null;
+        }
+        if ($state === remote_state::UNREACHABLE) {
+            erase_tutor_conversations::queue($courseid, $userid);
+            failure_reporter::report('local_dixeo', (int) $userid, failure_reporter::REASON_NOKEY);
+            return remote_state::not_configured_exception();
         }
 
         try {
             service_factory::get_tutor_service()->delete_conversations($courseid, $userid);
             return null;
         } catch (api_exception $e) {
-            if (class_exists(\block_dixeo_tutor\task\erase_conversations::class)) {
-                \block_dixeo_tutor\task\erase_conversations::queue($courseid, $userid);
-            }
+            erase_tutor_conversations::queue($courseid, $userid);
             return $e;
         }
     }

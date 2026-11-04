@@ -557,6 +557,7 @@ $string['state_frozen'] = 'Eingefroren';
 $string['state_suspended'] = 'Gesperrt';
 $string['task_aggregate_tutor_usage'] = 'Dixeo-Tutor-Nutzungsanalysen aggregieren';
 $string['task_cleanup_image_jobs'] = 'Dixeo-Bildauftragsdatensätze bereinigen';
+$string['task_erase_tutor_conversations'] = 'Tutor-Unterhaltungen bei Dixeo löschen';
 $string['task_poll_image'] = 'Dixeo-Bildauftrag abfragen';
 $string['task_poll_image_generation'] = 'Dixeo-Bildgenerierungsauftrag abfragen';
 $string['task_process_file_sync'] = 'Dixeo-Dateisynchronisation verarbeiten';

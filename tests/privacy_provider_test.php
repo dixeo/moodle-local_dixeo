@@ -32,10 +32,13 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\client;
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\event\privacy_request_failed;
 use local_dixeo\external\service_factory;
 use local_dixeo\privacy\provider;
+use local_dixeo\privacy\remote_state;
 use local_dixeo\repository\job_repository;
 use local_dixeo\service\tutor_service;
+use local_dixeo\task\erase_tutor_conversations;
 
 /**
  * Privacy provider tests.
@@ -381,10 +384,226 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
         try {
             provider::delete_data_for_user($approved);
         } finally {
-            if (class_exists(\block_dixeo_tutor\task\erase_conversations::class)) {
-                $tasks = \core\task\manager::get_adhoc_tasks('\\block_dixeo_tutor\\task\\erase_conversations');
-                $this->assertNotEmpty($tasks);
+            $this->assertSame([[(int) $course->id, (int) $user->id]], $this->queued_erasure_scopes());
+        }
+    }
+
+    /**
+     * Scopes of every queued tutor conversation erasure.
+     *
+     * @return array<int, array{0: int|null, 1: int|null}> Course and user of each task.
+     */
+    private function queued_erasure_scopes(): array {
+        $scopes = [];
+        foreach (\core\task\manager::get_adhoc_tasks(erase_tutor_conversations::class) as $task) {
+            $data = $task->get_custom_data();
+            $scopes[] = [
+                isset($data->courseid) ? (int) $data->courseid : null,
+                isset($data->userid) ? (int) $data->userid : null,
+            ];
+        }
+        return $scopes;
+    }
+
+    /**
+     * Privacy failure notifications sent by local_dixeo.
+     *
+     * @param \phpunit_message_sink $sink Redirected messages.
+     * @return array
+     */
+    private function failure_notifications(\phpunit_message_sink $sink): array {
+        return array_values(array_filter(
+            $sink->get_messages(),
+            static fn($message): bool => $message->component === 'local_dixeo' && $message->eventtype === 'privacyfailure'
+        ));
+    }
+
+    /**
+     * Privacy failure events.
+     *
+     * @param \phpunit_event_sink $sink Redirected events.
+     * @return array
+     */
+    private function failure_events(\phpunit_event_sink $sink): array {
+        return array_values(array_filter(
+            $sink->get_events(),
+            static fn($event): bool => $event instanceof privacy_request_failed
+        ));
+    }
+
+    /**
+     * Put the site in the state where data was sent to Dixeo but the key is gone.
+     */
+    private function make_api_unreachable(): void {
+        remote_state::record_transfer();
+        service_factory::set_test_client(new client('https://api.dixeo.test', ''));
+    }
+
+    /**
+     * On a configured site, conversations listed by the API add course contexts and users.
+     */
+    public function test_remote_conversations_are_discovered(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $other = $this->getDataGenerator()->create_user();
+        $this->configure_api_client();
+
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->method('list_conversations')->willReturnCallback(
+            function (?int $courseid, ?int $userid) use ($course, $user, $other): array {
+                if ($userid !== null) {
+                    return [['courseid' => (int) $course->id, 'userid' => $userid]];
+                }
+                return [
+                    ['courseid' => (int) $course->id, 'userid' => (int) $user->id],
+                    ['courseid' => (int) $course->id, 'userid' => (int) $other->id],
+                ];
+            }
+        );
+        service_factory::set_test_tutor_service($tutor);
+
+        $context = \context_course::instance((int) $course->id);
+        $this->assertContainsEquals($context->id, provider::get_contexts_for_userid((int) $user->id)->get_contextids());
+
+        $userlist = new userlist($context, 'local_dixeo');
+        provider::get_users_in_context($userlist);
+        $this->assertEqualsCanonicalizing([(int) $user->id, (int) $other->id], $userlist->get_userids());
+    }
+
+    /**
+     * A site that never sent data makes no remote call and queues nothing.
+     */
+    public function test_never_makes_no_remote_call(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $this->insert_course_ai_record((int) $course->id, (int) $user->id);
+        unset_config(remote_state::CONFIG_TRANSFERRED, 'local_dixeo');
+        service_factory::set_test_client(new client('https://api.dixeo.test', ''));
+
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->expects($this->never())->method('list_conversations');
+        $tutor->expects($this->never())->method('export_conversation');
+        $tutor->expects($this->never())->method('delete_conversations');
+        service_factory::set_test_tutor_service($tutor);
+
+        $context = \context_course::instance((int) $course->id);
+        provider::get_contexts_for_userid((int) $user->id);
+        provider::get_users_in_context(new userlist($context, 'local_dixeo'));
+        $approved = new approved_contextlist($user, 'local_dixeo', [$context->id]);
+        provider::export_user_data($approved);
+        provider::delete_data_for_user($approved);
+
+        $this->assertSame([], $this->queued_erasure_scopes());
+    }
+
+    /**
+     * A missing key after a transfer is reported once on export, and erasure queues and fails.
+     */
+    public function test_unreachable_reports_and_queues(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course1 = $this->getDataGenerator()->create_course();
+        $course2 = $this->getDataGenerator()->create_course();
+        $this->make_api_unreachable();
+
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->expects($this->never())->method('export_conversation');
+        $tutor->expects($this->never())->method('delete_conversations');
+        service_factory::set_test_tutor_service($tutor);
+
+        $contextids = [
+            \context_course::instance((int) $course1->id)->id,
+            \context_course::instance((int) $course2->id)->id,
+        ];
+        $approved = new approved_contextlist($user, 'local_dixeo', $contextids);
+
+        $messages = $this->redirectMessages();
+        $events = $this->redirectEvents();
+        provider::export_user_data($approved);
+        $this->assertCount(count(get_admins()), $this->failure_notifications($messages));
+        $failures = $this->failure_events($events);
+        $this->assertCount(1, $failures);
+        $this->assertSame(remote_state::ERROR_NOT_CONFIGURED, $failures[0]->other['errorcode']);
+
+        $erasure = new approved_contextlist($user, 'local_dixeo', [$contextids[0]]);
+        try {
+            provider::delete_data_for_user($erasure);
+            $this->fail('An unreachable erasure must not complete as a success.');
+        } catch (api_exception $e) {
+            $this->assertSame(remote_state::ERROR_NOT_CONFIGURED, $e->get_error_code());
+        }
+        $this->assertSame([[(int) $course1->id, (int) $user->id]], $this->queued_erasure_scopes());
+    }
+
+    /**
+     * Discovery reports an API failure and adds nothing.
+     */
+    public function test_discovery_reports_api_failure(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $this->configure_api_client();
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->method('list_conversations')->willThrowException(new api_exception('connection_error', 'down', 0));
+        service_factory::set_test_tutor_service($tutor);
+
+        $events = $this->redirectEvents();
+        $this->redirectMessages();
+        $this->assertSame([], provider::get_contexts_for_userid((int) $user->id)->get_contextids());
+        $failures = $this->failure_events($events);
+        $this->assertCount(1, $failures);
+        $this->assertSame('connection_error', $failures[0]->other['errorcode']);
+        $this->assertSame([], $this->queued_erasure_scopes());
+    }
+
+    /**
+     * Repeated API failures for the same scope queue one task.
+     */
+    public function test_api_failure_queues_one_deduplicated_task(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $this->configure_api_client();
+        $tutor = $this->createMock(tutor_service::class);
+        $tutor->method('delete_conversations')->willThrowException(new api_exception('server_error', 'down', 503));
+        service_factory::set_test_tutor_service($tutor);
+
+        $context = \context_course::instance((int) $course->id);
+        foreach ([1, 2] as $attempt) {
+            try {
+                provider::delete_data_for_all_users_in_context($context);
+                $this->fail('A failed erasure must throw on attempt ' . $attempt);
+            } catch (api_exception $e) {
+                $this->assertSame('server_error', $e->get_error_code());
             }
         }
+
+        $this->assertSame([[(int) $course->id, null]], $this->queued_erasure_scopes());
+    }
+
+    /**
+     * Deleting a course or a user queues exactly one erasure of their conversations.
+     */
+    public function test_course_and_user_deletion_queue_erasure(): void {
+        $this->configure_api_client();
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_user();
+
+        delete_course($course, false);
+        $this->assertSame([[(int) $course->id, null]], $this->queued_erasure_scopes());
+
+        delete_user($user);
+        $this->assertContains([null, (int) $user->id], $this->queued_erasure_scopes());
+        $this->assertCount(2, $this->queued_erasure_scopes());
+    }
+
+    /**
+     * Deleting a course or a user on a site that never sent data queues nothing.
+     */
+    public function test_deletion_queues_nothing_when_never_transferred(): void {
+        unset_config(remote_state::CONFIG_TRANSFERRED, 'local_dixeo');
+        service_factory::set_test_client(new client('https://api.dixeo.test', ''));
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_user();
+
+        delete_course($course, false);
+        delete_user($user);
+
+        $this->assertSame([], $this->queued_erasure_scopes());
     }
 }
