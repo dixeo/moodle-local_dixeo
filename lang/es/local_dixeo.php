@@ -255,6 +255,7 @@ $string['error:busy'] = 'El servicio de IA está ocupado. Inténtelo de nuevo de
 $string['error:consentrequired'] = 'Acepte las Condiciones de uso actuales de Dixeo en la página del curso para continuar.';
 $string['error:content_rejected'] = 'El modelo rechazó la indicación. Reformúlela e inténtelo de nuevo.';
 $string['error:dixeo_disabled'] = 'Dixeo está desactivado.';
+$string['error:generation_not_allowed'] = 'La persona que solicitó esta actividad ya no puede generar actividades en este curso.';
 $string['error:instructions_too_long'] = 'Las instrucciones deben tener {$a} caracteres como máximo.';
 $string['error:job_not_found'] = 'No se encontró el trabajo solicitado.';
 $string['error:notslideshow'] = 'El módulo del curso no es una actividad de presentación.';

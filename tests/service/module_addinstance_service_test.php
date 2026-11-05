@@ -56,6 +56,23 @@ final class module_addinstance_service_test extends \advanced_testcase {
         module_addinstance_service::require_for_course((int) $course->id, 'quiz');
     }
 
+    public function test_allows_reports_addinstance_for_a_named_user(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $blocked = $this->user_who_can_manage_activities_but_not_add('quiz', $course);
+
+        $this->assertTrue(module_addinstance_service::allows((int) $course->id, 'quiz', (int) $teacher->id));
+        $this->assertFalse(module_addinstance_service::allows((int) $course->id, 'quiz', (int) $blocked->id));
+        $this->assertFalse(module_addinstance_service::allows((int) $course->id, 'notamodule', (int) $teacher->id));
+        $this->assertFalse(module_addinstance_service::allows((int) $course->id + 1000, 'quiz', (int) $teacher->id));
+
+        $DB->set_field('modules', 'visible', 0, ['name' => 'quiz']);
+        $this->assertFalse(module_addinstance_service::allows((int) $course->id, 'quiz', (int) $teacher->id));
+    }
+
     public function test_user_without_quiz_addinstance_cannot_create_quiz(): void {
         global $DB;
 
