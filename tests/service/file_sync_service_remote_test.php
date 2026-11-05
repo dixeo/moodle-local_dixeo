@@ -225,4 +225,76 @@ final class file_sync_service_remote_test extends \advanced_testcase {
 
         $this->assertNull($repository->get_by_courseid((int) $course->id));
     }
+
+    /**
+     * Stored sync errors reach a client only as a localised message mapped from the code.
+     */
+    public function test_get_status_maps_stored_error_to_client_message(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $repository = new course_ai_repository();
+        $repository->create($courseid, 2);
+        $service = new file_sync_service($repository, $this->createMock(client::class));
+        $store = function (?string $value) use ($DB, $courseid): void {
+            $DB->set_field('local_dixeo_course_ai', 'syncstatus', 'error', ['courseid' => $courseid]);
+            $DB->set_field('local_dixeo_course_ai', 'errormessage', $value, ['courseid' => $courseid]);
+        };
+
+        $store('upstream_ai: secret upstream detail');
+        $this->assertSame(get_string('error:unavailable', 'local_dixeo'), $service->get_status($courseid)->errormessage);
+
+        $store('rate_limit_exceeded');
+        $this->assertSame(get_string('error:busy', 'local_dixeo'), $service->get_status($courseid)->errormessage);
+
+        $store('weird: secret');
+        $this->assertSame(get_string('error:unexpected', 'local_dixeo'), $service->get_status($courseid)->errormessage);
+
+        $store('Secret provider text without a code');
+        $this->assertSame(get_string('error:unexpected', 'local_dixeo'), $service->get_status($courseid)->errormessage);
+
+        $store(null);
+        $this->assertNull($service->get_status($courseid)->errormessage);
+    }
+
+    /**
+     * A failed sync stores the API error code only, never the provider text.
+     */
+    public function test_trigger_sync_failure_stores_error_code_only(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $cm = $this->getDataGenerator()->create_module('resource', ['course' => $courseid]);
+        $context = \context_module::instance($cm->cmid);
+        $fs = get_file_storage();
+        $fs->delete_area_files($context->id, 'mod_resource', 'content');
+        $fs->create_file_from_string([
+            'contextid' => $context->id,
+            'component' => 'mod_resource',
+            'filearea' => 'content',
+            'itemid' => 0,
+            'filepath' => '/',
+            'filename' => 'notes.txt',
+        ], 'content');
+        $repository = new course_ai_repository();
+        $repository->set_enabled($courseid, true, get_admin()->id);
+
+        $client = $this->createMock(client::class);
+        $client->method('upload_files')->willThrowException(new api_exception('rate_limit_exceeded', 'secret', 429));
+
+        try {
+            (new file_sync_service($repository, $client))->trigger_sync($courseid);
+            $this->fail('The upload failure must be rethrown.');
+        } catch (api_exception $e) {
+            $this->assertSame('rate_limit_exceeded', $e->get_error_code());
+        }
+        $this->assertDebuggingCalled();
+
+        $record = $repository->get_by_courseid($courseid);
+        $this->assertSame('error', $record->syncstatus);
+        $this->assertSame('rate_limit_exceeded', $record->errormessage);
+    }
 }

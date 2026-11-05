@@ -30,6 +30,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\api\client;
+use local_dixeo\api\error_message;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\file_upload_part;
 use local_dixeo\event\file_sync_disabled;
@@ -425,7 +426,7 @@ class file_sync_service {
             $this->delete_course_store($courseid);
             $remotedeletestatus = 'completed';
         } catch (api_exception $e) {
-            $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
+            $this->repository->record_pending_deletion_error($courseid, $e->get_error_code());
             $this->queue_remote_deletion_retry($courseid);
         }
 
@@ -587,7 +588,7 @@ class file_sync_service {
             $this->repository->reset_sync_state($courseid);
             return true;
         } catch (api_exception $e) {
-            $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
+            $this->repository->record_pending_deletion_error($courseid, $e->get_error_code());
             if ($this->repository->should_retry_pending_deletion($courseid)) {
                 $this->queue_remote_deletion_retry($courseid);
             }
@@ -643,7 +644,8 @@ class file_sync_service {
     /**
      * Get the current sync status for a course.
      *
-     * Returns a status object with all relevant fields for UI display.
+     * Returns a status object with all relevant fields for UI display. The errormessage
+     * is a client-safe localised string mapped from the stored error code, or null.
      *
      * @param int $courseid The course ID.
      * @return \stdClass Status object with: enabled, status, filestotal, filescompleted,
@@ -673,12 +675,34 @@ class file_sync_service {
         $status->filestotal = $record->filestotal;
         $status->filescompleted = $record->filescompleted;
         $status->progresspercent = $record->progresspercent;
-        $status->errormessage = $record->errormessage;
+        $status->errormessage = self::client_error_message($record->errormessage);
         $status->lastsyncstarted = $record->lastsyncstarted;
         $status->lastsynccompleted = $record->lastsynccompleted;
         $status->filesskipped = count(course_ai_repository::parse_skipped_files($record->skippedfiles ?? null));
 
         return $status;
+    }
+
+    /**
+     * Client-safe message for a stored sync error.
+     *
+     * The stored value is an API error code. Rows written as "code: provider text" are read
+     * by their code prefix, so provider text never reaches a client.
+     *
+     * @param string|null $stored Stored errormessage value.
+     * @return string|null Localised message, or null when no error is stored.
+     */
+    private static function client_error_message(?string $stored): ?string {
+        if ($stored === null || $stored === '') {
+            return null;
+        }
+
+        $code = trim(explode(':', $stored, 2)[0]);
+        if (!preg_match('/^[a-z0-9_]+$/', $code)) {
+            $code = null;
+        }
+
+        return error_message::message($code);
     }
 
     /**
@@ -927,12 +951,12 @@ class file_sync_service {
             $this->repository->update_filehash($courseid, $filehash);
             return true;
         } catch (api_exception $e) {
-            // Persist a short UI-safe message only — never raw API response bodies.
-            $errormessage = $e->get_error_code() . ': ' . $e->getMessage();
-            if (\core_text::strlen($errormessage) > 500) {
-                $errormessage = \core_text::substr($errormessage, 0, 497) . '...';
-            }
-            $this->repository->record_error($courseid, $errormessage);
+            // Only the error code is stored; the provider text goes to the developer log.
+            debugging(
+                'Dixeo file sync ' . $courseid . ': ' . $e->get_error_code() . ': ' . $e->getMessage(),
+                DEBUG_DEVELOPER
+            );
+            $this->repository->record_error($courseid, $e->get_error_code());
             throw $e;
         }
     }

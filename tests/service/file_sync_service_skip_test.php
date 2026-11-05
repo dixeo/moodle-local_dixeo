@@ -187,7 +187,7 @@ final class file_sync_service_skip_test extends \advanced_testcase {
         } catch (api_exception $e) {
             $this->assertSame(413, $e->get_http_status());
         }
-        $this->assertDebuggingCalled();
+        $this->assertDebuggingCalledCount(2);
 
         $this->assertSame('error', $service->get_status($course->id)->status);
         $this->assertSame('retry', $repository->get_skipped_files($course->id)[0]['reason']);
@@ -200,8 +200,13 @@ final class file_sync_service_skip_test extends \advanced_testcase {
 
         $service = new file_sync_service(new course_ai_repository(), $this->mock_client(['a.txt' => 500]));
 
-        $this->expectException(api_exception::class);
-        $service->trigger_sync($course->id);
+        try {
+            $service->trigger_sync($course->id);
+            $this->fail('Expected api_exception');
+        } catch (api_exception $e) {
+            $this->assertSame(500, $e->get_http_status());
+        }
+        $this->assertDebuggingCalled();
     }
 
     public function test_upload_failed_is_retried_but_a_permanent_rejection_is_not_sent_again(): void {

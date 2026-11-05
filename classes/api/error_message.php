@@ -66,4 +66,25 @@ final class error_message {
 
         return self::STRING_KEYS[$code] ?? null;
     }
+
+    /**
+     * Client-safe message for an API problem type or job error code.
+     *
+     * @param string|null $code Problem type or job error code.
+     * @param string $fallbackkey String key used when the code is unknown or null.
+     * @param string $fallbackcomponent Component owning $fallbackkey.
+     * @return string The mapped local_dixeo string, else $fallbackkey in $fallbackcomponent.
+     */
+    public static function message(
+        ?string $code,
+        string $fallbackkey = 'error:unexpected',
+        string $fallbackcomponent = 'local_dixeo'
+    ): string {
+        $stringkey = self::string_key($code);
+        if ($stringkey !== null) {
+            return get_string($stringkey, 'local_dixeo');
+        }
+
+        return get_string($fallbackkey, $fallbackcomponent);
+    }
 }

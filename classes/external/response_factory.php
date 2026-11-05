@@ -59,11 +59,7 @@ class response_factory {
                 'Dixeo API ' . $exception->get_error_type() . ': ' . $exception->getMessage(),
                 DEBUG_DEVELOPER
             );
-            $stringkey = error_message::string_key($exception->get_error_type());
-            if ($stringkey !== null) {
-                return get_string($stringkey, 'local_dixeo');
-            }
-            return get_string($fallbackkey, $fallbackcomponent);
+            return error_message::message($exception->get_error_type(), $fallbackkey, $fallbackcomponent);
         }
 
         $detail = get_class($exception) . ': ' . $exception->getMessage();
@@ -111,12 +107,9 @@ class response_factory {
                 DEBUG_DEVELOPER
             );
 
-            $stringkey = error_message::string_key($type);
-            $message = $stringkey !== null
-                ? get_string($stringkey, 'local_dixeo')
-                : get_string($fallbackkey, $fallbackcomponent);
+            $message = error_message::message($type, $fallbackkey, $fallbackcomponent);
             $data['error'] = [
-                'type' => $stringkey !== null ? $type : 'api_error',
+                'type' => error_message::string_key($type) !== null ? $type : 'api_error',
                 'title' => $message,
                 'status' => (int) ($error['status'] ?? 500),
                 'detail' => $message,
