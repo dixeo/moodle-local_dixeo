@@ -34,6 +34,9 @@ final class input_limits {
     /** @var int Maximum bytes of a learner's free-text request sent to Dixeo. */
     public const MAX_REQUEST_BYTES = 2000;
 
+    /** @var int Maximum characters of activity generation instructions sent to Dixeo. */
+    public const MAX_INSTRUCTIONS_CHARS = 10000;
+
     /**
      * Decode a JSON array or object within size and depth bounds.
      *

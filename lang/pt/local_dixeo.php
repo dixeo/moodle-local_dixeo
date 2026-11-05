@@ -255,6 +255,7 @@ $string['error:busy'] = 'O serviço de IA está ocupado. Tente novamente dentro 
 $string['error:consentrequired'] = 'Aceite os Termos de utilização atuais da Dixeo na página do curso para continuar.';
 $string['error:content_rejected'] = 'O modelo recusou a instrução. Reformule-a e tente novamente.';
 $string['error:dixeo_disabled'] = 'O Dixeo está desligado.';
+$string['error:instructions_too_long'] = 'As instruções devem ter no máximo {$a} caracteres.';
 $string['error:job_not_found'] = 'O trabalho solicitado não foi encontrado.';
 $string['error:notslideshow'] = 'O módulo da disciplina não é uma atividade de apresentação.';
 $string['error:payment_required'] = 'Créditos insuficientes. Adicione créditos para continuar.';

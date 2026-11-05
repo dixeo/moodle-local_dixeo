@@ -255,6 +255,7 @@ $string['error:busy'] = 'The AI service is busy. Please try again in a few minut
 $string['error:consentrequired'] = 'Accept the current Dixeo Terms of Use on the course page to continue.';
 $string['error:content_rejected'] = 'The prompt was refused by the model. Try rewording it.';
 $string['error:dixeo_disabled'] = 'Dixeo is turned off.';
+$string['error:instructions_too_long'] = 'Instructions must be {$a} characters or fewer.';
 $string['error:job_not_found'] = 'The requested job was not found.';
 $string['error:notslideshow'] = 'The course module is not a slideshow activity.';
 $string['error:payment_required'] = 'Insufficient credits. Please add credits to continue.';

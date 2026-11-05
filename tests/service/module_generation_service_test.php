@@ -124,4 +124,26 @@ final class module_generation_service_test extends \advanced_testcase {
         $client->expects($this->never())->method('post_multipart');
         return new job_service($client);
     }
+
+    /**
+     * Instructions are capped in characters, not bytes, before anything is posted.
+     */
+    public function test_instructions_are_capped_before_posting(): void {
+        $max = \local_dixeo\util\input_limits::MAX_INSTRUCTIONS_CHARS;
+        $client = $this->createMock(\local_dixeo\api\client::class);
+        $client->expects($this->once())
+            ->method('post')
+            ->willReturn(['id' => \core\uuid::generate()]);
+        $service = new module_generation_service(new job_service($client), 'default');
+
+        $result = $service->submit_generate_job('page', str_repeat('é', $max), 'Course context');
+        $this->assertNotSame('', $result->jobid);
+
+        try {
+            $service->submit_generate_job('page', str_repeat('é', $max + 1), 'Course context');
+            $this->fail('Instructions above the limit must be refused');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:instructions_too_long', $e->errorcode);
+        }
+    }
 }

@@ -255,6 +255,7 @@ $string['error:busy'] = 'Der KI-Dienst ist ausgelastet. Bitte versuchen Sie es i
 $string['error:consentrequired'] = 'Akzeptieren Sie die aktuellen Dixeo-Nutzungsbedingungen auf der Kursseite, um fortzufahren.';
 $string['error:content_rejected'] = 'Die Eingabe wurde vom Modell abgelehnt. Formulieren Sie sie um und versuchen Sie es erneut.';
 $string['error:dixeo_disabled'] = 'Dixeo ist ausgeschaltet.';
+$string['error:instructions_too_long'] = 'Anweisungen dürfen höchstens {$a} Zeichen lang sein.';
 $string['error:job_not_found'] = 'Der angeforderte Auftrag wurde nicht gefunden.';
 $string['error:notslideshow'] = 'Das Kursmodul ist keine Slideshow-Aktivität.';
 $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Credits auf, um fortzufahren.';

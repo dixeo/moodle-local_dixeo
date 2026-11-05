@@ -34,6 +34,7 @@ use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\job_access_mode;
 use local_dixeo\dto\operation_result;
+use local_dixeo\util\input_limits;
 
 /**
  * Service for module generation and fill operations.
@@ -521,6 +522,7 @@ class module_generation_service {
      * @param int|null $courseid Optional course ID for RAG file search.
      * @return array The request payload.
      * @throws \invalid_parameter_exception If required parameters are empty.
+     * @throws \moodle_exception error:instructions_too_long above {@see input_limits::MAX_INSTRUCTIONS_CHARS}.
      */
     public function build_edit_payload(
         string $moduletype,
@@ -540,6 +542,7 @@ class module_generation_service {
      * @param int|null $courseid Optional course ID for RAG file search.
      * @return array The request payload.
      * @throws \invalid_parameter_exception If required parameters are empty.
+     * @throws \moodle_exception error:instructions_too_long above {@see input_limits::MAX_INSTRUCTIONS_CHARS}.
      */
     private function build_payload(string $moduletype, string $instructions, string $context, ?int $courseid = null): array {
         if (empty(trim($moduletype))) {
@@ -548,6 +551,12 @@ class module_generation_service {
         if (empty(trim($instructions))) {
             throw new \invalid_parameter_exception('Instructions are required');
         }
+        input_limits::require_max_chars(
+            $instructions,
+            input_limits::MAX_INSTRUCTIONS_CHARS,
+            'error:instructions_too_long',
+            'local_dixeo'
+        );
 
         $payload = [
             'moduleType' => $moduletype,
