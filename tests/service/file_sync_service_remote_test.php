@@ -18,7 +18,9 @@ namespace local_dixeo\service;
 
 use local_dixeo\api\client;
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\event\file_sync_disabled;
 use local_dixeo\repository\course_ai_repository;
+use local_dixeo\settings\config;
 
 /**
  * Tests for remote file replacement, deletion and live sync status.
@@ -116,5 +118,111 @@ final class file_sync_service_remote_test extends \advanced_testcase {
         $set('syncing', 1000, 1000);
         $this->assertSame('synchronized', $service->get_live_status($courseid)->status);
         $this->assertSame(1, $polls);
+    }
+
+    /**
+     * Purging an enabled course turns sync off, empties the remote store and resets the row.
+     */
+    public function test_purge_course_files_resets_enabled_course(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $actor = $this->getDataGenerator()->create_user();
+        $repository = new course_ai_repository();
+        $repository->set_enabled($courseid, true, 2);
+        $repository->update_filehash($courseid, 'abc');
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->once())->method('delete_files')->with((string) $courseid)->willReturn([]);
+
+        $sink = $this->redirectEvents();
+        (new file_sync_service($repository, $client))->purge_course_files($courseid, (int) $actor->id);
+        $events = array_values(array_filter(
+            $sink->get_events(),
+            static fn($event): bool => $event instanceof file_sync_disabled
+        ));
+        $sink->close();
+
+        $this->assertSame(
+            '0',
+            (new config())->get('local_dixeo', 'filesync_enabled', \context_course::instance($courseid))->get_value()
+        );
+        $record = $repository->get_by_courseid($courseid);
+        $this->assertSame('none', $record->syncstatus);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertEmpty($record->filehash);
+        $this->assertCount(1, $events);
+        $this->assertSame((int) $actor->id, (int) $events[0]->userid);
+    }
+
+    /**
+     * A failed purge rethrows, keeps the row pending deletion with the code only, and queues no retry.
+     */
+    public function test_purge_course_files_rethrows_without_queueing_a_retry(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $courseid = (int) $course->id;
+        $repository = new course_ai_repository();
+        $repository->set_enabled($courseid, true, 2);
+
+        $client = $this->createMock(client::class);
+        $client->method('delete_files')->willThrowException(new api_exception('upstream_ai', 'secret', 502));
+
+        try {
+            (new file_sync_service($repository, $client))->purge_course_files($courseid, 2);
+            $this->fail('The remote delete failure must be rethrown.');
+        } catch (api_exception $e) {
+            $this->assertSame('upstream_ai', $e->get_error_code());
+        }
+
+        $record = $repository->get_by_courseid($courseid);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+        $this->assertSame('upstream_ai', $record->errormessage);
+        $this->assertEmpty(\core\task\manager::get_adhoc_tasks('\\local_dixeo\\task\\process_remote_file_deletion'));
+    }
+
+    /**
+     * A deleted course is still purged under its id.
+     */
+    public function test_purge_course_files_for_deleted_course(): void {
+        $this->resetAfterTest();
+        $client = $this->createMock(client::class);
+        $client->expects($this->once())->method('delete_files')->with('999999')->willReturn([]);
+
+        (new file_sync_service(new course_ai_repository(), $client))->purge_course_files(999999, 2);
+    }
+
+    /**
+     * Turning Dixeo off does not stop a purge.
+     */
+    public function test_purge_course_files_ignores_dixeo_switch(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->once())->method('delete_files')->with((string) $course->id)->willReturn([]);
+
+        (new file_sync_service(new course_ai_repository(), $client))->purge_course_files((int) $course->id, 2);
+    }
+
+    /**
+     * Purging a course that never synced creates no course_ai row.
+     */
+    public function test_purge_course_files_creates_no_row(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $repository = new course_ai_repository();
+
+        $client = $this->createMock(client::class);
+        $client->expects($this->once())->method('delete_files')->willReturn([]);
+
+        (new file_sync_service($repository, $client))->purge_course_files((int) $course->id, 2);
+
+        $this->assertNull($repository->get_by_courseid((int) $course->id));
     }
 }

@@ -422,8 +422,7 @@ class file_sync_service {
 
         $remotedeletestatus = 'pending';
         try {
-            $this->client->delete_files((string) $courseid);
-            $this->repository->reset_sync_state($courseid);
+            $this->delete_course_store($courseid);
             $remotedeletestatus = 'completed';
         } catch (api_exception $e) {
             $this->repository->record_pending_deletion_error($courseid, $e->getMessage());
@@ -441,6 +440,70 @@ class file_sync_service {
                 $remotedeletestatus
             )->trigger();
         }
+    }
+
+    /**
+     * Stop file sync for a course and delete every file Dixeo holds under its id.
+     *
+     * For remote erasure: never gated by the Dixeo switch, works for a deleted course,
+     * queues no retry of its own, and throws so the calling remote_erasure_task retries.
+     * An existing course_ai row is disabled and kept pending_deletion until the remote
+     * delete succeeds; a missing row is never created.
+     *
+     * @param int $courseid The course ID, whether or not the course still exists.
+     * @param int $actorid The user recorded as disabling sync.
+     * @return void
+     * @throws \Throwable When the remote delete fails; the row stays pending_deletion.
+     */
+    public function purge_course_files(int $courseid, int $actorid): void {
+        global $DB;
+
+        $exists = $DB->record_exists('course', ['id' => $courseid]);
+        $record = $this->repository->get_by_courseid($courseid);
+        $wasenabled = $record !== null && (bool) $record->enabled;
+
+        if ($exists) {
+            $this->write_filesync_setting($courseid, '0');
+        }
+
+        if ($record !== null) {
+            $this->repository->set_enabled($courseid, false, $actorid);
+            $this->repository->mark_pending_deletion($courseid);
+        }
+
+        try {
+            $this->delete_course_store($courseid);
+        } catch (\Throwable $e) {
+            if ($record !== null) {
+                $code = $e instanceof api_exception ? $e->get_error_code() : 'remote_delete_failed';
+                $this->repository->record_pending_deletion_error($courseid, $code);
+            }
+            throw $e;
+        }
+
+        if ($exists && $wasenabled) {
+            file_sync_disabled::create_for_course(
+                $courseid,
+                $actorid,
+                (int) $record->id,
+                true,
+                'completed'
+            )->trigger();
+        }
+    }
+
+    /**
+     * Delete the course's remote file store, then clear the local sync evidence.
+     *
+     * The local state is reset only after the remote delete succeeds.
+     *
+     * @param int $courseid The course ID.
+     * @return void
+     * @throws \Throwable When the remote delete fails.
+     */
+    private function delete_course_store(int $courseid): void {
+        $this->client->delete_files((string) $courseid);
+        $this->repository->reset_sync_state($courseid);
     }
 
     /**
