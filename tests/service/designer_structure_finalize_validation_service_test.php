@@ -27,6 +27,7 @@ namespace local_dixeo;
 
 use local_dixeo\service\designer_structure_finalize_validation_service;
 use local_dixeo\service\module_types_service;
+use local_dixeo\util\input_limits;
 
 /**
  * Unit tests for designer structure finalize validation service.
@@ -319,5 +320,60 @@ final class designer_structure_finalize_validation_service_test extends \advance
         ]);
 
         $this->assertCount(1, $errors);
+    }
+
+    /**
+     * Build a one-module structure whose module carries the given instructions.
+     *
+     * @param string $instructions Module instructions.
+     * @return array
+     */
+    private function structure_with_instructions(string $instructions): array {
+        return [
+            'course_structure' => [
+                'title' => 'T',
+                'sections' => [
+                    [
+                        'title' => 'S',
+                        'modules' => [
+                            [
+                                'type' => 'page',
+                                'title' => 'Title',
+                                'summary' => 'Summary text long enough.',
+                                'instructions' => $instructions,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    public function test_instructions_at_shared_maximum_pass(): void {
+        $mock = $this->createMock(module_types_service::class);
+        $mock->method('get_module_types_cached')->willReturn($this->catalogue_page_only());
+        $svc = new designer_structure_finalize_validation_service($mock);
+
+        $instructions = str_repeat('é', input_limits::MAX_INSTRUCTIONS_CHARS);
+
+        $this->assertSame([], $svc->validate_with_field_issues($this->structure_with_instructions($instructions)));
+    }
+
+    public function test_instructions_over_shared_maximum_report_one_issue(): void {
+        $mock = $this->createMock(module_types_service::class);
+        $mock->method('get_module_types_cached')->willReturn($this->catalogue_page_only());
+        $svc = new designer_structure_finalize_validation_service($mock);
+
+        $instructions = str_repeat('é', input_limits::MAX_INSTRUCTIONS_CHARS + 1);
+
+        $issues = $svc->validate_with_field_issues($this->structure_with_instructions($instructions));
+
+        $this->assertCount(1, $issues);
+        $this->assertSame('sections[0].modules[0].instructions', $issues[0]['path']);
+        $this->assertSame(
+            get_string('designerstructurevalidate_fill_instructions_too_long', 'local_dixeo',
+                ['max' => input_limits::MAX_INSTRUCTIONS_CHARS]),
+            $issues[0]['message']
+        );
     }
 }

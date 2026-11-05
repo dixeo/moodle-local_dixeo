@@ -18,6 +18,7 @@ namespace local_dixeo\service;
 
 use core_text;
 use local_dixeo\api\exception\api_exception;
+use local_dixeo\util\input_limits;
 
 /**
  * Validates a course-structure payload before designer finalize creates the Moodle course.
@@ -40,9 +41,6 @@ class designer_structure_finalize_validation_service {
 
     /** @var int Soft cap for HTML / long text fields (sanity). */
     private const LONG_TEXT_SOFT_MAX = 65535;
-
-    /** @var int Soft cap for fill instructions sent to the API. */
-    private const FILL_INSTRUCTIONS_SOFT_MAX = 500000;
 
     /** @var int Same minimum as block_dixeo_modulegen AI instructions. */
     public const MIN_MODULE_INSTRUCTIONS_CHARS = 10;
@@ -334,15 +332,6 @@ class designer_structure_finalize_validation_service {
             }
         }
 
-        if (isset($module['instructions']) && $module['instructions'] !== null && $module['instructions'] !== '') {
-            $i = (string) $module['instructions'];
-            if (core_text::strlen($i) > self::LONG_TEXT_SOFT_MAX) {
-                $issues[] = $this->field_issue($bp . '.instructions', 'designerstructurevalidate_module_instructions_too_long', [
-                    'max' => self::LONG_TEXT_SOFT_MAX,
-                ]);
-            }
-        }
-
         $payload = self::build_fill_instruction_payload($module);
         if (trim($payload) === '') {
             $issues[] = $this->field_issue($bp . '.instructions', 'designerstructurevalidate_module_instructions_required', [
@@ -352,9 +341,9 @@ class designer_structure_finalize_validation_service {
             $issues[] = $this->field_issue($bp . '.instructions', 'designerstructurevalidate_instructions_api_min', [
                 'min' => self::MIN_MODULE_INSTRUCTIONS_CHARS,
             ]);
-        } else if (core_text::strlen($payload) > self::FILL_INSTRUCTIONS_SOFT_MAX) {
+        } else if (core_text::strlen($payload) > input_limits::MAX_INSTRUCTIONS_CHARS) {
             $issues[] = $this->field_issue($bp . '.instructions', 'designerstructurevalidate_fill_instructions_too_long', [
-                'max' => self::FILL_INSTRUCTIONS_SOFT_MAX,
+                'max' => input_limits::MAX_INSTRUCTIONS_CHARS,
             ]);
         }
     }
