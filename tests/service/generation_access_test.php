@@ -39,6 +39,8 @@ final class generation_access_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->course = $this->getDataGenerator()->create_course();
         $this->teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')
+            ->create_terms_acceptance(['userid' => $this->teacher->id]);
     }
 
     protected function tearDown(): void {
@@ -169,6 +171,41 @@ final class generation_access_test extends \advanced_testcase {
         $this->assert_reason(
             'error:activity_not_available',
             generation_access::denial_reason((int) $this->teacher->id, (int) $this->course->id, 'page')
+        );
+    }
+
+    public function test_unaccepted_terms_are_refused(): void {
+        $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
+
+        $this->assert_reason(
+            'error:consentrequired',
+            generation_access::denial_reason((int) $teacher->id, (int) $this->course->id, 'page')
+        );
+
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')
+            ->create_terms_acceptance(['userid' => $teacher->id]);
+        $this->assertNull(generation_access::denial_reason((int) $teacher->id, (int) $this->course->id, 'page'));
+    }
+
+    public function test_earlier_rule_wins_over_unaccepted_terms(): void {
+        $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
+        $this->assert_reason(
+            'error:activity_not_available',
+            generation_access::denial_reason((int) $teacher->id, (int) $this->course->id, 'notamodule')
+        );
+
+        $this->setAdminUser();
+        service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'enabled',
+            \context_course::instance($this->course->id),
+            '0'
+        );
+        $this->setUser(null);
+
+        $this->assert_reason(
+            'error:dixeo_disabled',
+            generation_access::denial_reason((int) $teacher->id, (int) $this->course->id, 'page')
         );
     }
 

@@ -69,7 +69,8 @@ class get_job_status extends external_api {
             'courseid' => $courseid,
         ]);
 
-        self::validate_course_capability($params['courseid']);
+        // A status read sends nothing, so it works without the current Terms of Use.
+        self::validate_course_capability($params['courseid'], false, false);
 
         job_id::require_valid($params['jobid']);
 

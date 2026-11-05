@@ -108,6 +108,7 @@ final class file_sync_capability_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $user = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $user->id]);
         $context = \context_course::instance($course->id);
         $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
         assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);

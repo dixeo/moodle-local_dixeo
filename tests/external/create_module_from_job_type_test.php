@@ -79,6 +79,7 @@ final class create_module_from_job_type_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
         $this->setUser($teacher);
 
         $jobid = \core\uuid::generate();

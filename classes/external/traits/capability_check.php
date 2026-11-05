@@ -28,27 +28,39 @@
 namespace local_dixeo\external\traits;
 
 use local_dixeo\external\service_factory;
+use local_dixeo\service\consent_service;
 
 /**
  * Trait providing capability checking for external API endpoints.
+ *
+ * Terms of Use gate: an endpoint that starts or advances Dixeo processing, or stores input
+ * that will be sent, keeps the default $requireconsent = true. An endpoint that only reads
+ * status or a catalogue, or that stops, cancels, turns off or deletes, passes false, so a
+ * user who withdrew acceptance can still stop processing and remove data.
  */
 trait capability_check {
     /**
      * Validate course context and check required capabilities.
      *
-     * Use this for endpoints that operate on specific courses.
+     * Use this for endpoints that operate on specific courses. Checks run in this order:
+     * course id, context, capabilities, Dixeo enabled for the course, then the Terms of Use.
      *
      * @param int $courseid The course ID.
      * @param bool $requiremanageactivities Whether to also check moodle/course:manageactivities.
+     * @param bool $requireconsent Whether the acting user must have accepted the current Terms of Use.
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
-     * @throws \moodle_exception If Dixeo is turned off for the course.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is turned off for the course,
+     *     error:consentrequired when the current Terms of Use are not accepted.
      */
     protected static function validate_course_capability(
         int $courseid,
-        bool $requiremanageactivities = false
+        bool $requiremanageactivities = false,
+        bool $requireconsent = true
     ): \context_course {
+        global $USER;
+
         if ($courseid <= 1) {
             throw new \invalid_parameter_exception('Invalid course id');
         }
@@ -63,21 +75,30 @@ trait capability_check {
 
         service_factory::get_settings_config()->require_enabled($coursecontext);
 
+        if ($requireconsent) {
+            (new consent_service())->require_accepted((int) $USER->id, $coursecontext);
+        }
+
         return $coursecontext;
     }
 
     /**
      * Validate course context and require local/dixeo:syncfiles.
      *
-     * Use for enable/disable/trigger of external course file transfer.
+     * Use for enable/disable/trigger of external course file transfer. Checks run in this order:
+     * course id, context, capability, Dixeo enabled for the course, then the Terms of Use.
      *
      * @param int $courseid The course ID.
+     * @param bool $requireconsent Whether the acting user must have accepted the current Terms of Use.
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
-     * @throws \moodle_exception If Dixeo is turned off for the course.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is turned off for the course,
+     *     error:consentrequired when the current Terms of Use are not accepted.
      */
-    protected static function validate_course_sync_capability(int $courseid): \context_course {
+    protected static function validate_course_sync_capability(int $courseid, bool $requireconsent = true): \context_course {
+        global $USER;
+
         if ($courseid <= 1) {
             throw new \invalid_parameter_exception('Invalid course id');
         }
@@ -86,6 +107,10 @@ trait capability_check {
         self::validate_context($coursecontext);
         require_capability('local/dixeo:syncfiles', $coursecontext);
         service_factory::get_settings_config()->require_enabled($coursecontext);
+
+        if ($requireconsent) {
+            (new consent_service())->require_accepted((int) $USER->id, $coursecontext);
+        }
 
         return $coursecontext;
     }

@@ -172,6 +172,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
         assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);
         accesslib_clear_all_caches_for_unit_testing();
         $this->setUser($user);
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $user->id]);
 
         $repository = new course_ai_repository();
         $repository->create($course->id, $user->id);
@@ -199,6 +200,7 @@ final class file_sync_service_opt_in_test extends \advanced_testcase {
     public function test_trigger_file_sync_reports_an_unchanged_course_as_up_to_date(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => get_admin()->id]);
 
         $course = $this->getDataGenerator()->create_course();
         $this->getDataGenerator()->create_module('resource', ['course' => $course->id]);

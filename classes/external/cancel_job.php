@@ -68,7 +68,8 @@ class cancel_job extends external_api {
             'courseid' => $courseid,
         ]);
 
-        self::validate_course_capability($params['courseid']);
+        // Cancelling stops processing, so it works without the current Terms of Use.
+        self::validate_course_capability($params['courseid'], false, false);
 
         job_id::require_valid($params['jobid']);
 

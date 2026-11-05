@@ -93,6 +93,80 @@ final class consent_gate_test extends \advanced_testcase {
     }
 
     /**
+     * A system-context page shows the lock only after it opts in, and only for that page.
+     */
+    public function test_site_page_locks_only_after_opt_in(): void {
+        global $PAGE;
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->open_site_page($user);
+
+        $this->assertSame('', $this->render_lock());
+
+        consent_gate::apply_to_site_page();
+        $headers = new before_http_headers($PAGE->get_renderer('core'));
+        consent_gate::lock_body($headers);
+        $this->assertStringContainsString('local-dixeo-consent-locked', $PAGE->bodyclasses);
+        $html = $this->render_lock();
+        $this->assertStringContainsString('data-region="local-dixeo-consent-lock"', $html);
+        $this->assertStringContainsString('name="courseid" value="' . SITEID . '"', $html);
+
+        $this->open_site_page($user);
+        $this->assertSame('', $this->render_lock());
+    }
+
+    /**
+     * An opted-in site page has no lock once the terms are accepted or while Dixeo is off at the site.
+     */
+    public function test_site_page_without_lock_when_accepted_or_disabled(): void {
+        $user = $this->getDataGenerator()->create_user();
+
+        $this->setAdminUser();
+        (new \local_dixeo\settings\config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $this->open_site_page($user);
+        consent_gate::apply_to_site_page();
+        $this->assertSame('', $this->render_lock());
+
+        $this->setAdminUser();
+        (new \local_dixeo\settings\config())->set('local_dixeo', 'enabled', \context_system::instance(), '1');
+        $this->open_site_page($user);
+        consent_gate::apply_to_site_page();
+        $this->assertNotSame('', $this->render_lock());
+
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $user->id]);
+        $this->assertSame('', $this->render_lock());
+    }
+
+    /**
+     * Render the top-of-body hook output for the current page.
+     *
+     * @return string
+     */
+    private function render_lock(): string {
+        global $PAGE;
+
+        $hook = new before_standard_top_of_body_html_generation($PAGE->get_renderer('core'));
+        consent_gate::callback($hook);
+        return $hook->get_output();
+    }
+
+    /**
+     * Prepare a fresh system-context page for one user.
+     *
+     * @param \stdClass $user User.
+     */
+    private function open_site_page(\stdClass $user): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $this->setUser($user);
+        $PAGE = new \moodle_page();
+        $PAGE->set_context(\context_system::instance());
+        $PAGE->set_pagelayout('standard');
+        $PAGE->set_url(new \moodle_url('/my/index.php'));
+    }
+
+    /**
      * Prepare a course page for one user.
      *
      * @param \stdClass $user User.

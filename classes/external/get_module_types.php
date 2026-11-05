@@ -101,7 +101,8 @@ class get_module_types extends external_api {
     private static function validate_course_for_module_types(int $courseid): void {
         global $PAGE;
         require_course_login($courseid);
-        self::validate_course_capability($courseid, true);
+        // A catalogue read sends nothing, so it works without the current Terms of Use.
+        self::validate_course_capability($courseid, true, false);
         $PAGE->set_context(\context_course::instance($courseid));
     }
 

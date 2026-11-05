@@ -103,6 +103,50 @@ class consent_service {
     }
 
     /**
+     * Whether this user must accept the current terms before Dixeo works for a course, or for the site.
+     *
+     * Guests and ids below 1 never need to. Dixeo off ({@see \local_dixeo\settings\config::enabled_for_course()})
+     * never needs to. Courses at or below SITEID, and missing courses, resolve to the site
+     * ({@see \local_dixeo\settings\config::context_for_course()}).
+     *
+     * @param int $userid User id.
+     * @param int $courseid Course id, or SITEID (or 0) for site-level Dixeo work.
+     * @return bool
+     */
+    public function gate_required_for_course(int $userid, int $courseid): bool {
+        if ($userid < 1 || isguestuser($userid)) {
+            return false;
+        }
+        if (!(new \local_dixeo\settings\config())->enabled_for_course($courseid)) {
+            return false;
+        }
+        return !$this->terms_current($userid);
+    }
+
+    /**
+     * Stop a request for a course, or for the site, while the current Terms of Use are not accepted.
+     *
+     * Uses {@see self::gate_required_for_course()}.
+     *
+     * @param int $userid Acting user.
+     * @param int $courseid Course id, or SITEID (or 0) for site-level Dixeo work.
+     * @param string $errorkey Language string of the error.
+     * @param string $component Component owning the error string.
+     * @return void
+     * @throws \moodle_exception $errorkey in $component when the terms are not accepted.
+     */
+    public function require_accepted_for_course(
+        int $userid,
+        int $courseid,
+        string $errorkey = 'error:consentrequired',
+        string $component = 'local_dixeo'
+    ): void {
+        if ($this->gate_required_for_course($userid, $courseid)) {
+            throw new \moodle_exception($errorkey, $component);
+        }
+    }
+
+    /**
      * Whether a background path (observer, task) may send data about this user for this course.
      *
      * Requires a real, non-guest user, an existing course above SITEID with Dixeo enabled, and
@@ -147,11 +191,31 @@ class consent_service {
     /**
      * Whether the user has accepted the current Terms of Use.
      *
+     * The answer is kept for the rest of the request, per user and language, because entry
+     * points run this check once per module or queued row. Recording a decision clears it.
+     *
      * @param int $userid User id.
      * @return bool
      */
     public function terms_current(int $userid): bool {
-        return $this->decision_current($userid, self::ACTION_GRANTED);
+        $cache = self::terms_cache();
+        $key = $userid . '_' . current_language();
+        $cached = $cache->get($key);
+        if ($cached !== false) {
+            return $cached === 1;
+        }
+        $current = $this->decision_current($userid, self::ACTION_GRANTED);
+        $cache->set($key, $current ? 1 : 0);
+        return $current;
+    }
+
+    /**
+     * Request cache of {@see self::terms_current()} answers.
+     *
+     * @return \cache
+     */
+    private static function terms_cache(): \cache {
+        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'termscurrent');
     }
 
     /**
@@ -404,6 +468,7 @@ class consent_service {
             'action' => $action,
             'timecreated' => time(),
         ]);
+        self::terms_cache()->purge();
     }
 
     /**

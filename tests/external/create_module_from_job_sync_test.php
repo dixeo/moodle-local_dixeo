@@ -120,6 +120,7 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
         $context = \context_course::instance($course->id);
         $this->deny_syncfiles_for_editingteacher($context);
         $this->setUser($teacher);
@@ -145,6 +146,7 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
         $context = \context_course::instance($course->id);
         $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
         assign_capability('local/dixeo:syncfiles', CAP_ALLOW, $roleid, $context->id, true);
@@ -173,6 +175,7 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
         $this->setUser($teacher);
 
         $jobid = \core\uuid::generate();

@@ -42,7 +42,8 @@ final class generation_access {
      *  3. the user exists, is a real user, is not deleted or suspended, does not use the nologin
      *     auth, has active access to the course, and holds local/dixeo:generate and
      *     moodle/course:manageactivities in it, else error:generation_not_allowed;
-     *  4. the type resolves to an activity the user may add, else error:activity_not_available.
+     *  4. the type resolves to an activity the user may add, else error:activity_not_available;
+     *  5. the user has accepted the current Terms of Use, else error:consentrequired.
      *
      * @param int $userid User the generation is done for.
      * @param int $courseid Course that will own the activity.
@@ -68,6 +69,10 @@ final class generation_access {
         $module = service_factory::get_module_types_service()->resolve_generation_module($type);
         if ($module === null || !module_addinstance_service::allows($courseid, $module, $userid)) {
             return new \lang_string('error:activity_not_available', 'local_dixeo', clean_param($type, PARAM_ALPHANUMEXT));
+        }
+
+        if (!(new consent_service())->terms_current($userid)) {
+            return new \lang_string('error:consentrequired', 'local_dixeo');
         }
 
         return null;

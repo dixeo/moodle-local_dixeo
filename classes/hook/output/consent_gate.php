@@ -22,7 +22,7 @@ use local_dixeo\service\consent_notice;
 use local_dixeo\service\consent_service;
 
 /**
- * Locks a Dixeo course until the user accepts the current Terms of Use.
+ * Locks a Dixeo course, or an opted-in site-level page, until the user accepts the current Terms of Use.
  *
  * The dialog has no close control. Exit leaves without recording a choice.
  * Continue stays disabled until both boxes are ticked.
@@ -34,6 +34,21 @@ use local_dixeo\service\consent_service;
 class consent_gate {
     /** @var string[] Layouts that must not trap an embedded frame. */
     private const SKIP_LAYOUTS = ['embedded', 'popup', 'print', 'frametop', 'secure', 'maintenance'];
+
+    /** @var \moodle_page|null Site-level page that opted into the lock. */
+    private static ?\moodle_page $sitepage = null;
+
+    /**
+     * Show the terms lock on this site-level page when the user still needs the current terms.
+     *
+     * Course pages lock on their own. A system-context page that sends data to Dixeo opts in
+     * with this call. Call after $PAGE->set_context(system) and before $OUTPUT->header().
+     */
+    public static function apply_to_site_page(): void {
+        global $PAGE;
+
+        self::$sitepage = $PAGE;
+    }
 
     /**
      * Stop the page from scrolling before the body tag is printed.
@@ -79,6 +94,8 @@ class consent_gate {
     /**
      * Course id when this page must show the terms lock, otherwise null.
      *
+     * A site-level page that opted in through {@see self::apply_to_site_page()} yields SITEID.
+     *
      * @return int|null
      */
     private static function courseid(): ?int {
@@ -95,6 +112,9 @@ class consent_gate {
         }
 
         $service = new consent_service();
+        if (self::$sitepage === $PAGE && $PAGE->context->contextlevel == CONTEXT_SYSTEM) {
+            return $service->gate_required_for_course((int) $USER->id, SITEID) ? SITEID : null;
+        }
         if (!$service->gate_required((int) $USER->id, $PAGE->context)) {
             return null;
         }
@@ -119,6 +139,9 @@ class consent_gate {
         try {
             return $PAGE->url->out_as_local_url(false);
         } catch (\moodle_exception $e) {
+            if ($courseid <= SITEID) {
+                return (new \moodle_url('/'))->out_as_local_url(false);
+            }
             return (new \moodle_url('/course/view.php', ['id' => $courseid]))->out_as_local_url(false);
         }
     }

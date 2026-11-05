@@ -68,7 +68,8 @@ class set_file_sync_enabled extends external_api {
             'removefiles' => $removefiles,
         ]);
 
-        self::validate_course_sync_capability($params['courseid']);
+        // Turning sync off stops sending, so only enabling needs the current Terms of Use.
+        self::validate_course_sync_capability($params['courseid'], (bool) $params['enabled']);
 
         $service = service_factory::get_file_sync_service();
 

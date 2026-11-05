@@ -105,12 +105,15 @@ function local_dixeo_consent_handle(string $action): void {
             \core\output\notification::NOTIFY_ERROR
         );
     }
-    if ($courseid < 2) {
+    // SITEID comes from site-level Dixeo pages, which every logged-in user can open.
+    if ($courseid < SITEID) {
         throw new moodle_exception('invalidcourseid');
     }
-    $course = get_course($courseid);
-    if (!can_access_course($course)) {
-        throw new moodle_exception('nopermissions', 'error', '', get_string('course'));
+    if ($courseid > SITEID) {
+        $course = get_course($courseid);
+        if (!can_access_course($course)) {
+            throw new moodle_exception('nopermissions', 'error', '', get_string('course'));
+        }
     }
 
     $service->accept($userid);

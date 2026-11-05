@@ -61,7 +61,8 @@ class get_file_sync_status extends external_api {
             'courseid' => $courseid,
         ]);
 
-        self::validate_course_capability($params['courseid']);
+        // A status read sends nothing, so it works without the current Terms of Use.
+        self::validate_course_capability($params['courseid'], false, false);
 
         $service = service_factory::get_file_sync_service();
 

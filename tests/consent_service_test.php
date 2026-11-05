@@ -135,10 +135,12 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
 
         $decision = $service->latest((int) $user->id);
         $DB->set_field(consent_service::TABLE_DOCUMENT, 'version', '1999-01-01.1', ['id' => $decision->documentid]);
+        $this->start_new_request();
         $this->assertTrue($service->gate_required((int) $user->id, $context));
 
         $DB->set_field(consent_service::TABLE_DOCUMENT, 'version', consent_service::VERSION, ['id' => $decision->documentid]);
         $DB->set_field(consent_service::TABLE_DOCUMENT, 'documenthash', str_repeat('a', 64), ['id' => $decision->documentid]);
+        $this->start_new_request();
         $this->assertTrue($service->gate_required((int) $user->id, $context));
     }
 
@@ -195,6 +197,97 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $service->accept((int) $user->id);
         $service->require_accepted((int) $user->id, $context);
         $this->assertTrue($service->terms_current((int) $user->id));
+    }
+
+    /**
+     * The course-or-site gate follows Dixeo at the site layer for SITEID and the course switch for a course.
+     */
+    public function test_gate_required_for_course(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $offcourse = $this->getDataGenerator()->create_course();
+        $service = new consent_service();
+        $userid = (int) $user->id;
+
+        $this->assertTrue($service->gate_required_for_course($userid, SITEID));
+        $this->assertTrue($service->gate_required_for_course($userid, 0));
+        $this->assertTrue($service->gate_required_for_course($userid, (int) $course->id));
+        $this->assertTrue($service->gate_required_for_course($userid, (int) $course->id + 1000));
+        $this->assertFalse($service->gate_required_for_course((int) guest_user()->id, SITEID));
+        $this->assertFalse($service->gate_required_for_course(0, (int) $course->id));
+
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', \context_course::instance($offcourse->id), '0');
+        $this->assertFalse($service->gate_required_for_course($userid, (int) $offcourse->id));
+        $this->assertTrue($service->gate_required_for_course($userid, SITEID));
+
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $this->assertFalse($service->gate_required_for_course($userid, SITEID));
+        $this->assertFalse($service->gate_required_for_course($userid, (int) $course->id));
+
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '1');
+        $service->accept($userid);
+        $this->assertFalse($service->gate_required_for_course($userid, SITEID));
+        $this->assertFalse($service->gate_required_for_course($userid, (int) $course->id));
+    }
+
+    /**
+     * require_accepted_for_course() throws the given error for the site and for a course until acceptance.
+     */
+    public function test_require_accepted_for_course(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $service = new consent_service();
+        $userid = (int) $user->id;
+
+        foreach ([SITEID, (int) $course->id] as $courseid) {
+            try {
+                $service->require_accepted_for_course($userid, $courseid);
+                $this->fail('Unaccepted terms must stop the request.');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('error:consentrequired', $e->errorcode);
+                $this->assertSame('local_dixeo', $e->module);
+            }
+        }
+
+        try {
+            $service->require_accepted_for_course($userid, SITEID, 'consentrequired', 'block_dixeo_tutor');
+            $this->fail('Unaccepted terms must stop the request.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('consentrequired', $e->errorcode);
+            $this->assertSame('block_dixeo_tutor', $e->module);
+        }
+
+        $service->require_accepted_for_course((int) guest_user()->id, SITEID);
+        $service->require_accepted_for_course(0, (int) $course->id);
+
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', \context_course::instance($course->id), '0');
+        $service->require_accepted_for_course($userid, (int) $course->id);
+
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $service->require_accepted_for_course($userid, SITEID);
+
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '1');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $userid]);
+        $service->require_accepted_for_course($userid, SITEID);
+        $this->assertTrue($service->terms_current($userid));
+    }
+
+    /**
+     * The answer kept for the request follows accept() and withdraw_terms() in the same request.
+     */
+    public function test_terms_memo_follows_decisions_in_the_same_request(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $userid = (int) $user->id;
+
+        $this->assertFalse((new consent_service())->terms_current($userid));
+        (new consent_service())->accept($userid);
+        $this->assertTrue((new consent_service())->terms_current($userid));
+        (new consent_service())->withdraw_terms($userid);
+        $this->assertFalse((new consent_service())->terms_current($userid));
+        (new consent_service())->accept($userid);
+        $this->assertTrue((new consent_service())->terms_current($userid));
     }
 
     /**
@@ -294,5 +387,12 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $string = [];
         include(__DIR__ . "/../lang/{$lang}/local_dixeo.php");
         return $string;
+    }
+
+    /**
+     * Forget answers kept for the current request, as a new page load would.
+     */
+    private function start_new_request(): void {
+        \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'termscurrent')->purge();
     }
 }
