@@ -370,10 +370,11 @@ final class designer_structure_finalize_validation_service_test extends \advance
 
         $this->assertCount(1, $issues);
         $this->assertSame('sections[0].modules[0].instructions', $issues[0]['path']);
-        $this->assertSame(
-            get_string('designerstructurevalidate_fill_instructions_too_long', 'local_dixeo',
-                ['max' => input_limits::MAX_INSTRUCTIONS_CHARS]),
-            $issues[0]['message']
+        $expected = get_string(
+            'designerstructurevalidate_fill_instructions_too_long',
+            'local_dixeo',
+            ['max' => input_limits::MAX_INSTRUCTIONS_CHARS]
         );
+        $this->assertSame($expected, $issues[0]['message']);
     }
 }
