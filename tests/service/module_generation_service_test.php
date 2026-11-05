@@ -73,4 +73,55 @@ final class module_generation_service_test extends \advanced_testcase {
         $this->assertArrayNotHasKey('generateImages', $payload);
         $this->assertArrayNotHasKey('packageImages', $payload);
     }
+
+    /**
+     * Course submissions stop before reading the course or posting when Dixeo is off.
+     *
+     * @dataProvider disabled_layer_provider
+     * @param string $layer Layer turned off: site or course.
+     */
+    public function test_course_submissions_refuse_while_dixeo_is_off(string $layer): void {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $context = $layer === 'site' ? \context_system::instance() : \context_course::instance($course->id);
+        (new \local_dixeo\settings\config())->set('local_dixeo', 'enabled', $context, '0');
+
+        $service = new module_generation_service($this->job_service_without_posts(), 'default');
+        $calls = [
+            fn() => $service->submit_generate_job_for_course('page', 'Write an intro', (int) $course->id, 1),
+            fn() => $service->submit_fill_job_for_course('page', 'Write an intro', (int) $course->id, 1, 'Title', 'Summary'),
+        ];
+        foreach ($calls as $call) {
+            try {
+                $call();
+                $this->fail('A course submission must not run while Dixeo is off');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('error:dixeo_disabled', $e->errorcode);
+            }
+        }
+    }
+
+    /**
+     * Layers that can turn Dixeo off for a course.
+     *
+     * @return array
+     */
+    public static function disabled_layer_provider(): array {
+        return [
+            'site' => ['site'],
+            'course' => ['course'],
+        ];
+    }
+
+    /**
+     * Job service whose API client must never post.
+     *
+     * @return job_service
+     */
+    private function job_service_without_posts(): job_service {
+        $client = $this->createMock(\local_dixeo\api\client::class);
+        $client->expects($this->never())->method('post');
+        $client->expects($this->never())->method('post_multipart');
+        return new job_service($client);
+    }
 }

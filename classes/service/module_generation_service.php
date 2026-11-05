@@ -132,11 +132,14 @@ class module_generation_service {
      * - Teaching modules (page, label): tiered context by section proximity
      * - Assessment modules (quiz, glossary): full content everywhere
      *
+     * Nothing is read from the course or sent while Dixeo is off for the course.
+     *
      * @param string $moduletype The module type (page, label, quiz, glossary).
      * @param string $instructions Instructions for the AI.
      * @param int $courseid The course ID.
      * @param int|null $sectionnumber Target section number.
      * @return operation_result Pending operation result with jobid.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the course.
      * @throws api_exception If the API request fails.
      */
     public function submit_generate_job_for_course(
@@ -145,6 +148,7 @@ class module_generation_service {
         int $courseid,
         ?int $sectionnumber = null
     ): operation_result {
+        (new \local_dixeo\settings\config())->require_enabled_for_course($courseid);
         $mode = $this->get_context_mode($moduletype);
         $context = context_builder_factory::buildcoursecontext($courseid, $sectionnumber, $mode);
 
@@ -186,7 +190,8 @@ class module_generation_service {
      *
      * Used for structure-based generation where the module title and summary
      * are already defined. Enriches the course context with module metadata
-     * so the AI generates coherent content.
+     * so the AI generates coherent content. Nothing is read from the course or
+     * sent while Dixeo is off for the course.
      *
      * @param string $moduletype The module type (page, label, quiz, glossary).
      * @param string $instructions Instructions for the AI.
@@ -195,6 +200,7 @@ class module_generation_service {
      * @param string $title The module title from the course structure.
      * @param string $summary The module summary from the course structure.
      * @return operation_result Pending operation result with jobid.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the course.
      * @throws api_exception If the API request fails.
      */
     public function submit_fill_job_for_course(
@@ -205,6 +211,7 @@ class module_generation_service {
         string $title,
         string $summary
     ): operation_result {
+        (new \local_dixeo\settings\config())->require_enabled_for_course($courseid);
         $mode = $this->get_context_mode($moduletype);
         $context = context_builder_factory::buildmodulefillcontext(
             $courseid,
