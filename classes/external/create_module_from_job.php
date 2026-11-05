@@ -37,6 +37,7 @@ use local_dixeo\dsl\interpreter;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\service\course_completion_sync_service;
+use local_dixeo\service\module_types_service;
 use local_dixeo\external\service_factory;
 
 /**
@@ -62,6 +63,7 @@ class create_module_from_job extends external_api {
             // with values from the structure definition rather than re-querying the job.
             'name' => new external_value(PARAM_TEXT, 'Override module name from course structure', VALUE_OPTIONAL),
             'intro' => new external_value(PARAM_RAW, 'Override module intro from course structure', VALUE_OPTIONAL),
+            'expectedtype' => new external_value(PARAM_ALPHANUMEXT, 'Requested Dixeo module type', VALUE_DEFAULT, ''),
         ]);
     }
 
@@ -70,7 +72,8 @@ class create_module_from_job extends external_api {
      *
      * Fetches the job result and runs the DSL interpreter to create the module.
      * Optional name/intro allow the course structure flow to override AI-generated
-     * values with those defined in the structure template.
+     * values with those defined in the structure template. When an expected type is
+     * given, a job whose result names another activity type creates nothing.
      *
      * @param string $jobid The completed job UUID.
      * @param int $courseid The course ID.
@@ -78,6 +81,7 @@ class create_module_from_job extends external_api {
      * @param int|null $beforemod Course module ID to insert before (null or 0 = append).
      * @param string|null $name Override module name.
      * @param string|null $intro Override module intro HTML.
+     * @param string $expectedtype Dixeo module type the job was requested for, or '' to accept any type.
      * @return array Result with cmid on success.
      */
     public static function execute(
@@ -86,7 +90,8 @@ class create_module_from_job extends external_api {
         int $sectionnumber = 0,
         ?int $beforemod = null,
         ?string $name = null,
-        ?string $intro = null
+        ?string $intro = null,
+        string $expectedtype = ''
     ): array {
         global $USER;
 
@@ -97,6 +102,7 @@ class create_module_from_job extends external_api {
             'beforemod' => $beforemod ?? 0,
             'name' => $name,
             'intro' => $intro,
+            'expectedtype' => $expectedtype,
         ]);
 
         self::validate_course_capability($params['courseid'], true);
@@ -125,6 +131,15 @@ class create_module_from_job extends external_api {
             // Result may be JSON encoded string from get_job_status, decode if needed.
             if (is_string($result)) {
                 $result = json_decode($result, true);
+            }
+
+            if ($params['expectedtype'] !== '' && !self::result_has_type($result, $params['expectedtype'])) {
+                return response_factory::module_creation_result(
+                    false,
+                    0,
+                    get_string('error:module_type_mismatch', 'local_dixeo'),
+                    'module_type_mismatch'
+                );
             }
 
             if (empty($result['creation'])) {
@@ -213,6 +228,22 @@ class create_module_from_job extends external_api {
                 'dsl_execution_error'
             );
         }
+    }
+
+    /**
+     * Whether a completed job result describes the requested Dixeo module type.
+     *
+     * @param mixed $result Decoded job result.
+     * @param string $expectedtype Requested Dixeo module type.
+     * @return bool False when the type is no longer supported or the result names another type.
+     */
+    private static function result_has_type($result, string $expectedtype): bool {
+        $moodlemodule = service_factory::get_module_types_service()->resolve_generation_module($expectedtype);
+        if ($moodlemodule === null) {
+            return false;
+        }
+        $resulttype = is_array($result) ? (string) ($result['moduleType'] ?? '') : '';
+        return module_types_service::result_matches_requested_type($expectedtype, $resulttype, $moodlemodule);
     }
 
     /**

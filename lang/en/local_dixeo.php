@@ -258,6 +258,7 @@ $string['error:dixeo_disabled'] = 'Dixeo is turned off.';
 $string['error:generation_not_allowed'] = 'The person who requested this activity can no longer generate activities in this course.';
 $string['error:instructions_too_long'] = 'Instructions must be {$a} characters or fewer.';
 $string['error:job_not_found'] = 'The requested job was not found.';
+$string['error:module_type_mismatch'] = 'The generated activity type does not match the requested type.';
 $string['error:notslideshow'] = 'The course module is not a slideshow activity.';
 $string['error:payment_required'] = 'Insufficient credits. Please add credits to continue.';
 $string['error:scope_unavailable'] = 'This topic is not available. Choose another section or activity.';

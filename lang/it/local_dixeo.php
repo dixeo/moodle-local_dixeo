@@ -258,6 +258,7 @@ $string['error:dixeo_disabled'] = 'Dixeo è disattivato.';
 $string['error:generation_not_allowed'] = 'La persona che ha richiesto questa attività non può più generare attività in questo corso.';
 $string['error:instructions_too_long'] = 'Le istruzioni devono contenere al massimo {$a} caratteri.';
 $string['error:job_not_found'] = 'Il lavoro richiesto non è stato trovato.';
+$string['error:module_type_mismatch'] = 'Il tipo di attività generato non corrisponde al tipo richiesto.';
 $string['error:notslideshow'] = 'Il modulo del corso non è un\'attività presentazione.';
 $string['error:payment_required'] = 'Crediti insufficienti. Aggiungi crediti per continuare.';
 $string['error:scope_unavailable'] = 'Questo argomento non è disponibile. Scegli un\'altra sezione o un\'altra attività.';
