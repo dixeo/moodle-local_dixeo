@@ -266,6 +266,7 @@ $string['error:job_not_found'] = 'O trabalho solicitado não foi encontrado.';
 $string['error:module_type_mismatch'] = 'O tipo de atividade gerado não corresponde ao tipo solicitado.';
 $string['error:notslideshow'] = 'O módulo da disciplina não é uma atividade de apresentação.';
 $string['error:payment_required'] = 'Créditos insuficientes. Adicione créditos para continuar.';
+$string['error:prompt_too_long'] = 'A descrição da imagem deve ter no máximo {$a} caracteres.';
 $string['error:scope_unavailable'] = 'Este tópico não está disponível. Escolha outra secção ou outra atividade.';
 $string['error:slidenotinslideshow'] = 'O diapositivo solicitado não pertence a esta apresentação.';
 $string['error:tutor_synthesis_busy'] = 'Já está a ser pedida uma síntese. Tente novamente dentro de momentos.';

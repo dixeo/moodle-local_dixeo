@@ -266,6 +266,7 @@ $string['error:job_not_found'] = 'The requested job was not found.';
 $string['error:module_type_mismatch'] = 'The generated activity type does not match the requested type.';
 $string['error:notslideshow'] = 'The course module is not a slideshow activity.';
 $string['error:payment_required'] = 'Insufficient credits. Please add credits to continue.';
+$string['error:prompt_too_long'] = 'The image description must be {$a} characters or fewer.';
 $string['error:scope_unavailable'] = 'This topic is not available. Choose another section or activity.';
 $string['error:slidenotinslideshow'] = 'The requested slide does not belong to this slideshow.';
 $string['error:tutor_synthesis_busy'] = 'A synthesis is already being requested. Try again in a moment.';

@@ -37,6 +37,12 @@ final class input_limits {
     /** @var int Maximum characters of activity generation instructions sent to Dixeo. */
     public const MAX_INSTRUCTIONS_CHARS = 10000;
 
+    /** @var int Maximum characters of an image description sent to Dixeo (API contract). */
+    public const MAX_IMAGE_PROMPT_CHARS = 4000;
+
+    /** @var int Maximum characters of image edit instructions sent to Dixeo (API contract). */
+    public const MAX_IMAGE_INSTRUCTIONS_CHARS = 2000;
+
     /** @var int Maximum bytes of activity HTML sent to Dixeo for an AI edit. */
     public const MAX_EDIT_CONTENT_BYTES = 512000;
 

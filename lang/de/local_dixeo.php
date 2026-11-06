@@ -266,6 +266,7 @@ $string['error:job_not_found'] = 'Der angeforderte Auftrag wurde nicht gefunden.
 $string['error:module_type_mismatch'] = 'Der generierte Aktivitätstyp entspricht nicht dem angeforderten Typ.';
 $string['error:notslideshow'] = 'Das Kursmodul ist keine Slideshow-Aktivität.';
 $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Credits auf, um fortzufahren.';
+$string['error:prompt_too_long'] = 'Die Bildbeschreibung darf höchstens {$a} Zeichen lang sein.';
 $string['error:scope_unavailable'] = 'Dieses Thema ist nicht verfügbar. Wählen Sie einen anderen Abschnitt oder eine andere Aktivität.';
 $string['error:slidenotinslideshow'] = 'Die angeforderte Folie gehört nicht zu dieser Slideshow.';
 $string['error:tutor_synthesis_busy'] = 'Eine Synthese wird bereits angefordert. Versuchen Sie es gleich noch einmal.';

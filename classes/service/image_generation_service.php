@@ -33,6 +33,7 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\operation_result;
 use local_dixeo\service\image\policy;
+use local_dixeo\util\input_limits;
 
 /**
  * Shared API client for course, section, and embedded content image jobs.
@@ -454,7 +455,7 @@ class image_generation_service {
      * Build the API request payload for image editing.
      *
      * @param array $imagesbase64 Raw base64-encoded source images.
-     * @param string $instructions Change to apply.
+     * @param string $instructions Change to apply, at most {@see input_limits::MAX_IMAGE_INSTRUCTIONS_CHARS} characters.
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
      * @param string $courseid Course identifier for tracking.
@@ -472,6 +473,13 @@ class image_generation_service {
                 'Unsupported image size "' . $size . '". Supported: ' . implode(', ', self::SUPPORTED_SIZES)
             );
         }
+
+        input_limits::require_max_chars(
+            trim($instructions),
+            input_limits::MAX_IMAGE_INSTRUCTIONS_CHARS,
+            'error:instructions_too_long',
+            'local_dixeo'
+        );
 
         $payload = [
             'images' => array_values($imagesbase64),
@@ -497,7 +505,7 @@ class image_generation_service {
      * @param string $size Image dimensions.
      * @param string $quality Quality level.
      * @param string|null $courseid Optional course identifier for tracking.
-     * @param string|null $prompt Optional visual description, sent as authored (the API validates it).
+     * @param string|null $prompt Optional visual description, at most {@see input_limits::MAX_IMAGE_PROMPT_CHARS} characters.
      * @return array The request payload.
      */
     private function build_payload(
@@ -512,6 +520,15 @@ class image_generation_service {
         if (!in_array($size, self::SUPPORTED_SIZES, true)) {
             throw new \invalid_parameter_exception(
                 'Unsupported image size "' . $size . '". Supported: ' . implode(', ', self::SUPPORTED_SIZES)
+            );
+        }
+
+        if ($prompt !== null) {
+            input_limits::require_max_chars(
+                trim($prompt),
+                input_limits::MAX_IMAGE_PROMPT_CHARS,
+                'error:prompt_too_long',
+                'local_dixeo'
             );
         }
 
