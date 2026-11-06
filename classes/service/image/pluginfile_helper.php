@@ -170,14 +170,15 @@ final class pluginfile_helper {
      *
      * @param string $imageurl
      * @return string
-     * @throws \moodle_exception When the URL does not resolve to a file.
+     * @throws \moodle_exception When the URL does not resolve to a file, or the file is not a
+     *     valid edit source ({@see image_bounds::encode_edit_source()}).
      */
     public static function image_url_to_base64(string $imageurl): string {
         $file = self::get_stored_file_from_pluginfile_url($imageurl);
         if (!$file) {
             throw new \moodle_exception('dixeo_pluginfile_not_found', 'local_dixeo');
         }
-        return base64_encode($file->get_content());
+        return image_bounds::encode_edit_source($file);
     }
 
     /**
