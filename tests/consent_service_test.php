@@ -291,6 +291,62 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * A withdrawal recorded by another process is seen once the memoised answer expires.
+     */
+    public function test_terms_memo_expires_after_withdrawal_by_another_process(): void {
+        global $DB;
+
+        $clock = $this->mock_clock_with_frozen();
+        $user = $this->getDataGenerator()->create_user();
+        $userid = (int) $user->id;
+        $service = new consent_service();
+        $service->accept($userid);
+        $this->assertTrue($service->terms_current($userid));
+
+        $latest = $service->latest($userid);
+        $DB->insert_record(consent_service::TABLE, (object) [
+            'userid' => $userid,
+            'documentid' => (int) $latest->documentid,
+            'action' => consent_service::ACTION_WITHDRAWN,
+            'timecreated' => (int) $latest->timecreated + 1,
+        ]);
+        $this->assertTrue($service->terms_current($userid));
+
+        $clock->bump(31);
+        $this->assertFalse($service->terms_current($userid));
+    }
+
+    /**
+     * An acceptance recorded by another process is seen once the memoised refusal expires.
+     */
+    public function test_terms_memo_expires_after_acceptance_by_another_process(): void {
+        global $DB;
+
+        $clock = $this->mock_clock_with_frozen();
+        $user = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        $userid = (int) $user->id;
+        $service = new consent_service();
+        $this->assertFalse($service->terms_current($userid));
+
+        $service->accept((int) $other->id);
+        $documentid = (int) $service->latest((int) $other->id)->documentid;
+        $this->assertFalse($service->terms_current($userid));
+
+        $DB->insert_record(consent_service::TABLE, (object) [
+            'userid' => $userid,
+            'documentid' => $documentid,
+            'action' => consent_service::ACTION_GRANTED,
+            'timecreated' => time(),
+        ]);
+        $clock->bump(29);
+        $this->assertFalse($service->terms_current($userid));
+
+        $clock->bump(2);
+        $this->assertTrue($service->terms_current($userid));
+    }
+
+    /**
      * may_process_for() needs a real user, an existing course with Dixeo on and current terms.
      */
     public function test_may_process_for(): void {

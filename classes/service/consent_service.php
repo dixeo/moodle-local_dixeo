@@ -50,6 +50,9 @@ class consent_service {
     /** @var string The user withdrew acceptance. */
     public const ACTION_WITHDRAWN = 'withdrawn';
 
+    /** @var int Seconds a memoised terms answer stays valid within one process. */
+    private const TERMS_MEMO_TTL = 30;
+
     /** @var consent_notice|null Notice text for the current request. */
     private ?consent_notice $notice = null;
 
@@ -191,8 +194,9 @@ class consent_service {
     /**
      * Whether the user has accepted the current Terms of Use.
      *
-     * The answer is kept for the rest of the request, per user and language, because entry
-     * points run this check once per module or queued row. Recording a decision clears it.
+     * The answer is kept for up to 30 seconds per user and language, because entry points and
+     * queue loops run this check once per module, row or image. Recording a decision in this
+     * process clears it at once. A decision recorded by another process is seen within 30 seconds.
      *
      * @param int $userid User id.
      * @return bool
@@ -200,17 +204,18 @@ class consent_service {
     public function terms_current(int $userid): bool {
         $cache = self::terms_cache();
         $key = $userid . '_' . current_language();
+        $now = \core\di::get(\core\clock::class)->time();
         $cached = $cache->get($key);
-        if ($cached !== false) {
-            return $cached === 1;
+        if (is_array($cached) && ($now - (int) $cached['t']) < self::TERMS_MEMO_TTL) {
+            return $cached['v'] === 1;
         }
         $current = $this->decision_current($userid, self::ACTION_GRANTED);
-        $cache->set($key, $current ? 1 : 0);
+        $cache->set($key, ['v' => $current ? 1 : 0, 't' => $now]);
         return $current;
     }
 
     /**
-     * Request cache of {@see self::terms_current()} answers.
+     * Request cache of time-stamped {@see self::terms_current()} answers.
      *
      * @return \cache
      */
