@@ -222,4 +222,91 @@ final class editor_image_codec_test extends \advanced_testcase {
         $this->assertCount(1, $tasks);
         $this->assertSame('local_dixeo_editor', reset($tasks)->get_custom_data()->request->component);
     }
+
+    /**
+     * Oversized draft HTML stops before any lookup, and before the edit payload is built.
+     */
+    public function test_oversized_draft_html_stops_before_encoding(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$ctx, , $page] = $this->make_page_context(11);
+        $draft = '<img data-dixeo-img-gen="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" src="x" />'
+            . str_repeat('x', \local_dixeo\util\input_limits::MAX_EDIT_CONTENT_BYTES);
+
+        $reads = $DB->perf_get_reads();
+        try {
+            editor_regenerate_service::build_api_context((int) $page->cmid, null, $draft, $ctx, (int) get_admin()->id);
+            $this->fail('Oversized draft HTML must stop.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:content_too_long', $e->errorcode);
+        }
+        $this->assertSame($reads, $DB->perf_get_reads());
+
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string(
+            'error:content_too_long',
+            'local_dixeo',
+            display_size(\local_dixeo\util\input_limits::MAX_EDIT_CONTENT_BYTES)
+        ));
+        editor_regenerate_service::build_edit_payload((int) $page->cmid, null, 'Shorter', $ctx, $draft, (int) get_admin()->id);
+    }
+
+    /**
+     * Encoding stops after the image cap and leaves later tags unchanged.
+     */
+    public function test_encode_leaves_tags_past_the_cap_unchanged(): void {
+        $this->resetAfterTest();
+
+        $cap = \local_dixeo\util\input_limits::MAX_IMAGES_PER_CONTENT;
+        $html = '';
+        for ($i = 0; $i <= $cap; $i++) {
+            $html .= '<img src="x.png" data-dixeo-img-gen="' . \core\uuid::generate() . '" alt="" />';
+        }
+        $last = '<img src="last.png" data-dixeo-img-gen="' . \core\uuid::generate() . '" alt="" />';
+        $html = preg_replace('/<img[^>]*>$/', $last, $html);
+
+        $encoded = (new editor_image_codec())->encode_html_for_api($html, $this->make_context());
+
+        $this->assertSame($cap, substr_count($encoded, '[img-gen ref='));
+        $this->assertSame(1, substr_count($encoded, '<img'));
+        $this->assertStringEndsWith($last, $encoded);
+    }
+
+    /**
+     * Decoding queues at most the image cap of new images and still restores every ref.
+     */
+    public function test_decode_caps_new_images_and_keeps_refs(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+        [$ctx] = $this->make_page_context(12);
+
+        $refs = ['11111111-2222-3333-4444-555555555555', '66666666-7777-8888-9999-000000000000'];
+        foreach ($refs as $ref) {
+            $location = $ctx->module_location(file_service::stub_filename_for_placeholder($ref));
+            file_service::create_stub($location, (int) get_admin()->id);
+        }
+        $cap = \local_dixeo\util\input_limits::MAX_IMAGES_PER_CONTENT;
+        $html = shortcode_parser::build_ref_shortcode($refs[0]);
+        for ($i = 0; $i <= $cap; $i++) {
+            $html .= '[img-gen prompt="Picture ' . $i . '"]';
+        }
+        $html .= shortcode_parser::build_ref_shortcode($refs[1]);
+
+        $result = (new editor_image_codec())->decode_html_from_api($html, $ctx, (int) get_admin()->id);
+
+        $this->assertCount($cap, $result->newplaceholderids);
+        $this->assertSame($cap, $DB->count_records('local_dixeo_image_job'));
+        $this->assertSame($refs, $result->restoredplaceholderids);
+        foreach ($refs as $ref) {
+            $this->assertStringContainsString('data-dixeo-img-gen="' . $ref . '"', $result->html);
+        }
+        $this->assertStringNotContainsString('[img-gen', $result->html);
+        $this->assertSame($cap + 2, substr_count($result->html, '<img'));
+    }
 }

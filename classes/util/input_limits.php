@@ -37,6 +37,12 @@ final class input_limits {
     /** @var int Maximum characters of activity generation instructions sent to Dixeo. */
     public const MAX_INSTRUCTIONS_CHARS = 10000;
 
+    /** @var int Maximum bytes of activity HTML sent to Dixeo for an AI edit. */
+    public const MAX_EDIT_CONTENT_BYTES = 512000;
+
+    /** @var int Maximum images one HTML content encodes, or queues generation for, in one request. */
+    public const MAX_IMAGES_PER_CONTENT = 30;
+
     /**
      * Decode a JSON array or object within size and depth bounds.
      *
@@ -112,6 +118,22 @@ final class input_limits {
     public static function require_max_bytes(string $value, int $maxbytes, string $field): void {
         if (strlen($value) > $maxbytes) {
             throw new \invalid_parameter_exception($field . ' is too long');
+        }
+    }
+
+    /**
+     * Stop when a value is larger than a byte limit, with a localised message.
+     *
+     * @param string $value Value to check.
+     * @param int $maxbytes Maximum length in bytes.
+     * @param string $errorkey Error string; receives display_size($maxbytes).
+     * @param string $component Component owning $errorkey.
+     * @return void
+     * @throws \moodle_exception $errorkey in $component; $a is display_size($maxbytes).
+     */
+    public static function require_max_size(string $value, int $maxbytes, string $errorkey, string $component): void {
+        if (strlen($value) > $maxbytes) {
+            throw new \moodle_exception($errorkey, $component, '', display_size($maxbytes));
         }
     }
 

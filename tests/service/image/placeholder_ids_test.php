@@ -81,4 +81,14 @@ final class placeholder_ids_test extends \basic_testcase {
         }
         return $ids;
     }
+
+    /**
+     * The status cap leaves room for every new image one content may queue.
+     */
+    public function test_cap_covers_the_images_of_one_content(): void {
+        $this->assertGreaterThanOrEqual(
+            \local_dixeo\util\input_limits::MAX_IMAGES_PER_CONTENT,
+            placeholder_ids::MAX_PER_REQUEST
+        );
+    }
 }

@@ -256,6 +256,7 @@ $string['error:consent_loggedinas'] = 'You are logged in as another user. Only t
 $string['error:consent_not_current'] = 'This was not sent to Dixeo because the current Dixeo Terms of Use are not accepted.';
 $string['error:consentrequired'] = 'Accept the current Dixeo Terms of Use on the course page to continue.';
 $string['error:content_rejected'] = 'The prompt was refused by the model. Try rewording it.';
+$string['error:content_too_long'] = 'This content is too large to edit with Dixeo AI (maximum {$a}).';
 $string['error:dixeo_disabled'] = 'Dixeo is turned off.';
 $string['error:generation_not_allowed'] = 'The person who requested this activity can no longer generate activities in this course.';
 $string['error:instructions_too_long'] = 'Instructions must be {$a} characters or fewer.';

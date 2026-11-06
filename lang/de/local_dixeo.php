@@ -256,6 +256,7 @@ $string['error:consent_loggedinas'] = 'Sie sind als anderer Nutzer angemeldet. N
 $string['error:consent_not_current'] = 'Dies wurde nicht an Dixeo gesendet, weil die aktuellen Dixeo-Nutzungsbedingungen nicht akzeptiert sind.';
 $string['error:consentrequired'] = 'Akzeptieren Sie die aktuellen Dixeo-Nutzungsbedingungen auf der Kursseite, um fortzufahren.';
 $string['error:content_rejected'] = 'Die Eingabe wurde vom Modell abgelehnt. Formulieren Sie sie um und versuchen Sie es erneut.';
+$string['error:content_too_long'] = 'Dieser Inhalt ist zu groß, um ihn mit Dixeo AI zu bearbeiten (maximal {$a}).';
 $string['error:dixeo_disabled'] = 'Dixeo ist ausgeschaltet.';
 $string['error:generation_not_allowed'] = 'Die Person, die diese Aktivität angefordert hat, kann in diesem Kurs keine Aktivitäten mehr generieren.';
 $string['error:instructions_too_long'] = 'Anweisungen dürfen höchstens {$a} Zeichen lang sein.';

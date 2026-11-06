@@ -137,6 +137,7 @@ public static function extend_course_context(\local_dixeo\hook\extend_course_con
 
 - Every remote job submission (`job_service::submit_job()` and `submit_and_wait()`) throws `error:dixeo_disabled` while Dixeo is off for the job's context, course or site. Cancelling a job, reading its status and remote erasure are not affected.
 - Image generation counts as off while Dixeo is off. Saving or decoding content there strips `[img-gen]` shortcodes instead of leaving placeholders that can never be generated.
+- Draft HTML sent for an AI edit is limited to `input_limits::MAX_EDIT_CONTENT_BYTES` (512000 bytes); larger content throws `error:content_too_long`. One content encodes at most `input_limits::MAX_IMAGES_PER_CONTENT` (30) images for the request and queues at most 30 new images from the response; further new-image shortcodes are removed, while existing images are always restored.
 
 **Upgrade note (2026110600):**
 

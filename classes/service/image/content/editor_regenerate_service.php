@@ -21,6 +21,7 @@ use local_dixeo\context\context_builder_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\module_generation_service;
+use local_dixeo\util\input_limits;
 
 /**
  * Builds encoded edit payloads and decodes AI responses for the content editor.
@@ -83,6 +84,7 @@ final class editor_regenerate_service {
      * @param editor_image_context $imagecontext
      * @param int $userid Acting user, needed to resolve their form draft files.
      * @return string
+     * @throws \moodle_exception error:content_too_long when $drafthtml exceeds input_limits::MAX_EDIT_CONTENT_BYTES.
      */
     public static function build_api_context(
         int $cmid,
@@ -91,6 +93,14 @@ final class editor_regenerate_service {
         editor_image_context $imagecontext,
         int $userid = 0
     ): string {
+        if ($drafthtml !== null) {
+            input_limits::require_max_size(
+                $drafthtml,
+                input_limits::MAX_EDIT_CONTENT_BYTES,
+                'error:content_too_long',
+                'local_dixeo'
+            );
+        }
         $raw = context_builder_factory::build_edit_context($cmid, $subid, $drafthtml);
         $codec = new editor_image_codec();
         $encoded = $codec->encode_context_block($raw, $imagecontext, $userid);
@@ -108,6 +118,7 @@ final class editor_regenerate_service {
      * @param string|null $drafthtml
      * @param int $userid Acting user, needed to resolve their form draft files.
      * @return array{payload: array, imagecontext: editor_image_context}
+     * @throws \moodle_exception error:content_too_long when $drafthtml exceeds input_limits::MAX_EDIT_CONTENT_BYTES.
      */
     public static function build_edit_payload(
         int $cmid,

@@ -256,6 +256,7 @@ $string['error:consent_loggedinas'] = 'Ha iniciado sesión como otro usuario. So
 $string['error:consent_not_current'] = 'No se envió a Dixeo porque no se han aceptado las Condiciones de uso actuales de Dixeo.';
 $string['error:consentrequired'] = 'Acepte las Condiciones de uso actuales de Dixeo en la página del curso para continuar.';
 $string['error:content_rejected'] = 'El modelo rechazó la indicación. Reformúlela e inténtelo de nuevo.';
+$string['error:content_too_long'] = 'Este contenido es demasiado grande para editarlo con Dixeo AI (máximo {$a}).';
 $string['error:dixeo_disabled'] = 'Dixeo está desactivado.';
 $string['error:generation_not_allowed'] = 'La persona que solicitó esta actividad ya no puede generar actividades en este curso.';
 $string['error:instructions_too_long'] = 'Las instrucciones deben tener {$a} caracteres como máximo.';

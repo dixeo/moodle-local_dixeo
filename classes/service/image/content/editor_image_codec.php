@@ -23,6 +23,7 @@ use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\generation_request;
 use local_dixeo\service\image\job_orchestrator;
 use local_dixeo\service\image\policy;
+use local_dixeo\util\input_limits;
 
 /**
  * Encode/decode img-gen shortcodes for Dixeo editor API round-trip.
@@ -35,6 +36,9 @@ final class editor_image_codec {
     /**
      * Replace pluginfile images in HTML with [img-gen ref/file] shortcodes for the remote API.
      *
+     * At most input_limits::MAX_IMAGES_PER_CONTENT <img> tags are encoded per call; later tags
+     * are returned unchanged, so one request costs a bounded number of file lookups.
+     *
      * @param string $html
      * @param editor_image_context $ctx
      * @param int $userid Acting user, needed to resolve their form draft files.
@@ -45,9 +49,13 @@ final class editor_image_codec {
             return $html;
         }
 
+        $count = 0;
         return (string) preg_replace_callback(
             '/<img\b[^>]*>/iu',
-            function (array $match) use ($ctx, $userid): string {
+            function (array $match) use ($ctx, $userid, &$count): string {
+                if (++$count > input_limits::MAX_IMAGES_PER_CONTENT) {
+                    return $match[0];
+                }
                 return $this->encode_img_tag($match[0], $ctx, $userid);
             },
             $html
@@ -85,6 +93,10 @@ final class editor_image_codec {
     /**
      * Decode API HTML: restore ref/file images and queue jobs for new shortcodes.
      *
+     * At most input_limits::MAX_IMAGES_PER_CONTENT new images are queued; further new-image
+     * shortcodes are removed with no stub and no job. Ref and file restores are not counted,
+     * because dropping one would delete an existing image.
+     *
      * @param string $html
      * @param editor_image_context $ctx
      * @param int $userid
@@ -108,10 +120,11 @@ final class editor_image_codec {
 
         $newids = [];
         $restoredids = [];
+        $newcount = 0;
 
         $decoded = (string) preg_replace_callback(
             shortcode_parser::SHORTCODE_PATTERN,
-            function (array $match) use ($ctx, $userid, &$newids, &$restoredids): string {
+            function (array $match) use ($ctx, $userid, &$newids, &$restoredids, &$newcount): string {
                 $parsed = shortcode_parser::find_all($match[0]);
                 if ($parsed === []) {
                     return '';
@@ -126,6 +139,9 @@ final class editor_image_codec {
                     return $this->restore_file_shortcode($spec, $ctx, $userid);
                 }
 
+                if (++$newcount > input_limits::MAX_IMAGES_PER_CONTENT) {
+                    return '';
+                }
                 $img = $this->create_new_shortcode_image($spec, $ctx, $userid);
                 if ($img !== '') {
                     if (preg_match('/\bdata-dixeo-img-gen="([^"]+)"/', $img, $idmatch)) {

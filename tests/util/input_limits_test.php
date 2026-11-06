@@ -107,4 +107,21 @@ final class input_limits_test extends \advanced_testcase {
         $this->assertFalse(input_limits::is_bounded([[1, 2, 3]], 2, 3, 2));
         $this->assertTrue(input_limits::is_bounded(42, 0, 0, 0));
     }
+
+    /**
+     * A value of exactly the byte limit passes; one byte more stops with a localised size message.
+     */
+    public function test_require_max_size(): void {
+        input_limits::require_max_size(str_repeat('x', 10), 10, 'error:content_too_long', 'local_dixeo');
+
+        try {
+            input_limits::require_max_size(str_repeat('x', 11), 10, 'error:content_too_long', 'local_dixeo');
+            $this->fail('A value over the byte limit must stop.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:content_too_long', $e->errorcode);
+            $this->assertSame('local_dixeo', $e->module);
+            $this->assertSame(display_size(10), $e->a);
+            $this->assertStringContainsString(display_size(10), $e->getMessage());
+        }
+    }
 }
