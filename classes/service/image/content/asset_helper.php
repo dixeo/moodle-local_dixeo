@@ -36,6 +36,12 @@ final class asset_helper {
     /** @var string|null */
     private static $errorbinary = null;
 
+    /** @var string|null SHA-1 of the placeholder asset. */
+    private static $placeholderhash = null;
+
+    /** @var string|null SHA-1 of the error asset. */
+    private static $errorhash = null;
+
     /**
      * PNG bytes shown while an [img-gen] job is pending.
      *
@@ -70,8 +76,9 @@ final class asset_helper {
         if ($contenthash === '') {
             return false;
         }
-        return $contenthash === sha1(self::get_placeholder_binary())
-            || $contenthash === sha1(self::get_error_binary());
+        self::$placeholderhash ??= sha1(self::get_placeholder_binary());
+        self::$errorhash ??= sha1(self::get_error_binary());
+        return $contenthash === self::$placeholderhash || $contenthash === self::$errorhash;
     }
 
     /**

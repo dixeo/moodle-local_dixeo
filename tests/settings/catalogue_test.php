@@ -314,6 +314,8 @@ final class catalogue_test extends \advanced_testcase {
         unset_config('version', 'block_dixeo_tutor');
         unset_config('version', 'block_dixeo_designer');
         unset_config('version', 'plagiarism_dixeo');
+        // The uninstall is seen by the next request; drop the definitions this request already loaded.
+        catalogue::reset();
 
         $settings = catalogue::load();
         $this->assertArrayHasKey('enabled', $settings);

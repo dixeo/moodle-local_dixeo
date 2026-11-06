@@ -82,6 +82,7 @@ class course_template_service {
             $templates = $this->list_templates();
             $normalised = $this->normalise_templates($templates);
             $cache->set(self::CACHE_KEY_TEMPLATES, $normalised);
+            \local_dixeo\settings\catalogue::reset();
             return $normalised;
         } catch (api_exception $e) {
             debugging('Unable to load course templates from Dixeo API: ' . $e->getMessage(), DEBUG_DEVELOPER);

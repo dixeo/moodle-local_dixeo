@@ -50,6 +50,9 @@ final class config {
     /** @var string Catalogue key for the master switch. */
     private const ENABLED = 'enabled';
 
+    /** @var int Seconds a request reuses a course's master switch value. */
+    private const ENABLED_MEMO_TTL = 30;
+
     /**
      * Effective value at $context, falling back through the parent chain.
      *
@@ -293,6 +296,10 @@ final class config {
      * course value. Any other context follows the Dixeo layer. This read does not
      * require an edit capability.
      *
+     * The Dixeo layer is read on every call. The course layer is kept in a request cache per
+     * course for up to {@see self::ENABLED_MEMO_TTL} seconds, because filters and output hooks
+     * ask once per formatted text. A write through this class is visible at once.
+     *
      * @param \context $context System, course, or a context inside a course.
      * @return bool
      */
@@ -304,7 +311,36 @@ final class config {
         if (!$coursecontext instanceof \context) {
             return true;
         }
-        return $this->get(self::COMPONENT, self::ENABLED, $coursecontext)->get_value() === '1';
+        $cache = self::enabled_course_memo();
+        $now = \core\di::get(\core\clock::class)->time();
+        $cached = $cache->get($coursecontext->id);
+        if (is_array($cached) && ($now - (int) $cached['t']) < self::ENABLED_MEMO_TTL) {
+            return $cached['v'] === 1;
+        }
+        $enabled = $this->get(self::COMPONENT, self::ENABLED, $coursecontext)->get_value() === '1';
+        $cache->set($coursecontext->id, ['v' => $enabled ? 1 : 0, 't' => $now]);
+        return $enabled;
+    }
+
+    /**
+     * Request cache of time-stamped course master switch values, keyed by course context id.
+     *
+     * @return \cache
+     */
+    private static function enabled_course_memo(): \cache {
+        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'enabledcourse');
+    }
+
+    /**
+     * Forget request-cached reads that a stored value can change.
+     *
+     * @param definition $definition Catalogue entry that was written.
+     */
+    private function forget_memos(definition $definition): void {
+        catalogue::reset();
+        if ($definition->get_component() === self::COMPONENT && $definition->get_key() === self::ENABLED) {
+            self::enabled_course_memo()->purge();
+        }
     }
 
     /**
@@ -1003,6 +1039,7 @@ final class config {
      */
     private function delete_stored(definition $definition, \context $context, string $level): void {
         global $DB;
+        $this->forget_memos($definition);
         if ($level === resolver::LAYER_DIXEO) {
             unset_config($definition->get_key(), $definition->get_component());
             return;
@@ -1027,6 +1064,7 @@ final class config {
      */
     private function write_stored(definition $definition, \context $context, string $level, string $value): void {
         global $DB;
+        $this->forget_memos($definition);
         if ($level === resolver::LAYER_DIXEO) {
             set_config($definition->get_key(), $value, $definition->get_component());
             return;

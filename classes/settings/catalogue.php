@@ -27,14 +27,64 @@ namespace local_dixeo\settings;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class catalogue {
+    /** @var int Seconds a request reuses the loaded definitions before scanning the callbacks again. */
+    private const MEMO_TTL = 30;
+
     /**
      * Definitions declared by every installed `*_dixeo_settings()` callback, keyed by setting key.
      *
-     * Keys are unique across components.
+     * Keys are unique across components. Every settings read goes through here, so the result is
+     * kept in a request cache per language (the callbacks return translated labels and defaults)
+     * for up to {@see self::MEMO_TTL} seconds. Long-running processes such as cron therefore see
+     * newly installed plugins and stored values that feed option lists. Install and upgrade always
+     * scan, because plugins and their callbacks change while they run.
      *
      * @return definition[]
      */
     public static function load(): array {
+        global $CFG;
+
+        $memoised = !during_initial_install() && empty($CFG->upgraderunning);
+        if ($memoised) {
+            $key = current_language();
+            $now = \core\di::get(\core\clock::class)->time();
+            $cached = self::memo()->get($key);
+            if (is_array($cached) && ($now - (int) $cached['t']) < self::MEMO_TTL) {
+                return $cached['d'];
+            }
+        }
+        $definitions = self::scan();
+        if ($memoised) {
+            self::memo()->set($key, ['t' => $now, 'd' => $definitions]);
+        }
+        return $definitions;
+    }
+
+    /**
+     * Forget the definitions kept by {@see self::load()} in this request.
+     *
+     * Called after a write that can change callback output, such as a stored setting value or
+     * the course template list.
+     */
+    public static function reset(): void {
+        self::memo()->purge();
+    }
+
+    /**
+     * Request cache of time-stamped definitions, keyed by language.
+     *
+     * @return \cache
+     */
+    private static function memo(): \cache {
+        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'settingscatalogue');
+    }
+
+    /**
+     * Definitions read from every installed `*_dixeo_settings()` callback.
+     *
+     * @return definition[]
+     */
+    private static function scan(): array {
         global $CFG;
 
         $rows = [];
