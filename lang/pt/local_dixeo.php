@@ -252,6 +252,7 @@ $string['error:activity_not_available'] = 'O tipo de atividade {$a} não está i
 $string['error:api_url_https_required'] = 'O URL da API Dixeo deve ser um endereço HTTPS absoluto (por exemplo https://api.dixeo.com).';
 $string['error:authentication'] = 'Autenticação falhou. Verifique a sua chave API.';
 $string['error:busy'] = 'O serviço de IA está ocupado. Tente novamente dentro de alguns minutos.';
+$string['error:consent_loggedinas'] = 'Iniciou sessão como outro utilizador. Apenas esse utilizador pode aceitar ou retirar os Termos de utilização da Dixeo.';
 $string['error:consent_not_current'] = 'Isto não foi enviado para a Dixeo porque os Termos de utilização atuais da Dixeo não foram aceites.';
 $string['error:consentrequired'] = 'Aceite os Termos de utilização atuais da Dixeo na página do curso para continuar.';
 $string['error:content_rejected'] = 'O modelo recusou a instrução. Reformule-a e tente novamente.';

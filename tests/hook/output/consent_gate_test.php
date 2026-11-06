@@ -138,6 +138,33 @@ final class consent_gate_test extends \advanced_testcase {
     }
 
     /**
+     * While an administrator is logged in as the user, the lock explains why and offers no form.
+     */
+    public function test_logged_in_as_shows_the_notice_instead_of_the_form(): void {
+        global $PAGE;
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $this->open_course($user, $course);
+        $html = $this->render_lock();
+        $this->assertStringContainsString('id="local-dixeo-consent-form"', $html);
+        $this->assertStringNotContainsString(get_string('error:consent_loggedinas', 'local_dixeo'), $html);
+
+        $this->setAdminUser();
+        \core\session\manager::loginas((int) $user->id, \context_system::instance());
+
+        $headers = new before_http_headers($PAGE->get_renderer('core'));
+        consent_gate::lock_body($headers);
+        $this->assertStringContainsString('local-dixeo-consent-locked', $PAGE->bodyclasses);
+        $html = $this->render_lock();
+        $this->assertStringContainsString('data-region="local-dixeo-consent-lock"', $html);
+        $this->assertStringContainsString(s(get_string('error:consent_loggedinas', 'local_dixeo')), $html);
+        $this->assertStringContainsString(get_string('consent_exit', 'local_dixeo'), $html);
+        $this->assertStringNotContainsString('local-dixeo-consent-form', $html);
+        $this->assertStringNotContainsString('name="sesskey"', $html);
+    }
+
+    /**
      * Render the top-of-body hook output for the current page.
      *
      * @return string

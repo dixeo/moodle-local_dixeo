@@ -381,6 +381,62 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * No decision is recorded or withdrawn while an administrator is logged in as the user.
+     */
+    public function test_decisions_refused_while_logged_in_as(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $accepted = $this->getDataGenerator()->create_user();
+        $userid = (int) $user->id;
+        $service = new consent_service();
+        $service->accept((int) $accepted->id);
+        $this->assertFalse($service->manage_context($userid)['loggedinas']);
+
+        $this->setAdminUser();
+        \core\session\manager::loginas($userid, \context_system::instance());
+        $rows = $DB->count_records(consent_service::TABLE);
+
+        $calls = [
+            'accept' => fn() => $service->accept($userid),
+            'set_processing on' => fn() => $service->set_processing($userid, true),
+            'set_processing off' => fn() => $service->set_processing($userid, false),
+            'withdraw_terms' => fn() => $service->withdraw_terms($userid),
+            'withdraw accepted user' => fn() => $service->withdraw_terms((int) $accepted->id),
+        ];
+        foreach ($calls as $label => $call) {
+            try {
+                $call();
+                $this->fail($label . ' must be refused while logged in as.');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('error:consent_loggedinas', $e->errorcode, $label);
+                $this->assertSame('local_dixeo', $e->module, $label);
+            }
+        }
+        $this->assertSame($rows, $DB->count_records(consent_service::TABLE));
+        $this->assertFalse($service->terms_current($userid));
+        $this->assertTrue($service->terms_current((int) $accepted->id));
+
+        $context = $service->manage_context($userid);
+        $this->assertTrue($context['loggedinas']);
+        $this->assertSame(get_string('error:consent_loggedinas', 'local_dixeo'), $context['loggedinasnotice']);
+        $html = $service->manage_html($userid);
+        $this->assertStringContainsString(s(get_string('error:consent_loggedinas', 'local_dixeo')), $html);
+        $this->assertStringContainsString(get_string('consent_close', 'local_dixeo'), $html);
+        $this->assertStringNotContainsString('local-dixeo-consent-save-form', $html);
+        $this->assertStringNotContainsString('data-action="revoke-consent"', $html);
+        $this->assertStringNotContainsString('local-dixeo-consent-revoke', $html);
+        $this->assertStringNotContainsString(
+            'local-dixeo-consent-revoke',
+            $service->manage_html((int) $accepted->id)
+        );
+
+        $this->setUser($user);
+        $service->accept($userid);
+        $this->assertTrue($service->terms_current($userid));
+    }
+
+    /**
      * may_process_for() needs a real user, an existing course with Dixeo on and current terms.
      */
     public function test_may_process_for(): void {

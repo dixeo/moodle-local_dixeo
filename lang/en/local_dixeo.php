@@ -252,6 +252,7 @@ $string['error:activity_not_available'] = 'The activity type {$a} is not install
 $string['error:api_url_https_required'] = 'The Dixeo API URL must be an absolute HTTPS address (for example https://api.dixeo.com).';
 $string['error:authentication'] = 'Authentication failed. Please check your API key.';
 $string['error:busy'] = 'The AI service is busy. Please try again in a few minutes.';
+$string['error:consent_loggedinas'] = 'You are logged in as another user. Only that user can accept or withdraw the Dixeo Terms of Use.';
 $string['error:consent_not_current'] = 'This was not sent to Dixeo because the current Dixeo Terms of Use are not accepted.';
 $string['error:consentrequired'] = 'Accept the current Dixeo Terms of Use on the course page to continue.';
 $string['error:content_rejected'] = 'The prompt was refused by the model. Try rewording it.';

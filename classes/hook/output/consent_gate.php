@@ -86,6 +86,8 @@ class consent_gate {
         $context['courseid'] = $courseid;
         $context['returnurl'] = self::return_url($courseid);
         $context['exiturl'] = (new \moodle_url('/'))->out(false);
+        $context['loggedinas'] = \core\session\manager::is_loggedinas();
+        $context['loggedinasnotice'] = get_string('error:consent_loggedinas', 'local_dixeo');
 
         $PAGE->requires->js_call_amd('local_dixeo/consent_gate', 'init');
         $hook->add_html($PAGE->get_renderer('core')->render_from_template('local_dixeo/consent_gate', $context));

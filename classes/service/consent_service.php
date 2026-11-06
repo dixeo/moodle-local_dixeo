@@ -239,8 +239,10 @@ class consent_service {
      * Record acceptance of the current notice.
      *
      * @param int $userid User id.
+     * @throws \moodle_exception error:consent_loggedinas while an administrator is logged in as the user.
      */
     public function accept(int $userid): void {
+        $this->require_own_session();
         if ($this->terms_current($userid)) {
             return;
         }
@@ -254,6 +256,7 @@ class consent_service {
      *
      * @param int $userid User id.
      * @param bool $granted True to accept, false to withdraw.
+     * @throws \moodle_exception error:consent_loggedinas while an administrator is logged in as the user.
      */
     public function set_processing(int $userid, bool $granted): void {
         if ($granted) {
@@ -270,8 +273,10 @@ class consent_service {
      * for this user are deleted.
      *
      * @param int $userid User id.
+     * @throws \moodle_exception error:consent_loggedinas while an administrator is logged in as the user.
      */
     public function withdraw_terms(int $userid): void {
+        $this->require_own_session();
         if ($this->terms_current($userid)) {
             $latest = $this->latest($userid);
             $documentid = $latest ? (int) $latest->documentid : $this->document_id();
@@ -279,6 +284,19 @@ class consent_service {
         }
         if ($this->has_analytics($userid)) {
             $this->delete_analytics($userid);
+        }
+    }
+
+    /**
+     * Refuse to record a decision while an administrator is logged in as the user.
+     *
+     * Only the user can accept or withdraw the Dixeo Terms of Use.
+     *
+     * @throws \moodle_exception error:consent_loggedinas
+     */
+    private function require_own_session(): void {
+        if (\core\session\manager::is_loggedinas()) {
+            throw new \moodle_exception('error:consent_loggedinas', 'local_dixeo');
         }
     }
 
@@ -307,6 +325,8 @@ class consent_service {
         $template['sesskey'] = sesskey();
         $template['canwithdrawterms'] = $this->terms_current($userid);
         $template['locked'] = $template['termschecked'] && $template['processingchecked'];
+        $template['loggedinas'] = \core\session\manager::is_loggedinas();
+        $template['loggedinasnotice'] = get_string('error:consent_loggedinas', 'local_dixeo');
         return $template;
     }
 

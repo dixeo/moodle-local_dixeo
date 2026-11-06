@@ -24,6 +24,8 @@
     * actionurl - Form action
     * sesskey - Session key
     * sections - Notice sections
+    * loggedinas - True while an administrator is logged in as the user; the forms are replaced by a notice
+    * loggedinasnotice - Why the choices cannot be changed in this session
 
     Example context (json):
     {
@@ -40,6 +42,8 @@
         "closeurl": "https://example.com/",
         "actionurl": "https://example.com/local/dixeo/consent.php",
         "sesskey": "sesskey",
+        "loggedinas": false,
+        "loggedinasnotice": "You are logged in as another user. Only that user can accept or withdraw the Dixeo Terms of Use.",
         "sections": [
             {
                 "id": "local-dixeo-consent-terms-section",
@@ -65,6 +69,16 @@
     <div class="local-dixeo-consent-manage-body">
         {{> local_dixeo/consent_sections }}
     </div>
+    {{#loggedinas}}
+    <div class="alert alert-warning" role="alert">{{loggedinasnotice}}</div>
+    <div class="local-dixeo-consent-actions">
+        <button type="button"
+                class="btn btn-primary"
+                data-action="hide"
+                data-close-url="{{closeurl}}">{{closelabel}}</button>
+    </div>
+    {{/loggedinas}}
+    {{^loggedinas}}
     {{#locked}}
     <div class="local-dixeo-consent-manage-form">
         <label class="local-dixeo-consent-check" for="local-dixeo-consent-manage-terms">
@@ -144,4 +158,5 @@
     </form>
     {{/canwithdrawterms}}
     {{/locked}}
+    {{/loggedinas}}
 </div>

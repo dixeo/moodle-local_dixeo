@@ -16,6 +16,8 @@
     * returnurl - Local URL to reopen after Continue
     * exiturl - Site home
     * version - Document version
+    * loggedinas - True while an administrator is logged in as the user; the form is replaced by a notice
+    * loggedinasnotice - Why the terms cannot be accepted in this session
 
     Example context (json):
     {
@@ -40,7 +42,9 @@
         "courseid": 2,
         "returnurl": "https://example.com/course/view.php?id=2",
         "exiturl": "https://example.com/",
-        "version": "2026-10-15.1"
+        "version": "2026-10-15.1",
+        "loggedinas": false,
+        "loggedinasnotice": "You are logged in as another user. Only that user can accept or withdraw the Dixeo Terms of Use."
     }
 }}
 <div class="local-dixeo-consent-lock" data-region="local-dixeo-consent-lock">
@@ -53,6 +57,13 @@
         <div class="local-dixeo-consent-body">
             {{> local_dixeo/consent_sections }}
         </div>
+        {{#loggedinas}}
+        <div class="alert alert-warning" role="alert">{{loggedinasnotice}}</div>
+        <div class="local-dixeo-consent-actions">
+            <a class="btn btn-secondary" href="{{exiturl}}">{{exitlabel}}</a>
+        </div>
+        {{/loggedinas}}
+        {{^loggedinas}}
         <form class="local-dixeo-consent-form"
               method="post"
               action="{{actionurl}}"
@@ -79,5 +90,6 @@
                         disabled>{{continuelabel}}</button>
             </div>
         </form>
+        {{/loggedinas}}
     </div>
 </div>
