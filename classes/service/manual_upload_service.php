@@ -84,6 +84,8 @@ class manual_upload_service {
      * @param array $uploadedfile $_FILES entry shape.
      * @return array{cmid: int, id: int, name: string}
      * @throws coding_exception|moodle_exception
+     * @throws \local_dixeo\exception\consent_required_exception error:consentrequired when the user has not accepted
+     *         the current Dixeo Terms of Use
      */
     public function create_from_upload(
         string $modtype,
@@ -228,15 +230,23 @@ class manual_upload_service {
     }
 
     /**
-     * Validate course login, generate and manageactivities capabilities.
+     * Validate course login, generate and manageactivities capabilities, and the current Terms of Use.
+     *
+     * The upload ends with a course file sync that sends the file to Dixeo, so the acting user
+     * must have accepted the current Dixeo Terms of Use before anything is staged.
      *
      * @param int $courseid Course ID.
+     * @throws \local_dixeo\exception\consent_required_exception error:consentrequired when the user has not accepted
+     *         the current Dixeo Terms of Use
      */
     private function validate_course_access(int $courseid): void {
+        global $USER;
+
         require_course_login($courseid);
         $context = context_course::instance($courseid);
         require_capability('local/dixeo:generate', $context);
         require_capability('moodle/course:manageactivities', $context);
+        (new consent_service())->require_accepted((int) $USER->id, $context);
     }
 
     /**
