@@ -70,7 +70,7 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $this->assertSame(consent_service::ACTION_GRANTED, $decision->action);
         $this->assertSame(consent_service::VERSION, $decision->version);
         $this->assertSame(current_language(), $decision->lang);
-        $this->assertSame((new consent_notice())->hash(), $decision->documenthash);
+        $this->assertSame((new consent_notice())->terms_hash(), $decision->documenthash);
         $this->assertStringContainsString((new consent_notice())->terms_statement(), $decision->documenttext);
         $this->assertSame(1, $DB->count_records(consent_service::TABLE, ['userid' => $user->id]));
         $this->assertSame(1, $DB->count_records(consent_service::TABLE_DOCUMENT, [
@@ -122,7 +122,7 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * A changed document version or a changed text in the same language asks again.
+     * A changed document version or a changed terms hash in the same language asks again.
      */
     public function test_version_or_hash_change_reprompts(): void {
         global $DB;
@@ -143,6 +143,127 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $DB->set_field(consent_service::TABLE_DOCUMENT, 'documenthash', str_repeat('a', 64), ['id' => $decision->documentid]);
         $this->start_new_request();
         $this->assertTrue($service->gate_required((int) $user->id, $context));
+    }
+
+    /**
+     * Site name, support email, Dixeo API URL and site URL are not part of the terms.
+     */
+    public function test_site_values_do_not_reprompt(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $service = new consent_service();
+        $service->accept((int) $user->id);
+
+        $notice = new consent_notice();
+        $termshash = $notice->terms_hash();
+
+        $this->change_site_values();
+        $this->start_new_request();
+
+        $this->assertTrue((new consent_service())->terms_current((int) $user->id));
+        $this->assertSame($termshash, $notice->terms_hash());
+    }
+
+    /**
+     * An acceptance after a site change points at the notice stored first for the same terms.
+     */
+    public function test_acceptance_after_site_change_reuses_the_stored_notice(): void {
+        global $DB, $SITE;
+
+        $first = $this->getDataGenerator()->create_user();
+        $second = $this->getDataGenerator()->create_user();
+        $oldname = $SITE->fullname;
+        (new consent_service())->accept((int) $first->id);
+        $firstdecision = (new consent_service())->latest((int) $first->id);
+
+        $this->change_site_values();
+        $this->start_new_request();
+        (new consent_service())->accept((int) $second->id);
+        $seconddecision = (new consent_service())->latest((int) $second->id);
+
+        $this->assertSame(1, $DB->count_records(consent_service::TABLE_DOCUMENT, [
+            'documenthash' => (new consent_notice())->terms_hash(),
+        ]));
+        $this->assertEquals($firstdecision->documentid, $seconddecision->documentid);
+        $text = $DB->get_field(consent_service::TABLE_DOCUMENT, 'documenttext', ['id' => $firstdecision->documentid]);
+        $this->assertStringContainsString($oldname, $text);
+        $this->assertStringNotContainsString('Renamed Dixeo Site', $text);
+    }
+
+    /**
+     * A local customisation of a consent string in the same language asks again.
+     */
+    public function test_string_edit_reprompts(): void {
+        global $CFG;
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $service = new consent_service();
+        $service->accept((int) $user->id);
+        $this->assertFalse($service->gate_required((int) $user->id, $context));
+
+        $dir = $CFG->langlocalroot . '/en_local';
+        make_writable_directory($dir);
+        $file = $dir . '/local_dixeo.php';
+        file_put_contents($file, "<?php\n\$string['consent_terms_body'] = 'Edited terms for {\$a->sitename}.';\n");
+        get_string_manager()->reset_caches(true);
+        $this->start_new_request();
+
+        try {
+            $this->assertSame('Edited terms for {$a->sitename}.', get_string('consent_terms_body', 'local_dixeo'));
+            $this->assertTrue((new consent_service())->gate_required((int) $user->id, $context));
+        } finally {
+            unlink($file);
+            get_string_manager()->reset_caches(true);
+        }
+    }
+
+    /**
+     * An acceptance stored with the earlier rendered-text hash is asked again.
+     */
+    public function test_old_format_acceptance_is_asked_again(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $service = new consent_service();
+        $service->accept((int) $user->id);
+        $this->assertFalse($service->gate_required((int) $user->id, $context));
+
+        $oldhash = hash(
+            'sha256',
+            consent_service::VERSION . "\n" . current_language() . "\n" . (new consent_notice())->document_text()
+        );
+        $DB->set_field(consent_service::TABLE_DOCUMENT, 'documenthash', $oldhash, [
+            'id' => $service->latest((int) $user->id)->documentid,
+        ]);
+        $this->start_new_request();
+
+        $this->assertTrue($service->gate_required((int) $user->id, $context));
+    }
+
+    /**
+     * An acceptance in another language counts for the same version, whatever its hash.
+     */
+    public function test_other_language_counts_for_same_version(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $service = new consent_service();
+        $service->accept((int) $user->id);
+        $documentid = $service->latest((int) $user->id)->documentid;
+        $DB->update_record(consent_service::TABLE_DOCUMENT, (object) [
+            'id' => $documentid,
+            'lang' => 'xx',
+            'documenthash' => str_repeat('a', 64),
+        ]);
+        $this->start_new_request();
+        $this->assertTrue($service->terms_current((int) $user->id));
+
+        $DB->set_field(consent_service::TABLE_DOCUMENT, 'version', '1999-01-01.1', ['id' => $documentid]);
+        $this->start_new_request();
+        $this->assertFalse($service->terms_current((int) $user->id));
     }
 
     /**
@@ -533,6 +654,30 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $string = [];
         include(__DIR__ . "/../lang/{$lang}/local_dixeo.php");
         return $string;
+    }
+
+    /**
+     * Change the site name, support email, Dixeo API URL and site URL.
+     */
+    private function change_site_values(): void {
+        global $CFG;
+
+        $this->set_site_name('Renamed Dixeo Site');
+        $CFG->supportemail = 'privacy@other.example';
+        set_config('api_url', 'https://other.example', 'local_dixeo');
+        $CFG->wwwroot = 'https://moved.example';
+    }
+
+    /**
+     * Rename the site in the database and in the global.
+     *
+     * @param string $name New site full name.
+     */
+    private function set_site_name(string $name): void {
+        global $DB, $SITE;
+
+        $DB->set_field('course', 'fullname', $name, ['id' => SITEID]);
+        $SITE->fullname = $name;
     }
 
     /**

@@ -133,6 +133,12 @@ public static function extend_course_context(\local_dixeo\hook\extend_course_con
 
 ## Upgrade notes
 
+**Upgrade note (2026110600):**
+
+- After this upgrade, each user is asked once to accept the Dixeo Terms of Use again.
+- From then on, changing the site name, site URL, support email or Dixeo API URL no longer asks again. A change of controller or processor is published by bumping the terms version.
+- The stored notice text is the one rendered when that terms version was first accepted in that language.
+
 **Upgrade note (2026110502):** teacher-side Dixeo actions now check on the server that the user has accepted the current Dixeo Terms of Use, as the course-page dialog already did in the browser. When the acting user has not accepted, the following throw the exception `error:consentrequired` (component `local_dixeo`, "Accept the current Dixeo Terms of Use on the course page to continue."):
 
 - the web services `local_dixeo_generate_module`, `local_dixeo_create_module_from_job`, `local_dixeo_trigger_file_sync` and `local_dixeo_set_file_sync_enabled` (when enabling);

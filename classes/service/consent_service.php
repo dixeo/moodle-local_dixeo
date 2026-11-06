@@ -19,9 +19,11 @@ namespace local_dixeo\service;
 /**
  * Records one Terms of Use decision per user action.
  *
- * The notice text is stored once per hash. Each decision points at that row.
- * The latest decision is the current choice. A new version, or edited text in the
- * same language, asks again. Switching language does not.
+ * One notice row is stored per terms hash; its text is the rendering stored first.
+ * Each decision points at that row. The latest decision is the current choice.
+ * A new version, or edited consent strings in the same language, asks again.
+ * Switching language does not, and neither does a change of site name, site URL,
+ * support email or Dixeo API URL.
  *
  * Accepting records tutor usage analytics. Withdrawing deletes analytics already stored.
  *
@@ -33,14 +35,16 @@ class consent_service {
     /** @var string One acceptance or withdrawal per user action. */
     public const TABLE = 'local_dixeo_consent';
 
-    /** @var string Notice text, one row per hash. */
+    /** @var string Stored notices: one row per terms hash; the text is the rendering stored first. */
     public const TABLE_DOCUMENT = 'local_dixeo_consent_document';
 
     /**
      * Document version shown to the user.
      *
      * Bump this when the Terms of Use, Privacy Notice, or analytics statement changes
-     * so people who already accepted are asked again.
+     * so people who already accepted are asked again. The site name, contact and Dixeo
+     * API URL are not part of the terms hash, so a change of controller, contact or
+     * processor also needs a bump.
      */
     public const VERSION = '2026-10-15.1';
 
@@ -429,8 +433,9 @@ class consent_service {
     /**
      * Whether the latest decision is this action on the current notice.
      *
-     * A different language still counts for the same version. The same language
-     * must match the hash of the text now shown, so an edited translation asks again.
+     * A different language still counts for the same version. The same language must
+     * match the terms hash of the raw consent strings, so an edited translation asks again
+     * while site values such as the site name or URL do not.
      *
      * @param int $userid User id.
      * @param string $action Action constant.
@@ -444,17 +449,17 @@ class consent_service {
         if ((string) $latest->version !== self::VERSION) {
             return false;
         }
-        if (
-            (string) $latest->lang === current_language()
-            && !hash_equals((string) $latest->documenthash, $this->notice()->hash())
-        ) {
-            return false;
+        if ((string) $latest->lang !== current_language()) {
+            return true;
         }
-        return true;
+        return hash_equals((string) $latest->documenthash, $this->notice()->terms_hash());
     }
 
     /**
      * Id of the stored notice for the text shown now.
+     *
+     * An existing row with the same terms hash is reused and its text is never rewritten,
+     * so it keeps the rendering stored first, which can differ in site name, contact or URLs.
      *
      * @return int
      */
@@ -462,7 +467,7 @@ class consent_service {
         global $DB;
 
         $notice = $this->notice();
-        $hash = $notice->hash();
+        $hash = $notice->terms_hash();
         $existing = $DB->get_field(self::TABLE_DOCUMENT, 'id', ['documenthash' => $hash]);
         if ($existing) {
             return (int) $existing;

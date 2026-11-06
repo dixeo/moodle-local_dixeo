@@ -29,12 +29,32 @@ namespace local_dixeo\service;
  */
 class consent_notice {
     /**
+     * Lang string keys of the notice text, in display order.
+     *
+     * The sections, the stored text and the terms hash all read these keys, so a string
+     * added to the notice is always covered by the terms hash.
+     */
+    private const TERMS_STRINGS = [
+        'termsheading' => 'consent_terms_heading',
+        'termsbody' => 'consent_terms_body',
+        'privacyheading' => 'consent_privacy_heading',
+        'privacybody' => 'consent_privacy_body',
+        'processingheading' => 'consent_processing_heading',
+        'processingbody' => 'consent_processing_body',
+        'termscheckbox' => 'consent_terms_checkbox',
+        'processingcheckbox' => 'consent_processing_checkbox',
+    ];
+
+    /** @var string Lang string key of the data-privacy link label, shown when that tool is installed. */
+    private const DATA_PROTECTION_STRING = 'consent_privacy_dataprotection';
+
+    /**
      * Checkbox text for the Terms of Use.
      *
      * @return string
      */
     public function terms_statement(): string {
-        return get_string('consent_terms_checkbox', 'local_dixeo');
+        return get_string(self::TERMS_STRINGS['termscheckbox'], 'local_dixeo');
     }
 
     /**
@@ -43,16 +63,34 @@ class consent_notice {
      * @return string
      */
     public function processing_statement(): string {
-        return get_string('consent_processing_checkbox', 'local_dixeo');
+        return get_string(self::TERMS_STRINGS['processingcheckbox'], 'local_dixeo');
     }
 
     /**
-     * SHA-256 of the version, language, and text shown.
+     * SHA-256 of the terms: version, language, raw consent strings and notice structure.
+     *
+     * Strings are read without placeholder values, so the site name, contact, Dixeo API URL
+     * and site URL are not covered. Local string customisations are. It identifies the stored
+     * notice row, and an acceptance stays current while this value is unchanged.
      *
      * @return string
      */
-    public function hash(): string {
-        return hash('sha256', consent_service::VERSION . "\n" . current_language() . "\n" . $this->document_text());
+    public function terms_hash(): string {
+        $dataprotection = $this->has_data_protection();
+        $strings = [];
+        foreach (self::TERMS_STRINGS as $key) {
+            $strings[$key] = get_string($key, 'local_dixeo');
+        }
+        if ($dataprotection) {
+            $strings[self::DATA_PROTECTION_STRING] = get_string(self::DATA_PROTECTION_STRING, 'local_dixeo');
+        }
+        $payload = [
+            'version' => consent_service::VERSION,
+            'lang' => current_language(),
+            'strings' => $strings,
+            'dataprotection' => $dataprotection,
+        ];
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -77,7 +115,7 @@ class consent_notice {
         }
         $url = $this->data_protection_url();
         if ($url !== null) {
-            $chunks[] = get_string('consent_privacy_dataprotection', 'local_dixeo') . "\n" . $url;
+            $chunks[] = get_string(self::DATA_PROTECTION_STRING, 'local_dixeo') . "\n" . $url;
         }
         $chunks[] = $this->terms_statement();
         $chunks[] = $this->processing_statement();
@@ -101,7 +139,7 @@ class consent_notice {
             'version' => consent_service::VERSION,
             'dataprotectionurl' => $url,
             'hasdataprotection' => $url !== null,
-            'dataprotectionlabel' => get_string('consent_privacy_dataprotection', 'local_dixeo'),
+            'dataprotectionlabel' => get_string(self::DATA_PROTECTION_STRING, 'local_dixeo'),
         ];
     }
 
@@ -115,18 +153,18 @@ class consent_notice {
         return [
             [
                 'id' => 'local-dixeo-consent-terms-section',
-                'heading' => get_string('consent_terms_heading', 'local_dixeo'),
-                'blocks' => $this->body_blocks(get_string('consent_terms_body', 'local_dixeo', $a)),
+                'heading' => get_string(self::TERMS_STRINGS['termsheading'], 'local_dixeo'),
+                'blocks' => $this->body_blocks(get_string(self::TERMS_STRINGS['termsbody'], 'local_dixeo', $a)),
             ],
             [
                 'id' => 'local-dixeo-consent-privacy-section',
-                'heading' => get_string('consent_privacy_heading', 'local_dixeo'),
-                'blocks' => $this->body_blocks(get_string('consent_privacy_body', 'local_dixeo', $a)),
+                'heading' => get_string(self::TERMS_STRINGS['privacyheading'], 'local_dixeo'),
+                'blocks' => $this->body_blocks(get_string(self::TERMS_STRINGS['privacybody'], 'local_dixeo', $a)),
             ],
             [
                 'id' => 'local-dixeo-consent-processing-section',
-                'heading' => get_string('consent_processing_heading', 'local_dixeo'),
-                'blocks' => $this->body_blocks(get_string('consent_processing_body', 'local_dixeo', $a)),
+                'heading' => get_string(self::TERMS_STRINGS['processingheading'], 'local_dixeo'),
+                'blocks' => $this->body_blocks(get_string(self::TERMS_STRINGS['processingbody'], 'local_dixeo', $a)),
             ],
         ];
     }
@@ -173,12 +211,21 @@ class consent_notice {
      * @return string|null
      */
     public function data_protection_url(): ?string {
-        global $CFG;
-
-        if (!is_readable($CFG->dirroot . '/admin/tool/dataprivacy/mydatarequests.php')) {
+        if (!$this->has_data_protection()) {
             return null;
         }
         return (new \moodle_url('/admin/tool/dataprivacy/mydatarequests.php'))->out(false);
+    }
+
+    /**
+     * Whether the notice shows the data-privacy requests link.
+     *
+     * @return bool
+     */
+    public function has_data_protection(): bool {
+        global $CFG;
+
+        return is_readable($CFG->dirroot . '/admin/tool/dataprivacy/mydatarequests.php');
     }
 
     /**

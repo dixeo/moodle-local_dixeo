@@ -219,20 +219,20 @@
         <INDEX NAME="idx_context_component_name" UNIQUE="true" FIELDS="contextid, component, name" COMMENT="One value per setting at a context"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="local_dixeo_consent_document" COMMENT="One stored notice per hash. A language can have several rows when the text changes.">
+    <TABLE NAME="local_dixeo_consent_document" COMMENT="One stored notice per terms hash">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="lang" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false" COMMENT="Language of this notice"/>
         <FIELD NAME="version" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="Document version of this notice"/>
-        <FIELD NAME="documenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the version, language, and text"/>
-        <FIELD NAME="documenttext" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Full notice text"/>
+        <FIELD NAME="documenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the version, language, raw consent strings and notice structure, without site values"/>
+        <FIELD NAME="documenttext" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Notice text as rendered when this row was first stored"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When this notice was first stored"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_consent_document_hash" UNIQUE="true" FIELDS="documenthash" COMMENT="One row per notice text"/>
+        <INDEX NAME="idx_consent_document_hash" UNIQUE="true" FIELDS="documenthash" COMMENT="One row per terms hash"/>
       </INDEXES>
     </TABLE>
     <TABLE NAME="local_dixeo_consent" COMMENT="One Terms of Use acceptance or withdrawal per user action">
