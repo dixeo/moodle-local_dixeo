@@ -136,11 +136,15 @@ public static function extend_course_context(\local_dixeo\hook\extend_course_con
 **Upgrade note (2026110502):** teacher-side Dixeo actions now check on the server that the user has accepted the current Dixeo Terms of Use, as the course-page dialog already did in the browser. When the acting user has not accepted, the following throw the exception `error:consentrequired` (component `local_dixeo`, "Accept the current Dixeo Terms of Use on the course page to continue."):
 
 - the web services `local_dixeo_generate_module`, `local_dixeo_create_module_from_job`, `local_dixeo_trigger_file_sync` and `local_dixeo_set_file_sync_enabled` (when enabling);
-- the `block_dixeo_modulegen` generation services;
+- the `block_dixeo_modulegen` generation services and manual upload;
 - the course designer services;
 - the `local_dixeo_editor` content regeneration services.
 
 Queued activity generation for such a user fails with the same message. Status, cancel, turn-off and delete calls are not affected. Mobile apps and other web service clients should show the message and send the user to Moodle in a browser to accept the terms. Accepting once covers every course until the terms change.
+
+Dixeo image generation and editing (course designer, image editor filter, Dixeo course format, and images queued from content) also require acceptance. A queued image whose user no longer accepts the terms is not sent and shows 'This was not sent to Dixeo because the current Dixeo Terms of Use are not accepted.' `[img-gen]` placeholders saved by such a user are removed, as when content image generation is off.
+
+Terms of Use decisions cannot be recorded or withdrawn while an administrator is logged in as the user.
 
 # Support
 
