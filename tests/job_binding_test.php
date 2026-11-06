@@ -290,4 +290,39 @@ final class job_binding_test extends \advanced_testcase {
         $this->assertFalse(local_dixeo_is_valid_job_uuid(''));
         $this->assertFalse(local_dixeo_is_valid_job_uuid('<script>'));
     }
+
+    /**
+     * A job matches a module only when course, course module, initiator and component all match.
+     */
+    public function test_belongs_to_module_requires_every_field(): void {
+        $repo = new job_repository();
+        $repo->register(
+            'job-module',
+            10,
+            5,
+            'default',
+            'module_edit',
+            'local_dixeo_editor',
+            new \local_dixeo\dto\job_binding_metadata('page', 0, 77)
+        );
+
+        $this->assertTrue($repo->belongs_to_module('job-module', 10, 77, 5, 'local_dixeo_editor'));
+        $this->assertFalse($repo->belongs_to_module('job-module', 11, 77, 5, 'local_dixeo_editor'));
+        $this->assertFalse($repo->belongs_to_module('job-module', 10, 78, 5, 'local_dixeo_editor'));
+        $this->assertFalse($repo->belongs_to_module('job-module', 10, 77, 6, 'local_dixeo_editor'));
+        $this->assertFalse($repo->belongs_to_module('job-module', 10, 77, 5, 'block_dixeo_modulegen'));
+        $this->assertFalse($repo->belongs_to_module('job-missing', 10, 77, 5, 'local_dixeo_editor'));
+    }
+
+    /**
+     * A job registered without a component does not match any component.
+     */
+    public function test_belongs_to_module_rejects_job_without_component(): void {
+        $repo = new job_repository();
+        $metadata = new \local_dixeo\dto\job_binding_metadata('page', 0, 77);
+        $repo->register('job-nocomponent', 10, 5, 'default', 'module_edit', null, $metadata);
+
+        $this->assertFalse($repo->belongs_to_module('job-nocomponent', 10, 77, 5, ''));
+        $this->assertFalse($repo->belongs_to_module('job-nocomponent', 10, 77, 5, 'local_dixeo_editor'));
+    }
 }

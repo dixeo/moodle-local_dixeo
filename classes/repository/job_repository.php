@@ -212,6 +212,28 @@ class job_repository {
     }
 
     /**
+     * Whether the job was started by the user from the given component for the given course module.
+     *
+     * @param string $jobid Remote job UUID.
+     * @param int $courseid Expected course ID.
+     * @param int $cmid Expected course module ID.
+     * @param int $userid Expected initiating user ID.
+     * @param string $component Expected originating frankenstyle component; an empty name never matches.
+     * @return bool
+     */
+    public function belongs_to_module(string $jobid, int $courseid, int $cmid, int $userid, string $component): bool {
+        $record = $this->get_by_jobid($jobid);
+        if ($record === null || $component === '') {
+            return false;
+        }
+
+        return (int) $record->courseid === $courseid
+            && (int) $record->cmid === $cmid
+            && (int) $record->userid === $userid
+            && (string) ($record->component ?? '') === $component;
+    }
+
+    /**
      * Delete job rows for a user (optionally limited to courses).
      *
      * @param int $userid User ID.
