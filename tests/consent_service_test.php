@@ -18,6 +18,7 @@ namespace local_dixeo;
 
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\writer;
+use local_dixeo\exception\consent_required_exception;
 use local_dixeo\privacy\provider;
 use local_dixeo\service\consent_notice;
 use local_dixeo\service\consent_service;
@@ -197,6 +198,39 @@ final class consent_service_test extends \core_privacy\tests\provider_testcase {
         $service->accept((int) $user->id);
         $service->require_accepted((int) $user->id, $context);
         $this->assertTrue($service->terms_current((int) $user->id));
+    }
+
+    /**
+     * Both require methods throw consent_required_exception with the default or the caller-chosen string.
+     */
+    public function test_require_methods_throw_consent_required_exception(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $service = new consent_service();
+        $userid = (int) $user->id;
+
+        $calls = [
+            'course default' => fn() => $service->require_accepted($userid, $context),
+            'course custom' => fn() => $service->require_accepted($userid, $context, 'consentrequired', 'block_dixeo_tutor'),
+            'site default' => fn() => $service->require_accepted_for_course($userid, SITEID),
+            'site custom' => fn() => $service->require_accepted_for_course(
+                $userid,
+                (int) $course->id,
+                'consentrequired',
+                'block_dixeo_tutor'
+            ),
+        ];
+        foreach ($calls as $label => $call) {
+            try {
+                $call();
+                $this->fail($label . ': unaccepted terms must stop the request.');
+            } catch (consent_required_exception $e) {
+                $custom = str_ends_with($label, 'custom');
+                $this->assertSame($custom ? 'consentrequired' : 'error:consentrequired', $e->errorcode, $label);
+                $this->assertSame($custom ? 'block_dixeo_tutor' : 'local_dixeo', $e->module, $label);
+            }
+        }
     }
 
     /**

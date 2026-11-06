@@ -51,6 +51,7 @@ final class error_message {
         'authentication' => 'error:authentication',
         'authentication_error' => 'error:authentication',
         'authentication_failed' => 'error:authentication',
+        'consent_required' => 'error:consent_not_current',
     ];
 
     /**

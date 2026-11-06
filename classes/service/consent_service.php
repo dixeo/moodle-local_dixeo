@@ -92,7 +92,7 @@ class consent_service {
      * @param string $errorkey Language string of the error.
      * @param string $component Component owning the error string.
      * @return void
-     * @throws \moodle_exception $errorkey in $component when the terms are not accepted.
+     * @throws \local_dixeo\exception\consent_required_exception $errorkey in $component when the terms are not accepted.
      */
     public function require_accepted(
         int $userid,
@@ -101,7 +101,7 @@ class consent_service {
         string $component = 'local_dixeo'
     ): void {
         if ($this->gate_required($userid, $context)) {
-            throw new \moodle_exception($errorkey, $component);
+            throw new \local_dixeo\exception\consent_required_exception($errorkey, $component);
         }
     }
 
@@ -136,7 +136,7 @@ class consent_service {
      * @param string $errorkey Language string of the error.
      * @param string $component Component owning the error string.
      * @return void
-     * @throws \moodle_exception $errorkey in $component when the terms are not accepted.
+     * @throws \local_dixeo\exception\consent_required_exception $errorkey in $component when the terms are not accepted.
      */
     public function require_accepted_for_course(
         int $userid,
@@ -145,7 +145,7 @@ class consent_service {
         string $component = 'local_dixeo'
     ): void {
         if ($this->gate_required_for_course($userid, $courseid)) {
-            throw new \moodle_exception($errorkey, $component);
+            throw new \local_dixeo\exception\consent_required_exception($errorkey, $component);
         }
     }
 

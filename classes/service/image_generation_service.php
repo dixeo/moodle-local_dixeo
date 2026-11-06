@@ -36,6 +36,9 @@ use local_dixeo\service\image\policy;
 
 /**
  * Shared API client for course, section, and embedded content image jobs.
+ *
+ * Every submission requires the acting user (`$USER`) to have accepted the current Dixeo Terms of Use.
+ * Queued submissions run as the user who queued them.
  */
 class image_generation_service {
     /** @var string API endpoint for image generation. */
@@ -101,6 +104,7 @@ class image_generation_service {
      * @param string|null $summary When non-null, sent instead of course.summary (same use-case).
      * @return operation_result Pending operation result with jobid.
      * @throws \moodle_exception If image generation is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -115,11 +119,7 @@ class image_generation_service {
 
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, summary', MUST_EXIST);
 
-        policy::assert_enabled(
-            policy::ENTITY_COURSE,
-            policy::ACTION_GENERATE,
-            \context_course::instance($courseid)
-        );
+        $this->assert_may_submit(policy::ENTITY_COURSE, policy::ACTION_GENERATE, $courseid);
 
         $resolvedtitle = $title !== null ? $title : $course->fullname;
         $resolvedsummary = $summary !== null ? $summary : ($course->summary ?? null);
@@ -153,6 +153,7 @@ class image_generation_service {
      * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result Pending operation result with jobid.
      * @throws \moodle_exception If section image generation is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -166,11 +167,7 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, section, name, summary', MUST_EXIST);
 
-        policy::assert_enabled(
-            policy::ENTITY_SECTION,
-            policy::ACTION_GENERATE,
-            \context_course::instance((int) $section->course)
-        );
+        $this->assert_may_submit(policy::ENTITY_SECTION, policy::ACTION_GENERATE, (int) $section->course);
 
         $title = $this->resolve_section_title($section);
 
@@ -202,6 +199,7 @@ class image_generation_service {
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
      * @throws \moodle_exception If course image editing is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the course is not found.
      */
@@ -220,11 +218,7 @@ class image_generation_service {
 
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
 
-        policy::assert_enabled(
-            policy::ENTITY_COURSE,
-            policy::ACTION_EDIT,
-            \context_course::instance($courseid)
-        );
+        $this->assert_may_submit(policy::ENTITY_COURSE, policy::ACTION_EDIT, $courseid);
 
         $payload = $this->build_edit_payload(
             $imagesbase64,
@@ -252,6 +246,7 @@ class image_generation_service {
      * @param string $quality Quality level (default medium).
      * @return operation_result Pending operation result with jobid.
      * @throws \moodle_exception If section image editing is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      * @throws api_exception If the API request fails.
      * @throws \dml_exception If the section is not found.
      */
@@ -270,11 +265,7 @@ class image_generation_service {
 
         $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course', MUST_EXIST);
 
-        policy::assert_enabled(
-            policy::ENTITY_SECTION,
-            policy::ACTION_EDIT,
-            \context_course::instance((int) $section->course)
-        );
+        $this->assert_may_submit(policy::ENTITY_SECTION, policy::ACTION_EDIT, (int) $section->course);
 
         $payload = $this->build_edit_payload(
             $imagesbase64,
@@ -303,6 +294,8 @@ class image_generation_service {
      * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
      * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result
+     * @throws \moodle_exception If image work is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      */
     public function submit_content_image_generate_job(
         int $courseid,
@@ -317,11 +310,7 @@ class image_generation_service {
 
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
 
-        policy::assert_enabled(
-            policy::ENTITY_CONTENT,
-            policy::ACTION_GENERATE,
-            \context_course::instance($courseid)
-        );
+        $this->assert_may_submit(policy::ENTITY_CONTENT, policy::ACTION_GENERATE, $courseid);
 
         $payload = $this->build_payload(
             scope: 'content',
@@ -352,6 +341,8 @@ class image_generation_service {
      * @param string $quality Quality level.
      * @param job_binding_metadata|null $metadata Optional host activity/context metadata.
      * @return operation_result
+     * @throws \moodle_exception If image work is disabled by {@see \local_dixeo\service\image\policy}.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
      */
     public function submit_content_image_edit_job(
         int $courseid,
@@ -368,11 +359,7 @@ class image_generation_service {
             throw new \invalid_parameter_exception('Edit instructions are required');
         }
 
-        policy::assert_enabled(
-            policy::ENTITY_CONTENT,
-            policy::ACTION_EDIT,
-            \context_course::instance($courseid)
-        );
+        $this->assert_may_submit(policy::ENTITY_CONTENT, policy::ACTION_EDIT, $courseid);
 
         global $DB;
         $DB->get_record('course', ['id' => $courseid], 'id', MUST_EXIST);
@@ -391,6 +378,23 @@ class image_generation_service {
             $this->component,
             job_binding_metadata::resolve_for_submit($payload, $courseid, $metadata)
         );
+    }
+
+    /**
+     * Refuse the submission when image work is disabled for the course, or the acting user has not
+     * accepted the current Dixeo Terms of Use.
+     *
+     * @param string $entity policy::ENTITY_* constant.
+     * @param string $action policy::ACTION_* constant.
+     * @param int $courseid Course the image is for.
+     * @throws \moodle_exception When the policy disables this image action.
+     * @throws \local_dixeo\exception\consent_required_exception When the acting user has not accepted the terms.
+     */
+    private function assert_may_submit(string $entity, string $action, int $courseid): void {
+        global $USER;
+
+        policy::assert_enabled($entity, $action, \context_course::instance($courseid));
+        (new consent_service())->require_accepted_for_course((int) $USER->id, $courseid);
     }
 
     /**

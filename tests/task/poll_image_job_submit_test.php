@@ -32,6 +32,7 @@ use local_dixeo\api\exception\rate_limit_exception;
 use local_dixeo\dto\operation_result;
 use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
+use local_dixeo\service\consent_service;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\content_target;
@@ -65,6 +66,7 @@ final class poll_image_job_submit_test extends \advanced_testcase {
         parent::setUp();
         $this->resetAfterTest();
         $this->setAdminUser();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $USER->id]);
         set_config('image_generation_enabled', 1, 'local_dixeo');
         set_config('image_generation_content_mode', policy::MODE_GENERATE, 'local_dixeo');
 
@@ -125,6 +127,32 @@ final class poll_image_job_submit_test extends \advanced_testcase {
         $data = $this->queued_task()->get_custom_data();
         $this->assertSame('remote-ok', $data->jobid);
         $this->assertObjectNotHasProperty('request', $data);
+    }
+
+    /**
+     * A user who withdrew the Terms of Use after queueing fails the job at once and sends nothing.
+     */
+    public function test_withdrawn_terms_fail_the_queued_submission(): void {
+        global $USER;
+
+        (new consent_service())->withdraw_terms((int) $USER->id);
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+        service_factory::set_test_image_generation_service(new image_generation_service($jobmock));
+
+        $task = $this->queued_task();
+        $task->execute();
+
+        $job = $this->job();
+        $this->assertSame(job_repository::STATUS_FAILED, $job->status);
+        $this->assertSame('', $job->jobid);
+        $this->assertSame(failure_message::CODE_CONSENT_REQUIRED, $job->errormessage);
+        $this->assertSame(
+            get_string('error:consent_not_current', 'local_dixeo'),
+            job_repository::get_status_for_target($this->target())['errormessage']
+        );
+        // No retry and no poll: only the record of the task that ran remains.
+        $this->assertSame($task->get_id(), $this->queued_task()->get_id());
     }
 
     /**

@@ -42,6 +42,9 @@ final class failure_message {
     /** @var string Provider asked the client to wait. */
     public const CODE_RATE_LIMITED = 'rate_limited';
 
+    /** @var string The user had not accepted the current Dixeo Terms of Use when the request was due to be sent. */
+    public const CODE_CONSENT_REQUIRED = 'consent_required';
+
     /**
      * Whether the value is an API code with a dedicated message.
      *

@@ -27,6 +27,7 @@
 namespace local_dixeo;
 
 use local_dixeo\dto\operation_result;
+use local_dixeo\exception\consent_required_exception;
 use local_dixeo\service\html_helper;
 use local_dixeo\service\image\policy;
 use local_dixeo\service\image_generation_service;
@@ -42,11 +43,14 @@ final class image_generation_service_policy_test extends \advanced_testcase {
     private const TEST_NAMESPACE = 'phpunit';
 
     /**
-     * SetUp.
+     * Act as a user who accepted the current Dixeo Terms of Use.
      */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $user->id]);
+        $this->setUser($user);
     }
 
     /**
@@ -362,6 +366,7 @@ final class image_generation_service_policy_test extends \advanced_testcase {
      */
     public function test_submit_course_image_job_rejected_when_course_overrides_mode_to_disabled(): void {
         $this->setAdminUser();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => get_admin()->id]);
         $this->apply_image_generation_settings(1, policy::MODE_GENERATE_EDIT, policy::MODE_GENERATE_EDIT);
 
         $jobmock = $this->createMock(job_service::class);
@@ -378,5 +383,128 @@ final class image_generation_service_policy_test extends \advanced_testcase {
 
         $this->expectException(\moodle_exception::class);
         $this->make_service_with_mock_jobs($jobmock)->submit_course_image_job((int) $course->id);
+    }
+
+    /**
+     * Each submit method, called with a course id.
+     *
+     * @return array
+     */
+    public static function submit_method_provider(): array {
+        return [
+            'course generate' => ['course_generate'],
+            'section generate' => ['section_generate'],
+            'course edit' => ['course_edit'],
+            'section edit' => ['section_edit'],
+            'content generate' => ['content_generate'],
+            'content edit' => ['content_edit'],
+        ];
+    }
+
+    /**
+     * Call one submit method for a course.
+     *
+     * @param image_generation_service $service
+     * @param string $method Key from {@see self::submit_method_provider()}.
+     * @param \stdClass $course
+     * @return operation_result
+     */
+    private function call_submit(image_generation_service $service, string $method, \stdClass $course): operation_result {
+        global $DB;
+
+        $courseid = (int) $course->id;
+        $sectionid = (int) $DB->get_field('course_sections', 'id', ['course' => $courseid, 'section' => 1], MUST_EXIST);
+        switch ($method) {
+            case 'course_generate':
+                return $service->submit_course_image_job($courseid);
+            case 'section_generate':
+                return $service->submit_section_image_job($sectionid);
+            case 'course_edit':
+                return $service->submit_course_image_edit_job($courseid, ['Ym9n'], 'Make it brighter');
+            case 'section_edit':
+                return $service->submit_section_image_edit_job($sectionid, ['Ym9n'], 'Make it brighter');
+            case 'content_generate':
+                return $service->submit_content_image_generate_job($courseid, 'Activity image', 'A sunny meadow');
+            default:
+                return $service->submit_content_image_edit_job($courseid, ['Ym9n'], 'Make it brighter');
+        }
+    }
+
+    /**
+     * A user without the current Terms of Use cannot submit any image job, and nothing reaches the API.
+     *
+     * @dataProvider submit_method_provider
+     * @param string $method Submit method key.
+     */
+    public function test_submit_refused_without_accepted_terms(string $method): void {
+        $this->apply_image_generation_settings(
+            1,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT
+        );
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Consent course']);
+        $this->setUser($this->getDataGenerator()->create_user());
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        try {
+            $this->call_submit($this->make_service_with_mock_jobs($jobmock), $method, $course);
+            $this->fail('A user without the current Terms of Use must not submit an image job.');
+        } catch (consent_required_exception $e) {
+            $this->assertSame('error:consentrequired', $e->errorcode);
+            $this->assertSame('local_dixeo', $e->module);
+        }
+    }
+
+    /**
+     * A user who accepted the current Terms of Use submits every image job.
+     *
+     * @dataProvider submit_method_provider
+     * @param string $method Submit method key.
+     */
+    public function test_submit_allowed_with_accepted_terms(string $method): void {
+        $this->apply_image_generation_settings(
+            1,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT
+        );
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Consent course']);
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->once())->method('submit_job')->willReturn($this->pending_result('accepted-job'));
+
+        $result = $this->call_submit($this->make_service_with_mock_jobs($jobmock), $method, $course);
+        $this->assertSame('accepted-job', $result->jobid);
+    }
+
+    /**
+     * A disabled image action is reported before the missing Terms of Use.
+     *
+     * @dataProvider submit_method_provider
+     * @param string $method Submit method key.
+     */
+    public function test_disabled_policy_wins_over_missing_terms(string $method): void {
+        $this->apply_image_generation_settings(
+            0,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT,
+            policy::MODE_GENERATE_EDIT
+        );
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Consent course']);
+        $this->setUser($this->getDataGenerator()->create_user());
+
+        $jobmock = $this->createMock(job_service::class);
+        $jobmock->expects($this->never())->method('submit_job');
+
+        try {
+            $this->call_submit($this->make_service_with_mock_jobs($jobmock), $method, $course);
+            $this->fail('A disabled image action must refuse the submission.');
+        } catch (\moodle_exception $e) {
+            $this->assertNotInstanceOf(consent_required_exception::class, $e);
+            $this->assertSame('dixeo_image_generation_disabled', $e->errorcode);
+        }
     }
 }

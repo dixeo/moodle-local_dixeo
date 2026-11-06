@@ -21,6 +21,7 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\api\exception\rate_limit_exception;
 use local_dixeo\external\service_factory;
 use local_dixeo\dto\job_binding_metadata;
+use local_dixeo\exception\consent_required_exception;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\registry as apply_registry;
 use local_dixeo\service\image\failure_message;
@@ -175,7 +176,8 @@ class poll_image_job extends \core\task\adhoc_task {
      * Submit a queued request, then hand over to polling.
      *
      * A busy or unreachable API reschedules the submission until the submit window
-     * ends. Any other refusal fails the job at once.
+     * ends. Any other refusal fails the job at once. A user who no longer accepts the
+     * current Dixeo Terms of Use fails the job at once.
      *
      * @param image_target $target
      * @param \stdClass $job Local image job row.
@@ -196,6 +198,9 @@ class poll_image_job extends \core\task\adhoc_task {
         try {
             $remotejobid = $request->submit();
             job_repository::set_remote_jobid((int) $job->id, $remotejobid);
+        } catch (consent_required_exception $e) {
+            job_orchestrator::fail_job($job, failure_message::CODE_CONSENT_REQUIRED);
+            return;
         } catch (api_exception $e) {
             $code = self::retry_code($e);
             if ($code === null) {

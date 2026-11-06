@@ -39,12 +39,13 @@ use local_dixeo\service\job_service;
  */
 final class generation_request_test extends \advanced_testcase {
     /**
-     * Enable content and section image generation.
+     * Enable content and section image generation for an administrator who accepted the current terms.
      */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
         $this->setAdminUser();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => get_admin()->id]);
         set_config('image_generation_enabled', 1, 'local_dixeo');
         set_config('image_generation_content_mode', policy::MODE_GENERATE, 'local_dixeo');
         set_config('image_generation_section_mode', policy::MODE_GENERATE, 'local_dixeo');
