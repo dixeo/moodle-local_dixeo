@@ -124,4 +124,34 @@ final class policy_test extends \advanced_testcase {
         $this->assertFalse(policy::is_enabled(policy::ENTITY_COURSE, policy::ACTION_EDIT, $context));
         $this->assertFalse(policy::is_globally_enabled());
     }
+
+    /**
+     * Image generation is off while the Dixeo switch is off, at the site or for one course.
+     */
+    public function test_image_generation_is_off_while_dixeo_is_off(): void {
+        $this->setAdminUser();
+        set_config('image_generation_enabled', 1, 'local_dixeo');
+        $course = $this->getDataGenerator()->create_course();
+        $other = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $config = service_factory::get_settings_config();
+
+        $config->set('local_dixeo', 'enabled', $context, '0', false);
+
+        $this->assertFalse(policy::is_enabled(policy::ENTITY_CONTENT, policy::ACTION_GENERATE, $context));
+        $this->assertTrue(policy::is_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_GENERATE,
+            \context_course::instance($other->id)
+        ));
+
+        $config->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+
+        $this->assertFalse(policy::is_enabled(
+            policy::ENTITY_CONTENT,
+            policy::ACTION_GENERATE,
+            \context_course::instance($other->id)
+        ));
+        $this->assertFalse(policy::is_globally_enabled());
+    }
 }

@@ -20,7 +20,8 @@ namespace local_dixeo\service\image;
 /**
  * Resolves image-generation availability from the Dixeo settings catalogue.
  *
- * image_generation_enabled follows the Dixeo master switch: Off at the Dixeo layer is
+ * Image generation is off wherever the Dixeo switch ({@see \local_dixeo\settings\config::enabled_for()})
+ * is off. image_generation_enabled follows the Dixeo master switch: Off at the Dixeo layer is
  * off in every course, including a course that stores On. A course can turn the feature
  * off only while the Dixeo layer is On. Course, section, and content modes are read for
  * the course when the context is in a course, and for the Dixeo layer otherwise.
@@ -109,11 +110,17 @@ final class policy {
     /**
      * Dixeo off blocks every course. A course may only turn the feature off while Dixeo is on.
      *
+     * Image generation counts as off wherever the Dixeo switch is off, so content saved or
+     * decoded there keeps no placeholder whose job could never be submitted.
+     *
      * @param \context $context System, course, or a context inside a course.
      * @return bool
      */
     private static function allows_image_generation(\context $context): bool {
         $config = \local_dixeo\external\service_factory::get_settings_config();
+        if (!$config->enabled_for($context)) {
+            return false;
+        }
         $system = \context_system::instance();
         if ($config->get('local_dixeo', 'image_generation_enabled', $system)->get_value() !== '1') {
             return false;

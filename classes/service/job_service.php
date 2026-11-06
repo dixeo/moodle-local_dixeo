@@ -37,6 +37,7 @@ use local_dixeo\dto\operation_result;
 use local_dixeo\dto\job_status;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\event\job_cancelled;
+use local_dixeo\external\service_factory;
 use local_dixeo\job_access_mode;
 use local_dixeo\repository\job_repository;
 
@@ -89,6 +90,7 @@ class job_service {
      * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the job's context, course or site.
      */
     public function submit_job(
         string $endpoint,
@@ -99,9 +101,10 @@ class job_service {
         array $files = [],
         ?string $idempotencykey = null
     ): operation_result {
+        $resolved = $this->require_enabled_for_submit($payload, $metadata);
         $response = $this->post($endpoint, $payload, $files, $idempotencykey);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
+        $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
 
         return operation_result::pending($jobid, 'pending', 0);
     }
@@ -121,6 +124,7 @@ class job_service {
      * @param \stored_file[] $files Files sent with the payload as multipart.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the job's context, course or site.
      */
     public function submit_and_wait(
         string $endpoint,
@@ -131,9 +135,10 @@ class job_service {
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
         array $files = []
     ): operation_result {
+        $resolved = $this->require_enabled_for_submit($payload, $metadata);
         $response = $this->post($endpoint, $payload, $files);
         $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
+        $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
         $config = polling_config::for_job_type($jobtype);
 
         return $this->poller->poll($jobid, $config);
@@ -356,7 +361,38 @@ class job_service {
         ?string $component = null,
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): void {
-        $this->register_job($jobid, $endpoint, $payload, $component, null, $accessmode);
+        $metadata = job_binding_metadata::resolve_for_submit($payload);
+        $this->register_job($jobid, $endpoint, $payload, $component, $metadata, $accessmode);
+    }
+
+    /**
+     * Stop a submission while Dixeo is off where the job would run.
+     *
+     * The switch is read on the binding context when it resolves to an existing context,
+     * otherwise on the payload course, which falls back to the site. Cancel, status, wait and
+     * direct client calls never pass through here, so stopping work and erasure do not
+     * depend on the switch.
+     *
+     * @param array $payload Request payload.
+     * @param job_binding_metadata|null $metadata Caller metadata merged over the payload.
+     * @return job_binding_metadata|null Binding metadata resolved for registration.
+     * @throws \moodle_exception error:dixeo_disabled when Dixeo is off.
+     */
+    private function require_enabled_for_submit(array $payload, ?job_binding_metadata $metadata): ?job_binding_metadata {
+        $resolved = job_binding_metadata::resolve_for_submit($payload, null, $metadata);
+        $config = service_factory::get_settings_config();
+
+        $context = null;
+        if ($resolved !== null && $resolved->contextid > 0) {
+            $context = \context::instance_by_id($resolved->contextid, IGNORE_MISSING);
+        }
+        if ($context instanceof \context) {
+            $config->require_enabled($context);
+        } else {
+            $config->require_enabled_for_course((int) ($payload['courseId'] ?? $payload['courseid'] ?? 0));
+        }
+
+        return $resolved;
     }
 
     /**
@@ -366,7 +402,7 @@ class job_service {
      * @param string $endpoint API endpoint used to create the job.
      * @param array $payload Request payload.
      * @param string|null $component Originating frankenstyle component.
-     * @param job_binding_metadata|null $metadata Optional activity/context metadata.
+     * @param job_binding_metadata|null $metadata Binding metadata already resolved for the submission.
      * @param job_access_mode $accessmode Persisted access policy.
      */
     private function register_job(
@@ -393,7 +429,6 @@ class job_service {
 
         $namespace = (string) ($payload['namespace'] ?? \local_dixeo_get_configured_namespace());
         $operation = $this->operation_from_endpoint($endpoint);
-        $mergedmetadata = job_binding_metadata::resolve_for_submit($payload, null, $metadata);
 
         $this->jobrepository->register(
             $jobid,
@@ -402,7 +437,7 @@ class job_service {
             $namespace,
             $operation,
             $component,
-            $mergedmetadata,
+            $metadata,
             $accessmode
         );
     }

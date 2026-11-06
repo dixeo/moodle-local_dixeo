@@ -133,6 +133,11 @@ public static function extend_course_context(\local_dixeo\hook\extend_course_con
 
 ## Upgrade notes
 
+**Upgrade note (2026110601):**
+
+- Every remote job submission (`job_service::submit_job()` and `submit_and_wait()`) throws `error:dixeo_disabled` while Dixeo is off for the job's context, course or site. Cancelling a job, reading its status and remote erasure are not affected.
+- Image generation counts as off while Dixeo is off. Saving or decoding content there strips `[img-gen]` shortcodes instead of leaving placeholders that can never be generated.
+
 **Upgrade note (2026110600):**
 
 - After this upgrade, each user is asked once to accept the Dixeo Terms of Use again.

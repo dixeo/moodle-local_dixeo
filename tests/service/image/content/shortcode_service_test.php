@@ -88,6 +88,48 @@ final class shortcode_service_test extends \advanced_testcase {
     }
 
     /**
+     * Saved content keeps no image placeholder while Dixeo is off for the course.
+     */
+    public function test_process_html_strips_while_dixeo_is_off(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $context = \context_module::instance($page->cmid);
+        \local_dixeo\external\service_factory::get_settings_config()->set(
+            'local_dixeo',
+            'enabled',
+            \context_course::instance($course->id),
+            '0',
+            false
+        );
+
+        $target = new html_field_target(
+            'page',
+            'content',
+            'mod_page',
+            'content',
+            0,
+            'page',
+            'content',
+            (int) $page->id,
+            $context->id,
+            (int) $course->id,
+            (int) $page->cmid,
+            'contentformat'
+        );
+
+        $processed = (new shortcode_service())->process_html('<p>Kept</p>[img-gen prompt="Remove me"]', $target, 2);
+
+        $this->assertStringContainsString('Kept', $processed);
+        $this->assertStringNotContainsString('[img-gen', $processed);
+        $this->assertStringNotContainsString('data-dixeo-img-gen=', $processed);
+        $this->assertSame(0, $DB->count_records('local_dixeo_image_job'));
+        $this->assertCount(0, \core\task\manager::get_adhoc_tasks(poll_image_job::class));
+    }
+
+    /**
      * Test process html strips when policy disabled.
      */
     public function test_process_html_strips_when_policy_disabled(): void {
