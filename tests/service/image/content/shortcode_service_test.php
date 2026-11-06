@@ -29,13 +29,14 @@ use local_dixeo\task\poll_image_job;
  */
 final class shortcode_service_test extends \advanced_testcase {
     /**
-     * SetUp.
+     * Turn content image generation on; the administrator has accepted the current Dixeo Terms of Use.
      */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
         set_config('image_generation_enabled', 1, 'local_dixeo');
         set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => get_admin()->id]);
     }
 
     /**
@@ -149,5 +150,47 @@ final class shortcode_service_test extends \advanced_testcase {
         $this->assertSame(3, substr_count($processed, 'data-dixeo-img-gen='));
         $this->assertSame(3, $DB->count_records('local_dixeo_image_job'));
         $this->assertCount(3, \core\task\manager::get_adhoc_tasks(poll_image_job::class));
+    }
+
+    /**
+     * A user without the current Terms of Use gets the shortcodes removed and nothing queued.
+     */
+    public function test_process_html_strips_without_accepted_terms(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $context = \context_module::instance($page->cmid);
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+        $filesbefore = $DB->count_records('files', ['contextid' => $context->id]);
+
+        $service = new shortcode_service();
+        $target = new html_field_target(
+            'page',
+            'content',
+            'mod_page',
+            'content',
+            0,
+            'page',
+            'content',
+            (int) $page->id,
+            $context->id,
+            (int) $course->id,
+            (int) $page->cmid,
+            'contentformat'
+        );
+
+        $processed = $service->process_html('Intro [img-gen prompt="Remove me"] end', $target, (int) $user->id);
+
+        $this->assertStringNotContainsString('[img-gen', $processed);
+        $this->assertStringNotContainsString('data-dixeo-img-gen=', $processed);
+        $this->assertStringContainsString('Intro', $processed);
+        $this->assertSame($filesbefore, $DB->count_records('files', ['contextid' => $context->id]));
+        $this->assertSame(0, $DB->count_records('local_dixeo_image_job'));
+        $this->assertCount(0, \core\task\manager::get_adhoc_tasks(poll_image_job::class));
+
+        $this->assertSame('', trim($service->process_html('[img-gen prompt="Remove me"]', $target, 0)));
+        $this->assertSame(0, $DB->count_records('local_dixeo_image_job'));
     }
 }

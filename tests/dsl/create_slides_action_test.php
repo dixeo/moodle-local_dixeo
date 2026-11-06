@@ -296,12 +296,15 @@ final class create_slides_action_test extends \advanced_testcase {
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
         $section = $DB->get_record('course_sections', ['course' => $course->id, 'section' => 1], '*', MUST_EXIST);
+        // The submitter reached generation through the consent gate, so they accepted the current terms.
+        $submitter = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $submitter->id]);
         $context = [
             'courseid' => (int) $course->id,
             'sectionid' => (int) $section->id,
             'sectionnum' => 1,
             'modulename' => 'slideshow',
-            'userid' => (int) $this->getDataGenerator()->create_user()->id,
+            'userid' => (int) $submitter->id,
             'contextid' => \context_course::instance($course->id)->id,
         ];
 

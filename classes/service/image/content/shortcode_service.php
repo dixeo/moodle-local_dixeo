@@ -38,6 +38,9 @@ class shortcode_service {
     /**
      * Process HTML for one html_field_target field; returns updated HTML.
      *
+     * Shortcodes are removed without queueing when content image generation is off or the user
+     * has not accepted the current Dixeo Terms of Use.
+     *
      * @param string $html
      * @param html_field_target $htmlfieldtarget
      * @param int $userid
@@ -56,6 +59,9 @@ class shortcode_service {
                 $courseid > 0 ? \context_course::instance($courseid) : null
             )
         ) {
+            return shortcode_parser::strip_all($html);
+        }
+        if (!(new \local_dixeo\service\consent_service())->terms_current($userid)) {
             return shortcode_parser::strip_all($html);
         }
 
