@@ -309,4 +309,67 @@ final class editor_image_codec_test extends \advanced_testcase {
         $this->assertStringNotContainsString('[img-gen', $result->html);
         $this->assertSame($cap + 2, substr_count($result->html, '<img'));
     }
+
+    /**
+     * A placeholder of another course module neither sends that job's prompt nor restores its file.
+     */
+    public function test_foreign_module_placeholder_is_treated_as_unknown(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+        [$foreignctx] = $this->make_page_context(21);
+        [$ownctx] = $this->make_page_context(22);
+        $codec = new editor_image_codec();
+        $foreign = $codec->decode_html_from_api('[img-gen prompt="Secret foreign prompt"]', $foreignctx, (int) get_admin()->id);
+        $placeholderid = $foreign->newplaceholderids[0];
+
+        $encoded = $codec->encode_html_for_api(
+            '<img src="x.png" data-dixeo-img-gen="' . $placeholderid . '" alt="" />',
+            $ownctx
+        );
+        $this->assertStringNotContainsString('Secret foreign prompt', $encoded);
+        $this->assertStringContainsString(shortcode_parser::PRESERVE_PROMPT, $encoded);
+
+        $decoded = $codec->decode_html_from_api(
+            '<p>Own</p>' . shortcode_parser::build_ref_shortcode($placeholderid),
+            $ownctx,
+            (int) get_admin()->id
+        );
+        $this->assertStringNotContainsString('<img', $decoded->html);
+        $this->assertStringNotContainsString('/' . $foreignctx->contextid . '/', $decoded->html);
+
+        $ownencoded = $codec->encode_html_for_api(
+            '<img src="x.png" data-dixeo-img-gen="' . $placeholderid . '" alt="" />',
+            $foreignctx
+        );
+        $this->assertStringContainsString('Secret foreign prompt', $ownencoded);
+    }
+
+    /**
+     * A copied module whose file area holds the original stub still restores the image from its own area.
+     */
+    public function test_copied_module_restores_ref_from_its_own_files(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('image_generation_enabled', '1', 'local_dixeo');
+        set_config('image_generation_content_mode', 'generate', 'local_dixeo');
+        [$originalctx] = $this->make_page_context(23);
+        [$copyctx] = $this->make_page_context(24);
+        $codec = new editor_image_codec();
+        $original = $codec->decode_html_from_api('[img-gen prompt="A volcano"]', $originalctx, (int) get_admin()->id);
+        $placeholderid = $original->newplaceholderids[0];
+        $filename = file_service::stub_filename_for_placeholder($placeholderid);
+        file_service::create_stub($copyctx->module_location($filename), (int) get_admin()->id);
+
+        $decoded = $codec->decode_html_from_api(
+            shortcode_parser::build_ref_shortcode($placeholderid),
+            $copyctx,
+            (int) get_admin()->id
+        );
+
+        $this->assertStringContainsString('data-dixeo-img-gen="' . $placeholderid . '"', $decoded->html);
+        $this->assertStringContainsString('/' . $copyctx->contextid . '/mod_page/content/', $decoded->html);
+        $this->assertStringNotContainsString('/' . $originalctx->contextid . '/', $decoded->html);
+    }
 }

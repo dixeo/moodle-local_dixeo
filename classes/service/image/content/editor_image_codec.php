@@ -166,7 +166,7 @@ final class editor_image_codec {
     private function encode_img_tag(string $imghtml, editor_image_context $ctx, int $userid = 0): string {
         $ref = $this->extract_placeholder_id($imghtml);
         if ($ref !== null) {
-            $job = job_repository::get_by_placeholderid($ref);
+            $job = $this->job_in_context(job_repository::get_by_placeholderid($ref), $ctx);
             $prompt = $job && !empty($job->prompt) ? (string) $job->prompt : shortcode_parser::PRESERVE_PROMPT;
             $mode = $job && !empty($job->mode) ? (string) $job->mode : '';
             return shortcode_parser::build_ref_shortcode($ref, $prompt, $mode);
@@ -201,6 +201,20 @@ final class editor_image_codec {
     }
 
     /**
+     * The image job when it belongs to the edited course module, else null.
+     *
+     * Placeholder ids are visible in saved content, so a job of another module is treated
+     * as unknown: its prompt is not sent and its file location is not used.
+     *
+     * @param \stdClass|null $job Image job found by placeholder id.
+     * @param editor_image_context $ctx Editor image context.
+     * @return \stdClass|null
+     */
+    private function job_in_context(?\stdClass $job, editor_image_context $ctx): ?\stdClass {
+        return ($job && (int) $job->cmid === (int) $ctx->cmid) ? $job : null;
+    }
+
+    /**
      * Restore a ref shortcode to an img tag.
      *
      * @param array $spec Parsed shortcode attributes.
@@ -209,7 +223,7 @@ final class editor_image_codec {
      */
     private function restore_ref_shortcode(array $spec, editor_image_context $ctx): string {
         $ref = (string) $spec['ref'];
-        $job = job_repository::get_by_placeholderid($ref);
+        $job = $this->job_in_context(job_repository::get_by_placeholderid($ref), $ctx);
         $filename = file_service::stub_filename_for_placeholder($ref);
 
         $location = $this->resolve_ref_location($ref, $filename, $ctx, $job);
