@@ -31,6 +31,12 @@ use local_dixeo\util\input_limits;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class editor_regenerate_service {
+    /** @var string Lock type serialising the application of edit results per editor session. */
+    private const RESULT_LOCK_TYPE = 'local_dixeo_editor_result';
+
+    /** @var int Seconds to wait for the session lock before reporting the result as still processing. */
+    private const RESULT_LOCK_TIMEOUT = 5;
+
     /**
      * Build editor image context from adapter-like data.
      *
@@ -174,5 +180,47 @@ final class editor_regenerate_service {
         }
 
         return $result;
+    }
+
+    /**
+     * Apply the content of a completed edit job once per editor session.
+     *
+     * The first call for a job decodes the content (queueing its new images and stopping
+     * orphaned ones) and stores the result; later calls for the same job return the stored
+     * result without decoding again. A different job decodes again and replaces the stored
+     * result. Calls for one session are serialised by a lock.
+     *
+     * @param string $jobid Remote edit job id.
+     * @param string $html Content field returned by the edit API.
+     * @param editor_image_context $ctx Editor image context; its session id scopes the result.
+     * @param int $userid Acting user.
+     * @param editor_result_store $store Storage of the applied result on the session.
+     * @return applied_content|null Null when another request holds the session lock; the caller retries later.
+     */
+    public static function apply_api_content_once(
+        string $jobid,
+        string $html,
+        editor_image_context $ctx,
+        int $userid,
+        editor_result_store $store
+    ): ?applied_content {
+        $factory = \core\lock\lock_config::get_lock_factory(self::RESULT_LOCK_TYPE);
+        $lock = $factory->get_lock('session_' . $ctx->sessionid, self::RESULT_LOCK_TIMEOUT);
+        if (!$lock) {
+            return null;
+        }
+
+        try {
+            $stored = $store->get_applied_result($ctx->sessionid, $jobid);
+            if ($stored !== null) {
+                return new applied_content($stored, false);
+            }
+
+            $result = self::decode_api_content($html, $ctx, $userid);
+            $store->store_applied_result($ctx->sessionid, $jobid, $result);
+            return new applied_content($result, true);
+        } finally {
+            $lock->release();
+        }
     }
 }
