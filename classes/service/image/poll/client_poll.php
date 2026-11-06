@@ -35,10 +35,15 @@ use local_dixeo\service\image\image_target;
  */
 final class client_poll {
     /**
-     * Poll once.
+     * Poll once, and apply a completed result for the job owner.
+     *
+     * The caller may be another user than the owner (for example a co-teacher polling the
+     * job). The result is applied with $userid as the owner while the session user stays the
+     * caller.
+     *
      * @param string $remotejobid
      * @param image_target $target
-     * @param int $userid
+     * @param int $userid Job owner.
      * @param callable|null $imageurlresolver Called when apply succeeds; returns image URL string.
      * @return array{status: string, imageurl?: string, errormessage?: string}
      */
@@ -86,15 +91,8 @@ final class client_poll {
 
         $result = engine::normalise_result($jobstatus->result);
 
-        $originaluser = null;
         try {
-            global $USER;
-            if ((int) ($USER->id ?? 0) !== $userid) {
-                $originaluser = $USER;
-                $USER = \core_user::get_user($userid, '*', MUST_EXIST);
-                \core\session\manager::set_user($USER);
-            }
-
+            // The owner is passed to every apply handler; the session user is never switched.
             $job = job_repository::get_by_target($target);
             apply_registry::apply($target, $result, $userid, 'generated', $job);
             if ($job) {
@@ -119,10 +117,6 @@ final class client_poll {
             }
 
             return ['status' => 'failed', 'errormessage' => $message];
-        } finally {
-            if ($originaluser !== null) {
-                \core\session\manager::set_user($originaluser);
-            }
         }
     }
 }
