@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use local_dixeo\entry_effect;
 use local_dixeo\external\traits\capability_check;
 use local_dixeo\service\file_sync_service;
 
@@ -61,8 +62,8 @@ class get_file_sync_status extends external_api {
             'courseid' => $courseid,
         ]);
 
-        // A status read sends nothing, so it works without the current Terms of Use.
-        self::validate_course_capability($params['courseid'], false, false);
+        // Stops or reads status, so it works while Dixeo is off and without the current Terms of Use.
+        self::validate_course_capability($params['courseid'], false, entry_effect::STOP_OR_STATUS);
 
         $service = service_factory::get_file_sync_service();
 

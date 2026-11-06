@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_multiple_structure;
 use core_external\external_value;
+use local_dixeo\entry_effect;
 use local_dixeo\external\traits\capability_check;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\service\plugin_installation_service;
@@ -102,7 +103,7 @@ class get_module_types extends external_api {
         global $PAGE;
         require_course_login($courseid);
         // A catalogue read sends nothing, so it works without the current Terms of Use.
-        self::validate_course_capability($courseid, true, false);
+        self::validate_course_capability($courseid, true, entry_effect::FEATURE_READ);
         $PAGE->set_context(\context_course::instance($courseid));
     }
 

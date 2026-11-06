@@ -30,6 +30,7 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
+use local_dixeo\entry_effect;
 use local_dixeo\external\traits\capability_check;
 use local_dixeo\api\exception\api_exception;
 
@@ -68,8 +69,8 @@ class cancel_job extends external_api {
             'courseid' => $courseid,
         ]);
 
-        // Cancelling stops processing, so it works without the current Terms of Use.
-        self::validate_course_capability($params['courseid'], false, false);
+        // Stops or reads status, so it works while Dixeo is off and without the current Terms of Use.
+        self::validate_course_capability($params['courseid'], false, entry_effect::STOP_OR_STATUS);
 
         job_id::require_valid($params['jobid']);
 

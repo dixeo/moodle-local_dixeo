@@ -97,14 +97,16 @@ final class capability_check_consent_test extends \advanced_testcase {
     }
 
     /**
-     * Status reads and stop actions opt out of the terms check.
+     * Feature reads and stop or status actions do not need the current terms.
      */
     public function test_trait_passes_when_consent_is_not_required(): void {
         $courseid = (int) $this->course->id;
         $this->setUser($this->teacher);
 
-        $this->assertSame($courseid, (int) capability_check_fixture::course($courseid, true, false)->instanceid);
-        $this->assertSame($courseid, (int) capability_check_fixture::sync($courseid, false)->instanceid);
+        foreach ([entry_effect::FEATURE_READ, entry_effect::STOP_OR_STATUS] as $effect) {
+            $this->assertSame($courseid, (int) capability_check_fixture::course($courseid, true, $effect)->instanceid);
+            $this->assertSame($courseid, (int) capability_check_fixture::sync($courseid, $effect)->instanceid);
+        }
     }
 
     /**

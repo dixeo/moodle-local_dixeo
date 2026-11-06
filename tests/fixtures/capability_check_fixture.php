@@ -17,6 +17,7 @@
 namespace local_dixeo;
 
 use core_external\external_api;
+use local_dixeo\entry_effect;
 use local_dixeo\external\traits\capability_check;
 
 /**
@@ -34,25 +35,25 @@ class capability_check_fixture extends external_api {
      *
      * @param int $courseid Course id.
      * @param bool $requiremanageactivities Whether moodle/course:manageactivities is required.
-     * @param bool $requireconsent Whether the current Terms of Use are required.
+     * @param entry_effect $effect Effect of the simulated entry point.
      * @return \context_course
      */
     public static function course(
         int $courseid,
         bool $requiremanageactivities = false,
-        bool $requireconsent = true
+        entry_effect $effect = entry_effect::SEND
     ): \context_course {
-        return self::validate_course_capability($courseid, $requiremanageactivities, $requireconsent);
+        return self::validate_course_capability($courseid, $requiremanageactivities, $effect);
     }
 
     /**
      * Run validate_course_sync_capability().
      *
      * @param int $courseid Course id.
-     * @param bool $requireconsent Whether the current Terms of Use are required.
+     * @param entry_effect $effect Effect of the simulated entry point.
      * @return \context_course
      */
-    public static function sync(int $courseid, bool $requireconsent = true): \context_course {
-        return self::validate_course_sync_capability($courseid, $requireconsent);
+    public static function sync(int $courseid, entry_effect $effect = entry_effect::SEND): \context_course {
+        return self::validate_course_sync_capability($courseid, $effect);
     }
 }

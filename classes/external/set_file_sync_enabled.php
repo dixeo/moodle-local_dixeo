@@ -29,6 +29,7 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
+use local_dixeo\entry_effect;
 use local_dixeo\external\traits\capability_check;
 use local_dixeo\service\file_sync_service;
 
@@ -68,8 +69,12 @@ class set_file_sync_enabled extends external_api {
             'removefiles' => $removefiles,
         ]);
 
-        // Turning sync off stops sending, so only enabling needs the current Terms of Use.
-        self::validate_course_sync_capability($params['courseid'], (bool) $params['enabled']);
+        // Enabling sync sends course files. Turning it off stops sending and may erase the remote
+        // store, so it works while Dixeo is off and without the current Terms of Use.
+        self::validate_course_sync_capability(
+            $params['courseid'],
+            $params['enabled'] ? entry_effect::SEND : entry_effect::STOP_OR_STATUS
+        );
 
         $service = service_factory::get_file_sync_service();
 

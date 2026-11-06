@@ -27,40 +27,43 @@
 
 namespace local_dixeo\external\traits;
 
+use local_dixeo\entry_effect;
 use local_dixeo\external\service_factory;
 use local_dixeo\service\consent_service;
 
 /**
  * Trait providing capability checking for external API endpoints.
  *
- * Terms of Use gate: an endpoint that starts or advances Dixeo processing, or stores input
- * that will be sent, keeps the default $requireconsent = true. An endpoint that only reads
- * status or a catalogue, or that stops, cancels, turns off or deletes, passes false, so a
- * user who withdrew acceptance can still stop processing and remove data.
+ * Each endpoint declares its {@see entry_effect}, which decides the Dixeo gates:
+ * - SEND (default): starts or advances Dixeo processing, or stores input that will be sent.
+ *   Needs Dixeo enabled for the course and the current Terms of Use.
+ * - FEATURE_READ: reads feature data such as a catalogue. Needs Dixeo enabled only.
+ * - STOP_OR_STATUS: stops, cancels, turns off, erases, or reads the status of existing work.
+ *   Needs neither, so a user can stop processing, check it and remove data after Dixeo is
+ *   turned off or acceptance is withdrawn.
+ * Context and capability checks run for every effect; job ownership is enforced by job_service.
  */
 trait capability_check {
     /**
      * Validate course context and check required capabilities.
      *
      * Use this for endpoints that operate on specific courses. Checks run in this order:
-     * course id, context, capabilities, Dixeo enabled for the course, then the Terms of Use.
+     * course id, context, capabilities, then the Dixeo gates required by the effect.
      *
      * @param int $courseid The course ID.
      * @param bool $requiremanageactivities Whether to also check moodle/course:manageactivities.
-     * @param bool $requireconsent Whether the acting user must have accepted the current Terms of Use.
+     * @param entry_effect $effect What the endpoint does, which decides the Dixeo gates.
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
-     * @throws \moodle_exception error:dixeo_disabled when Dixeo is turned off for the course,
-     *     error:consentrequired when the current Terms of Use are not accepted.
+     * @throws \moodle_exception error:dixeo_disabled when the effect needs Dixeo and it is off for the course,
+     *     error:consentrequired when the effect needs the current Terms of Use and they are not accepted.
      */
     protected static function validate_course_capability(
         int $courseid,
         bool $requiremanageactivities = false,
-        bool $requireconsent = true
+        entry_effect $effect = entry_effect::SEND
     ): \context_course {
-        global $USER;
-
         if ($courseid <= 1) {
             throw new \invalid_parameter_exception('Invalid course id');
         }
@@ -73,11 +76,7 @@ trait capability_check {
             require_capability('moodle/course:manageactivities', $coursecontext);
         }
 
-        service_factory::get_settings_config()->require_enabled($coursecontext);
-
-        if ($requireconsent) {
-            (new consent_service())->require_accepted((int) $USER->id, $coursecontext);
-        }
+        self::require_entry_effect($coursecontext, $effect);
 
         return $coursecontext;
     }
@@ -86,19 +85,20 @@ trait capability_check {
      * Validate course context and require local/dixeo:syncfiles.
      *
      * Use for enable/disable/trigger of external course file transfer. Checks run in this order:
-     * course id, context, capability, Dixeo enabled for the course, then the Terms of Use.
+     * course id, context, capability, then the Dixeo gates required by the effect.
      *
      * @param int $courseid The course ID.
-     * @param bool $requireconsent Whether the acting user must have accepted the current Terms of Use.
+     * @param entry_effect $effect What the endpoint does, which decides the Dixeo gates.
      * @return \context_course The validated course context.
      * @throws \invalid_parameter_exception If course id is invalid.
      * @throws \required_capability_exception If capability check fails.
-     * @throws \moodle_exception error:dixeo_disabled when Dixeo is turned off for the course,
-     *     error:consentrequired when the current Terms of Use are not accepted.
+     * @throws \moodle_exception error:dixeo_disabled when the effect needs Dixeo and it is off for the course,
+     *     error:consentrequired when the effect needs the current Terms of Use and they are not accepted.
      */
-    protected static function validate_course_sync_capability(int $courseid, bool $requireconsent = true): \context_course {
-        global $USER;
-
+    protected static function validate_course_sync_capability(
+        int $courseid,
+        entry_effect $effect = entry_effect::SEND
+    ): \context_course {
         if ($courseid <= 1) {
             throw new \invalid_parameter_exception('Invalid course id');
         }
@@ -106,12 +106,28 @@ trait capability_check {
         $coursecontext = \context_course::instance($courseid);
         self::validate_context($coursecontext);
         require_capability('local/dixeo:syncfiles', $coursecontext);
-        service_factory::get_settings_config()->require_enabled($coursecontext);
 
-        if ($requireconsent) {
-            (new consent_service())->require_accepted((int) $USER->id, $coursecontext);
-        }
+        self::require_entry_effect($coursecontext, $effect);
 
         return $coursecontext;
+    }
+
+    /**
+     * Apply the Dixeo switch, then the Terms of Use check, as required by the effect.
+     *
+     * @param \context_course $context Validated course context.
+     * @param entry_effect $effect What the endpoint does.
+     * @throws \moodle_exception error:dixeo_disabled or error:consentrequired.
+     */
+    private static function require_entry_effect(\context_course $context, entry_effect $effect): void {
+        global $USER;
+
+        if ($effect->requires_enabled()) {
+            service_factory::get_settings_config()->require_enabled($context);
+        }
+
+        if ($effect->requires_terms()) {
+            (new consent_service())->require_accepted((int) $USER->id, $context);
+        }
     }
 }
