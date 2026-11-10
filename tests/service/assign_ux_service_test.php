@@ -226,8 +226,8 @@ final class assign_ux_service_test extends \advanced_testcase {
             ])
         );
         $this->assertSame(
-            ['questions' => [['id' => 'q1']]],
-            $service->map_authorship_result('quiz', ['questions' => [['id' => 'q1']]])
+            ['questions' => [['id' => 'q1', 'type' => 'open', 'text' => 'Why?']]],
+            $service->map_authorship_result('quiz', ['questions' => [['id' => 'q1', 'type' => 'open', 'text' => 'Why?']]])
         );
         $this->assertSame(
             [

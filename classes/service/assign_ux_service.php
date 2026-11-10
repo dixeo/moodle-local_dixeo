@@ -67,6 +67,21 @@ class assign_ux_service {
     /** Authorship API mode: final evaluation. */
     public const MODE_FINAL = 'final';
 
+    /** Most verification questions kept from a generated quiz. */
+    public const QUIZ_MAX_QUESTIONS = 15;
+
+    /** Longest question id kept as generated; longer or unsafe ids are replaced. */
+    public const QUIZ_MAX_ID_LENGTH = 64;
+
+    /** Longest question or option text, in characters. */
+    public const QUIZ_MAX_TEXT_CHARS = 2000;
+
+    /** Most options kept on one question. */
+    public const QUIZ_MAX_OPTIONS = 10;
+
+    /** Question types the evaluation step accepts. */
+    public const QUIZ_TYPES = ['true_false', 'multiple_choice', 'open'];
+
     /** API accepts at most this many submission files. */
     private const MAX_FILES = 5;
 
@@ -337,6 +352,12 @@ class assign_ux_service {
     /**
      * Map a completed authorship job result by mode.
      *
+     * A generated quiz is normalised to the shape the evaluation step accepts: at most
+     * {@see self::QUIZ_MAX_QUESTIONS} questions of a known type with text, each with a safe,
+     * unique id (letters, digits, underscore and hyphen, at most {@see self::QUIZ_MAX_ID_LENGTH}
+     * characters, or q plus its position), capped text, at most {@see self::QUIZ_MAX_OPTIONS}
+     * options, and the correct answer when it is an int or a string.
+     *
      * @param string $mode confidence|quiz|final.
      * @param array|null $result Job result.
      * @return array Mapped fields or error key.
@@ -356,8 +377,8 @@ class assign_ux_service {
             ];
         }
         if ($mode === self::MODE_QUIZ) {
-            $questions = $result['questions'] ?? null;
-            if (!is_array($questions) || $questions === []) {
+            $questions = self::normalise_quiz_questions($result['questions'] ?? null);
+            if ($questions === []) {
                 return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
             }
             return ['questions' => $questions];
@@ -612,6 +633,118 @@ class assign_ux_service {
             $payload['namespace'] = $this->namespace;
         }
         return $payload;
+    }
+
+    /**
+     * Normalise generated quiz questions; see {@see self::map_authorship_result()}.
+     *
+     * @param mixed $questions Raw questions from the API.
+     * @return list<array<string, mixed>>
+     */
+    private static function normalise_quiz_questions($questions): array {
+        if (!is_array($questions)) {
+            return [];
+        }
+
+        $out = [];
+        $used = [];
+        foreach ($questions as $question) {
+            if (count($out) >= self::QUIZ_MAX_QUESTIONS) {
+                break;
+            }
+            if (!is_array($question) || !in_array($question['type'] ?? null, self::QUIZ_TYPES, true)) {
+                continue;
+            }
+            $text = self::capped_text($question['text'] ?? null, self::QUIZ_MAX_TEXT_CHARS);
+            if ($text === '') {
+                continue;
+            }
+
+            $id = self::quiz_question_id($question['id'] ?? null, count($out), $used);
+            $used[$id] = true;
+            $normalised = ['id' => $id, 'type' => $question['type'], 'text' => $text];
+
+            if (is_array($question['options'] ?? null)) {
+                $normalised['options'] = self::normalise_quiz_options($question['options']);
+            }
+            $correct = $question['correct'] ?? null;
+            if (is_int($correct)) {
+                $normalised['correct'] = $correct;
+            } else if (is_string($correct)) {
+                $normalised['correct'] = self::capped_text($correct, self::QUIZ_MAX_ID_LENGTH);
+            }
+            $out[] = $normalised;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The generated id when it is safe, short and unused; otherwise q plus the position, made unique.
+     *
+     * @param mixed $raw Generated id.
+     * @param int $index Position of the question in the normalised quiz.
+     * @param array $used Ids already taken, as keys.
+     * @return string
+     */
+    private static function quiz_question_id($raw, int $index, array $used): string {
+        if (is_string($raw) || is_int($raw)) {
+            $raw = (string) $raw;
+            $clean = clean_param($raw, PARAM_ALPHANUMEXT);
+            if ($clean !== '' && $clean === $raw && strlen($clean) <= self::QUIZ_MAX_ID_LENGTH && !isset($used[$clean])) {
+                return $clean;
+            }
+        }
+
+        $id = 'q' . $index;
+        $suffix = 1;
+        while (isset($used[$id])) {
+            $id = 'q' . $index . '_' . $suffix++;
+        }
+        return $id;
+    }
+
+    /**
+     * Keep at most {@see self::QUIZ_MAX_OPTIONS} options as {value, text} strings.
+     *
+     * @param array $options Raw options: strings, or arrays with value and text.
+     * @return list<array{value: string, text: string}>
+     */
+    private static function normalise_quiz_options(array $options): array {
+        $out = [];
+        foreach ($options as $option) {
+            if (count($out) >= self::QUIZ_MAX_OPTIONS) {
+                break;
+            }
+            if (is_array($option)) {
+                $value = $option['value'] ?? $option['text'] ?? null;
+                $text = $option['text'] ?? $option['value'] ?? null;
+            } else {
+                $value = $option;
+                $text = $option;
+            }
+            $value = self::capped_text($value, self::QUIZ_MAX_ID_LENGTH);
+            $text = self::capped_text($text, self::QUIZ_MAX_TEXT_CHARS);
+            if ($value === '' && $text === '') {
+                continue;
+            }
+            $out[] = ['value' => $value, 'text' => $text];
+        }
+        return $out;
+    }
+
+    /**
+     * Trimmed scalar text capped at $max characters, or an empty string.
+     *
+     * @param mixed $value Raw value.
+     * @param int $max Most characters kept.
+     * @return string
+     */
+    private static function capped_text($value, int $max): string {
+        if (!is_scalar($value) || is_bool($value)) {
+            return '';
+        }
+        return trim(\core_text::substr(trim((string) $value), 0, $max));
     }
 
     /**
