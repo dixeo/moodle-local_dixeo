@@ -64,6 +64,8 @@ class simplequiz2_question_transformer {
      * @return array{0: int, 1: int} Maximum questions and maximum answers.
      */
     private static function limits(): array {
+        global $CFG;
+
         if (self::$limits !== null) {
             return self::$limits;
         }
