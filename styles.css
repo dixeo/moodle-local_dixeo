@@ -1617,15 +1617,11 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-control[aria-pressed="true"] .local-dixeo-settings-switch {
-    background: #9aa0a6;
+    background: #0676cc;
 }
 
 .local-dixeo-settings-control[aria-pressed="true"] .local-dixeo-settings-switch::after {
     left: 16px;
-}
-
-.local-dixeo-settings-control.local-dixeo-settings-supplied[aria-pressed="true"] .local-dixeo-settings-switch {
-    background: #0676cc;
 }
 
 .local-dixeo-settings-icon {
