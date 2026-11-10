@@ -281,6 +281,23 @@ class assign_ux_service {
     }
 
     /**
+     * Poll a job only when this user started it from this assignment through this component.
+     *
+     * @param string $jobid Remote job id.
+     * @param int $courseid Course id.
+     * @param int $cmid Assign course module id the caller expects the job to belong to.
+     * @param int $userid Acting user id, who must be the job's initiator.
+     * @return job_status
+     * @throws \moodle_exception error:job_not_found when the job is bound to another module, user or component.
+     */
+    public function get_status_for_module(string $jobid, int $courseid, int $cmid, int $userid): job_status {
+        if (!$this->jobservice->get_job_repository()->belongs_to_module($jobid, $courseid, $cmid, $userid, self::COMPONENT)) {
+            throw new \moodle_exception('error:job_not_found', 'local_dixeo');
+        }
+        return $this->jobservice->get_job_status($jobid, $courseid, $userid);
+    }
+
+    /**
      * Map a completed review job result for UX.
      *
      * @param array|null $result Job result array.
