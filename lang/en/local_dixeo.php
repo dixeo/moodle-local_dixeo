@@ -254,6 +254,7 @@ $string['error:authentication'] = 'Authentication failed. Please check your API 
 $string['error:busy'] = 'The AI service is busy. Please try again in a few minutes.';
 $string['error:consent_loggedinas'] = 'You are logged in as another user. Only that user can accept or withdraw the Dixeo Terms of Use.';
 $string['error:consent_not_current'] = 'This was not sent to Dixeo because the current Dixeo Terms of Use are not accepted.';
+$string['error:consent_subject_not_current'] = 'This student has not accepted the current Dixeo Terms of Use, so their work cannot be sent to Dixeo.';
 $string['error:consentrequired'] = 'Accept the current Dixeo Terms of Use on the course page to continue.';
 $string['error:content_rejected'] = 'The prompt was refused by the model. Try rewording it.';
 $string['error:content_too_long'] = 'This content is too large to edit with Dixeo AI (maximum {$a}).';

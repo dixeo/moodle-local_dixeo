@@ -254,6 +254,7 @@ $string['error:authentication'] = 'Authentifizierung fehlgeschlagen. Bitte über
 $string['error:busy'] = 'Der KI-Dienst ist ausgelastet. Bitte versuchen Sie es in einigen Minuten erneut.';
 $string['error:consent_loggedinas'] = 'Sie sind als anderer Nutzer angemeldet. Nur dieser Nutzer kann die Dixeo-Nutzungsbedingungen akzeptieren oder widerrufen.';
 $string['error:consent_not_current'] = 'Dies wurde nicht an Dixeo gesendet, weil die aktuellen Dixeo-Nutzungsbedingungen nicht akzeptiert sind.';
+$string['error:consent_subject_not_current'] = 'Diese:r Studierende hat die aktuellen Dixeo-Nutzungsbedingungen nicht akzeptiert. Die Arbeit kann daher nicht an Dixeo gesendet werden.';
 $string['error:consentrequired'] = 'Akzeptieren Sie die aktuellen Dixeo-Nutzungsbedingungen auf der Kursseite, um fortzufahren.';
 $string['error:content_rejected'] = 'Die Eingabe wurde vom Modell abgelehnt. Formulieren Sie sie um und versuchen Sie es erneut.';
 $string['error:content_too_long'] = 'Dieser Inhalt ist zu groß, um ihn mit Dixeo AI zu bearbeiten (maximal {$a}).';

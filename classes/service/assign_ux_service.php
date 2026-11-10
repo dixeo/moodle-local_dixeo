@@ -28,12 +28,16 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\dto\job_status;
 use local_dixeo\dto\operation_result;
+use local_dixeo\exception\consent_required_exception;
 
 /**
  * Orchestrates assign UX AI jobs via job_service (initiator_scoped by default).
  *
  * Builds structured camelCase payloads only — no prompt text. Persistence is
  * injected when authorship records must be written.
+ *
+ * Every submit method stops before reading the submission unless the acting user has accepted
+ * the current Dixeo Terms of Use and, when someone else's work is sent, the student has too.
  */
 class assign_ux_service {
     /** Component for credit / job binding attribution. */
@@ -120,8 +124,10 @@ class assign_ux_service {
      * @return operation_result Pending result with jobid.
      * @throws \moodle_exception When submission cannot be analyzed.
      * @throws api_exception When the API request fails.
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_review(int $courseid, int $cmid, int $studentuserid): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
         return $this->submit(self::ENDPOINT_REVIEW, $request, null, $cmid);
@@ -136,8 +142,10 @@ class assign_ux_service {
      * @return operation_result
      * @throws \moodle_exception
      * @throws api_exception
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_review_and_wait(int $courseid, int $cmid, int $studentuserid): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
         return $this->submit(self::ENDPOINT_REVIEW, $request, 'assign_review', $cmid);
@@ -154,8 +162,10 @@ class assign_ux_service {
      * @return operation_result Pending result with jobid.
      * @throws \moodle_exception When submission cannot be analyzed.
      * @throws api_exception When the API request fails.
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_grade(int $courseid, int $cmid, int $studentuserid): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
         return $this->submit(self::ENDPOINT_GRADE, $request, null, $cmid);
@@ -170,8 +180,10 @@ class assign_ux_service {
      * @return operation_result
      * @throws \moodle_exception
      * @throws api_exception
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_grade_and_wait(int $courseid, int $cmid, int $studentuserid): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
         return $this->submit(self::ENDPOINT_GRADE, $request, 'assign_grade', $cmid);
@@ -188,6 +200,7 @@ class assign_ux_service {
      * @return operation_result Pending result with jobid.
      * @throws \moodle_exception When mode/submission is invalid.
      * @throws api_exception When the API request fails.
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_authorship(
         int $courseid,
@@ -196,6 +209,7 @@ class assign_ux_service {
         string $mode,
         array $options = []
     ): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $mode = strtolower(trim($mode));
         if (!isset(self::AUTHORSHIP_STEPS[$mode])) {
             throw new \moodle_exception('assign_ux_authorship_mode_invalid', 'local_dixeo');
@@ -217,6 +231,7 @@ class assign_ux_service {
      * @return operation_result
      * @throws \moodle_exception
      * @throws api_exception
+     * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
      */
     public function submit_authorship_and_wait(
         int $courseid,
@@ -225,6 +240,7 @@ class assign_ux_service {
         string $mode,
         array $options = []
     ): operation_result {
+        $this->assert_may_send($courseid, $studentuserid);
         $mode = strtolower(trim($mode));
         if (!isset(self::AUTHORSHIP_STEPS[$mode])) {
             throw new \moodle_exception('assign_ux_authorship_mode_invalid', 'local_dixeo');
@@ -411,6 +427,28 @@ class assign_ux_service {
             $quizexplanation,
             $questionfeedbacks
         );
+    }
+
+    /**
+     * Stop a send of a student's work unless the people concerned have accepted the current terms.
+     *
+     * The acting user is always checked. When the acting user sends another user's work, that
+     * student, whose data is sent, is checked too. While Dixeo is off for the course this is a
+     * no-op, so the job service still reports the switch.
+     *
+     * @param int $courseid Course id.
+     * @param int $studentuserid Student whose submission or answers are sent.
+     * @return void
+     * @throws consent_required_exception When either acceptance is missing.
+     */
+    private function assert_may_send(int $courseid, int $studentuserid): void {
+        global $USER;
+
+        $consent = new consent_service();
+        $consent->require_accepted_for_course((int) $USER->id, $courseid);
+        if ($studentuserid !== (int) $USER->id) {
+            $consent->require_accepted_for_course($studentuserid, $courseid, 'error:consent_subject_not_current');
+        }
     }
 
     /**

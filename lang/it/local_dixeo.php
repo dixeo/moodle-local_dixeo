@@ -254,6 +254,7 @@ $string['error:authentication'] = 'Autenticazione fallita. Controlla la tua chia
 $string['error:busy'] = 'Il servizio di IA è occupato. Riprovate tra qualche minuto.';
 $string['error:consent_loggedinas'] = 'Hai effettuato l\'accesso come un altro utente. Solo quell\'utente può accettare o revocare le Condizioni d\'uso di Dixeo.';
 $string['error:consent_not_current'] = 'Non è stato inviato a Dixeo perché le Condizioni d\'uso attuali di Dixeo non sono state accettate.';
+$string['error:consent_subject_not_current'] = 'Questo studente non ha accettato le Condizioni d\'uso attuali di Dixeo, quindi il suo lavoro non può essere inviato a Dixeo.';
 $string['error:consentrequired'] = 'Accetta le Condizioni d\'uso attuali di Dixeo nella pagina del corso per continuare.';
 $string['error:content_rejected'] = 'Il modello ha rifiutato l\'istruzione. Riformulatela e riprovate.';
 $string['error:content_too_long'] = 'Questo contenuto è troppo grande per essere modificato con Dixeo AI (massimo {$a}).';

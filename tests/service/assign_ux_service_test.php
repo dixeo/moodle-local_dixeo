@@ -55,6 +55,7 @@ final class assign_ux_service_test extends \advanced_testcase {
             'assignsubmission_file_enabled' => 0,
         ]);
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->accept_terms((int) get_admin()->id, (int) $student->id);
         $this->create_onlinetext_submission((int) $assign->id, (int) $student->id, '<p>My draft</p>');
 
         $mockjob = $this->createMock(job_service::class);
@@ -100,6 +101,7 @@ final class assign_ux_service_test extends \advanced_testcase {
             'assignsubmission_file_maxsizebytes' => 1048576,
         ]);
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->accept_terms((int) get_admin()->id, (int) $student->id);
         $this->create_file_submission($assign, (int) $student->id, 'essay.pdf');
 
         $mockjob = $this->createMock(job_service::class);
@@ -138,6 +140,7 @@ final class assign_ux_service_test extends \advanced_testcase {
             'assignsubmission_file_enabled' => 0,
         ]);
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->accept_terms((int) get_admin()->id, (int) $student->id);
         $this->create_onlinetext_submission((int) $assign->id, (int) $student->id, 'Original work');
 
         $mockjob = $this->createMock(job_service::class);
@@ -166,6 +169,8 @@ final class assign_ux_service_test extends \advanced_testcase {
 
     public function test_submit_authorship_final_skips_submission_files(): void {
         $this->resetAfterTest();
+        $student = $this->getDataGenerator()->create_user();
+        $this->accept_terms((int) $student->id);
 
         $mockjob = $this->createMock(job_service::class);
         $mockjob->expects($this->once())
@@ -188,7 +193,7 @@ final class assign_ux_service_test extends \advanced_testcase {
         $reader->expects($this->never())->method('get_assignment_context');
 
         $service = new assign_ux_service($mockjob, $reader, null, 'test-ns');
-        $service->submit_authorship(10, 20, 30, assign_ux_service::MODE_FINAL, [
+        $service->submit_authorship(10, 20, (int) $student->id, assign_ux_service::MODE_FINAL, [
             'initialConfidence' => 70.0,
             'questions' => [['id' => 'q1', 'type' => 'open', 'text' => 'Why?']],
             'answers' => ['q1' => 'Because'],
@@ -272,6 +277,18 @@ final class assign_ux_service_test extends \advanced_testcase {
         $this->assertSame($stub, service_factory::get_assign_ux_service());
         service_factory::reset();
         $this->assertInstanceOf(assign_ux_service::class, service_factory::get_assign_ux_service());
+    }
+
+    /**
+     * Record acceptance of the current Dixeo Terms of Use for each user.
+     *
+     * @param int ...$userids User ids.
+     */
+    private function accept_terms(int ...$userids): void {
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dixeo');
+        foreach ($userids as $userid) {
+            $generator->create_terms_acceptance(['userid' => $userid]);
+        }
     }
 
     /**
