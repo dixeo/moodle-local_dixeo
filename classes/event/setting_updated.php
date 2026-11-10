@@ -28,6 +28,12 @@ namespace local_dixeo\event;
  * Fired when a catalogue setting is stored or its override is removed.
  *
  * The log names the setting and the context. It does not include the value.
+ *
+ * Other data:
+ * - component: frankenstyle component owning the setting.
+ * - name: catalogue key.
+ * - defaultcopy: optional, true when the write copies the Dixeo value onto a new activity
+ *   rather than recording a choice made for it.
  */
 class setting_updated extends \core\event\base {
     /**

@@ -53,6 +53,9 @@ final class config {
     /** @var int Seconds a request reuses a course's master switch value. */
     private const ENABLED_MEMO_TTL = 30;
 
+    /** @var bool True while {@see self::copy_activity_defaults()} stores the Dixeo values. */
+    private bool $copyingdefaults = false;
+
     /**
      * Effective value at $context, falling back through the parent chain.
      *
@@ -220,17 +223,23 @@ final class config {
      *
      * The row is kept even when it equals the Dixeo value. Settings that omit the activity
      * level stay on the Dixeo layer. The caller decides which modules receive a copy.
+     * Each resulting setting_updated event carries other['defaultcopy'] = true.
      *
      * @param \context_module $context The new module.
      */
     public function copy_activity_defaults(\context_module $context): void {
         $system = \context_system::instance();
-        foreach (catalogue::load() as $definition) {
-            if (!in_array(resolver::LAYER_ACTIVITY, $definition->get_levels(), true)) {
-                continue;
+        $this->copyingdefaults = true;
+        try {
+            foreach (catalogue::load() as $definition) {
+                if (!in_array(resolver::LAYER_ACTIVITY, $definition->get_levels(), true)) {
+                    continue;
+                }
+                $value = $this->get($definition->get_component(), $definition->get_key(), $system)->get_value();
+                $this->set($definition->get_component(), $definition->get_key(), $context, $value, false);
             }
-            $value = $this->get($definition->get_component(), $definition->get_key(), $system)->get_value();
-            $this->set($definition->get_component(), $definition->get_key(), $context, $value, false);
+        } finally {
+            $this->copyingdefaults = false;
         }
     }
 
@@ -932,12 +941,16 @@ final class config {
      * @param \context $context Context that changed.
      */
     private function notify_updated(definition $definition, \context $context): void {
+        $other = [
+            'component' => $definition->get_component(),
+            'name' => $definition->get_key(),
+        ];
+        if ($this->copyingdefaults) {
+            $other['defaultcopy'] = true;
+        }
         \local_dixeo\event\setting_updated::create([
             'context' => $context,
-            'other' => [
-                'component' => $definition->get_component(),
-                'name' => $definition->get_key(),
-            ],
+            'other' => $other,
         ])->trigger();
     }
 
