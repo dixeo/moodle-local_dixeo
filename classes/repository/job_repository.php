@@ -234,6 +234,25 @@ class job_repository {
     }
 
     /**
+     * Number of jobs a user started from a component for a course module since a time.
+     *
+     * @param int $userid Initiating user ID.
+     * @param int $cmid Course module ID.
+     * @param string $component Originating frankenstyle component.
+     * @param int $since Unix timestamp; jobs registered at or after it count.
+     * @return int
+     */
+    public function count_for_module_since(int $userid, int $cmid, string $component, int $since): int {
+        global $DB;
+
+        return $DB->count_records_select(
+            self::TABLE,
+            'userid = :userid AND cmid = :cmid AND component = :component AND timecreated >= :since',
+            ['userid' => $userid, 'cmid' => $cmid, 'component' => $component, 'since' => $since]
+        );
+    }
+
+    /**
      * Delete job rows for a user (optionally limited to courses).
      *
      * @param int $userid User ID.

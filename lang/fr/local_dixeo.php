@@ -265,6 +265,7 @@ $string['error:image_dimensions'] = 'L\'image est trop grande. Chaque côté doi
 $string['error:image_edit_source'] = 'Cette image ne peut pas être modifiée avec l\'IA Dixeo. Elle doit être au format PNG, JPEG ou WebP, peser au plus {$a->size} et mesurer au plus {$a->dimension} pixels par côté.';
 $string['error:instructions_too_long'] = 'Les instructions doivent comporter {$a} caractères au maximum.';
 $string['error:job_not_found'] = 'Le travail demandé n\'a pas été trouvé.';
+$string['error:job_quota_exceeded'] = 'Vous avez envoyé trop de demandes à Dixeo pour cette activité récemment. Réessayez plus tard.';
 $string['error:module_type_mismatch'] = 'Le type d\'activité généré ne correspond pas au type demandé.';
 $string['error:notslideshow'] = 'Le module de cours n\'est pas une activité diaporama.';
 $string['error:payment_required'] = 'Crédits insuffisants. Veuillez ajouter des crédits pour continuer.';

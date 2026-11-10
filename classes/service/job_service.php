@@ -36,7 +36,9 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\operation_result;
 use local_dixeo\dto\job_status;
 use local_dixeo\dto\job_binding_metadata;
+use local_dixeo\dto\job_quota;
 use local_dixeo\event\job_cancelled;
+use local_dixeo\exception\job_quota_exceeded_exception;
 use local_dixeo\external\service_factory;
 use local_dixeo\job_access_mode;
 use local_dixeo\repository\job_repository;
@@ -88,9 +90,11 @@ class job_service {
      * @param job_access_mode $accessmode Persisted access policy for later enforcement.
      * @param \stored_file[] $files Files sent with the payload as multipart.
      * @param string|null $idempotencykey Key reused on resubmission so the API creates and bills one job.
+     * @param job_quota|null $quota Limit on the user's recent jobs for the bound course module.
      * @return operation_result Pending operation result with jobid.
      * @throws api_exception If the API request fails.
      * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the job's context, course or site.
+     * @throws job_quota_exceeded_exception When the quota is used up or a concurrent send holds it.
      */
     public function submit_job(
         string $endpoint,
@@ -99,12 +103,20 @@ class job_service {
         ?job_binding_metadata $metadata = null,
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
         array $files = [],
-        ?string $idempotencykey = null
+        ?string $idempotencykey = null,
+        ?job_quota $quota = null
     ): operation_result {
         $resolved = $this->require_enabled_for_submit($payload, $metadata);
-        $response = $this->post($endpoint, $payload, $files, $idempotencykey);
-        $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
+        $jobid = $this->post_and_register(
+            $endpoint,
+            $payload,
+            $files,
+            $idempotencykey,
+            $component,
+            $resolved,
+            $accessmode,
+            $quota
+        );
 
         return operation_result::pending($jobid, 'pending', 0);
     }
@@ -122,9 +134,12 @@ class job_service {
      * @param job_binding_metadata|null $metadata Optional activity/context metadata.
      * @param job_access_mode $accessmode Persisted access policy for later enforcement.
      * @param \stored_file[] $files Files sent with the payload as multipart.
+     * @param job_quota|null $quota Limit on the user's recent jobs for the bound course module.
+     *                              Its lock is released before polling starts.
      * @return operation_result The completed operation result.
      * @throws api_exception If an API error occurs.
      * @throws \moodle_exception error:dixeo_disabled when Dixeo is off for the job's context, course or site.
+     * @throws job_quota_exceeded_exception When the quota is used up or a concurrent send holds it.
      */
     public function submit_and_wait(
         string $endpoint,
@@ -133,12 +148,11 @@ class job_service {
         ?string $component = null,
         ?job_binding_metadata $metadata = null,
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED,
-        array $files = []
+        array $files = [],
+        ?job_quota $quota = null
     ): operation_result {
         $resolved = $this->require_enabled_for_submit($payload, $metadata);
-        $response = $this->post($endpoint, $payload, $files);
-        $jobid = (string) ($response['id'] ?? '');
-        $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
+        $jobid = $this->post_and_register($endpoint, $payload, $files, null, $component, $resolved, $accessmode, $quota);
         $config = polling_config::for_job_type($jobtype);
 
         return $this->poller->poll($jobid, $config);
@@ -396,6 +410,86 @@ class job_service {
     }
 
     /**
+     * Post a job and register its local binding, within the quota when one is given.
+     *
+     * With a quota, a lock per component, user and course module covers the count, the POST and
+     * the registration, so concurrent sends from several sessions cannot all pass the same count.
+     * Nothing is posted when the lock cannot be taken within the quota's lock timeout, or when
+     * the jobs already registered in the window plus the jobs needed exceed the limit.
+     *
+     * @param string $endpoint API endpoint.
+     * @param array $payload Request payload.
+     * @param \stored_file[] $files Files to attach.
+     * @param string|null $idempotencykey Optional idempotency key.
+     * @param string|null $component Originating frankenstyle component.
+     * @param job_binding_metadata|null $resolved Binding metadata resolved for the submission.
+     * @param job_access_mode $accessmode Persisted access policy.
+     * @param job_quota|null $quota Optional job quota.
+     * @return string Remote job id.
+     * @throws api_exception If the API request fails.
+     * @throws job_quota_exceeded_exception When the quota is used up or a concurrent send holds it.
+     * @throws \coding_exception When a quota is given without a component or a bound course module.
+     */
+    private function post_and_register(
+        string $endpoint,
+        array $payload,
+        array $files,
+        ?string $idempotencykey,
+        ?string $component,
+        ?job_binding_metadata $resolved,
+        job_access_mode $accessmode,
+        ?job_quota $quota
+    ): string {
+        if ($quota === null) {
+            $response = $this->post($endpoint, $payload, $files, $idempotencykey);
+            $jobid = (string) ($response['id'] ?? '');
+            $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
+            return $jobid;
+        }
+
+        if ($component === null || $component === '' || $resolved === null || $resolved->cmid <= 0) {
+            throw new \coding_exception('A job quota needs a component and a bound course module.');
+        }
+        $userid = $this->resolve_job_userid($payload);
+        $cmid = $resolved->cmid;
+
+        $lock = \core\lock\lock_config::get_lock_factory(job_quota::LOCK_TYPE)
+            ->get_lock(job_quota::lock_key($component, $userid, $cmid), $quota->locktimeout);
+        if (!$lock) {
+            throw new job_quota_exceeded_exception();
+        }
+        try {
+            $now = \core\di::get(\core\clock::class)->time();
+            $count = $this->jobrepository->count_for_module_since($userid, $cmid, $component, $now - $quota->windowseconds);
+            if ($count + $quota->jobsneeded > $quota->limit) {
+                throw new job_quota_exceeded_exception();
+            }
+            $response = $this->post($endpoint, $payload, $files, $idempotencykey);
+            $jobid = (string) ($response['id'] ?? '');
+            $this->register_job($jobid, $endpoint, $payload, $component, $resolved, $accessmode);
+            return $jobid;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * User a job is registered for: the payload user, else the current user.
+     *
+     * @param array $payload Request payload.
+     * @return int User id, or 0 when there is neither.
+     */
+    private function resolve_job_userid(array $payload): int {
+        global $USER;
+
+        $userid = (int) ($payload['userId'] ?? $payload['userid'] ?? 0);
+        if ($userid < 1 && !empty($USER->id)) {
+            $userid = (int) $USER->id;
+        }
+        return $userid;
+    }
+
+    /**
      * Register a local binding for a remote job using the request payload.
      *
      * @param string $jobid Remote job UUID.
@@ -413,7 +507,7 @@ class job_service {
         ?job_binding_metadata $metadata = null,
         job_access_mode $accessmode = job_access_mode::INITIATOR_SCOPED
     ): void {
-        global $USER, $CFG;
+        global $CFG;
 
         if (trim($jobid) === '') {
             return;
@@ -422,10 +516,7 @@ class job_service {
         require_once($CFG->dirroot . '/local/dixeo/lib.php');
 
         $courseid = (int) ($payload['courseId'] ?? $payload['courseid'] ?? 0);
-        $userid = (int) ($payload['userId'] ?? $payload['userid'] ?? 0);
-        if ($userid < 1 && !empty($USER->id)) {
-            $userid = (int) $USER->id;
-        }
+        $userid = $this->resolve_job_userid($payload);
 
         $namespace = (string) ($payload['namespace'] ?? \local_dixeo_get_configured_namespace());
         $operation = $this->operation_from_endpoint($endpoint);

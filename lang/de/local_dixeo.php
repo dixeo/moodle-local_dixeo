@@ -265,6 +265,7 @@ $string['error:image_dimensions'] = 'Das Bild ist zu groß. Jede Seite darf höc
 $string['error:image_edit_source'] = 'Dieses Bild kann nicht mit Dixeo KI bearbeitet werden. Es muss ein PNG-, JPEG- oder WebP-Bild mit höchstens {$a->size} und höchstens {$a->dimension} Pixeln pro Seite sein.';
 $string['error:instructions_too_long'] = 'Anweisungen dürfen höchstens {$a} Zeichen lang sein.';
 $string['error:job_not_found'] = 'Der angeforderte Auftrag wurde nicht gefunden.';
+$string['error:job_quota_exceeded'] = 'Sie haben in letzter Zeit zu viele Anfragen für diese Aktivität an Dixeo gesendet. Versuchen Sie es später erneut.';
 $string['error:module_type_mismatch'] = 'Der generierte Aktivitätstyp entspricht nicht dem angeforderten Typ.';
 $string['error:notslideshow'] = 'Das Kursmodul ist keine Slideshow-Aktivität.';
 $string['error:payment_required'] = 'Unzureichende Credits. Bitte laden Sie Credits auf, um fortzufahren.';

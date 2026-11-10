@@ -265,6 +265,7 @@ $string['error:image_dimensions'] = 'The image is too large. Each side must be a
 $string['error:image_edit_source'] = 'This image cannot be edited with Dixeo AI. It must be a PNG, JPEG or WebP image of at most {$a->size} and {$a->dimension} pixels per side.';
 $string['error:instructions_too_long'] = 'Instructions must be {$a} characters or fewer.';
 $string['error:job_not_found'] = 'The requested job was not found.';
+$string['error:job_quota_exceeded'] = 'You have sent too many requests to Dixeo for this activity recently. Try again later.';
 $string['error:module_type_mismatch'] = 'The generated activity type does not match the requested type.';
 $string['error:notslideshow'] = 'The course module is not a slideshow activity.';
 $string['error:payment_required'] = 'Insufficient credits. Please add credits to continue.';

@@ -26,6 +26,7 @@ namespace local_dixeo\service;
 
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
+use local_dixeo\dto\job_quota;
 use local_dixeo\dto\job_status;
 use local_dixeo\dto\operation_result;
 use local_dixeo\exception\consent_required_exception;
@@ -136,16 +137,18 @@ class assign_ux_service {
      * @param int $courseid Course id.
      * @param int $cmid Assign course module id.
      * @param int $studentuserid Student whose submission is reviewed.
+     * @param job_quota|null $quota Limit on the student's recent jobs for this assignment.
      * @return operation_result Pending result with jobid.
      * @throws \moodle_exception When submission cannot be analyzed.
      * @throws api_exception When the API request fails.
      * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
+     * @throws \local_dixeo\exception\job_quota_exceeded_exception When the quota is used up.
      */
-    public function submit_review(int $courseid, int $cmid, int $studentuserid): operation_result {
+    public function submit_review(int $courseid, int $cmid, int $studentuserid, ?job_quota $quota = null): operation_result {
         $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
-        return $this->submit(self::ENDPOINT_REVIEW, $request, null, $cmid);
+        return $this->submit(self::ENDPOINT_REVIEW, $request, null, $cmid, $quota);
     }
 
     /**
@@ -243,17 +246,20 @@ class assign_ux_service {
      * @param int $studentuserid Student userid.
      * @param string $mode One of confidence|quiz|final.
      * @param array $options Mode-specific fields.
+     * @param job_quota|null $quota Limit on the student's recent jobs for this assignment.
      * @return operation_result
      * @throws \moodle_exception
      * @throws api_exception
      * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
+     * @throws \local_dixeo\exception\job_quota_exceeded_exception When the quota is used up.
      */
     public function submit_authorship_and_wait(
         int $courseid,
         int $cmid,
         int $studentuserid,
         string $mode,
-        array $options = []
+        array $options = [],
+        ?job_quota $quota = null
     ): operation_result {
         $this->assert_may_send($courseid, $studentuserid);
         $mode = strtolower(trim($mode));
@@ -265,7 +271,7 @@ class assign_ux_service {
 
         [$endpoint, $jobtype] = self::AUTHORSHIP_STEPS[$mode];
 
-        return $this->submit($endpoint, $request, $jobtype, $cmid);
+        return $this->submit($endpoint, $request, $jobtype, $cmid, $quota);
     }
 
     /**
@@ -295,6 +301,20 @@ class assign_ux_service {
             throw new \moodle_exception('error:job_not_found', 'local_dixeo');
         }
         return $this->jobservice->get_job_status($jobid, $courseid, $userid);
+    }
+
+    /**
+     * Number of assignment jobs a user started for a course module since a time.
+     *
+     * Jobs that background tasks run as the user count too.
+     *
+     * @param int $userid Initiating user id.
+     * @param int $cmid Assign course module id.
+     * @param int $since Unix timestamp; jobs registered at or after it count.
+     * @return int
+     */
+    public function count_recent_jobs(int $userid, int $cmid, int $since): int {
+        return $this->jobservice->get_job_repository()->count_for_module_since($userid, $cmid, self::COMPONENT, $since);
     }
 
     /**
@@ -512,10 +532,17 @@ class assign_ux_service {
      * @param array $request Built request with payload and files keys.
      * @param string|null $jobtype Job type to poll for, or null to return at once.
      * @param int $cmid Assign course module id.
+     * @param job_quota|null $quota Optional job quota, enforced by job_service.
      * @return operation_result
      * @throws api_exception
      */
-    private function submit(string $endpoint, array $request, ?string $jobtype, int $cmid): operation_result {
+    private function submit(
+        string $endpoint,
+        array $request,
+        ?string $jobtype,
+        int $cmid,
+        ?job_quota $quota = null
+    ): operation_result {
         $metadata = job_binding_metadata::for_module('assign', $cmid);
 
         if ($jobtype === null) {
@@ -524,7 +551,8 @@ class assign_ux_service {
                 $request['payload'],
                 self::COMPONENT,
                 $metadata,
-                files: $request['files']
+                files: $request['files'],
+                quota: $quota
             );
         }
 
@@ -534,7 +562,8 @@ class assign_ux_service {
             $jobtype,
             self::COMPONENT,
             $metadata,
-            files: $request['files']
+            files: $request['files'],
+            quota: $quota
         );
     }
 
