@@ -39,6 +39,7 @@ $string['assign_submission_some_files_not_readable'] = 'Die folgenden Datei(en) 
 $string['assign_submission_unsupported'] = 'Für die Analyse werden nur Online-Text- und Dateiabgaben unterstützt. Bei dieser Aufgabe ist keines von beiden aktiviert.';
 $string['assign_ux_authorship_final_incomplete'] = 'Die endgültige Urheberschaftsbewertung erfordert den anfänglichen Konfidenzwert, die Fragen und die Antworten.';
 $string['assign_ux_authorship_mode_invalid'] = 'Ungültiger Urheberschaftsmodus. Verwenden Sie confidence, quiz oder final.';
+$string['assign_ux_result_invalid'] = 'Die KI hat eine Bewertung vorgeschlagen, die nicht zur Bewertungskonfiguration dieser Aufgabe passt. Sie wurde daher nicht verwendet.';
 $string['assign_ux_result_missing'] = 'Die KI-Antwort fehlte oder war unvollständig.';
 $string['assign_ux_submission_invalid'] = '{$a}';
 $string['cachedef_coursetemplates'] = 'Zwischengespeicherte Kursstrukturvorlagen von der Dixeo-API';

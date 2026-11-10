@@ -57,6 +57,9 @@ class assign_submission_reader {
     /**
      * Assignment metadata and grading criteria for AI / UI context.
      *
+     * Guide criteria carry id, shortname, description, maxscore and sortorder. Rubric criteria carry
+     * id, description, sortorder and their levels (id, score, definition) in score order.
+     *
      * @param int $cmid Course module id.
      * @param int|null $courseid Optional course boundary check.
      * @return array{
@@ -65,8 +68,9 @@ class assign_submission_reader {
      *     activity: string,
      *     grading_method: string,
      *     assignmentid: int,
+     *     maxgrade: float,
      *     criteria: list<array<string, mixed>>
-     * }
+     * } maxgrade is the assignment's maximum point grade; 0 or below means a scale or no grade.
      */
     public function get_assignment_context(int $cmid, ?int $courseid = null): array {
         global $DB;
@@ -75,7 +79,7 @@ class assign_submission_reader {
         $assign = $DB->get_record(
             'assign',
             ['id' => $cm->instance],
-            'name,intro,introformat,activity,activityformat',
+            'name,intro,introformat,activity,activityformat,grade',
             MUST_EXIST
         );
 
@@ -97,6 +101,7 @@ class assign_submission_reader {
             'activity' => $assign->activity ?? '',
             'grading_method' => $gradingmethod,
             'assignmentid' => (int) $cm->instance,
+            'maxgrade' => (float) $assign->grade,
             'criteria' => [],
         ];
 
@@ -128,21 +133,28 @@ class assign_submission_reader {
             ], 'id', IGNORE_MISSING);
             if ($definition) {
                 $critrows = $DB->get_records('gradingform_rubric_criteria', ['definitionid' => $definition->id], 'sortorder');
-                foreach ($critrows as $c) {
-                    $levels = $DB->get_records('gradingform_rubric_levels', ['criterionid' => $c->id], 'score');
-                    $leveldata = [];
+                $levelsbycriterion = [];
+                if ($critrows) {
+                    $levels = $DB->get_records_list(
+                        'gradingform_rubric_levels',
+                        'criterionid',
+                        array_keys($critrows),
+                        'criterionid, score'
+                    );
                     foreach ($levels as $l) {
-                        $leveldata[] = [
+                        $levelsbycriterion[(int) $l->criterionid][] = [
                             'id' => (int) $l->id,
                             'score' => (float) $l->score,
                             'definition' => $l->definition ?? '',
                         ];
                     }
+                }
+                foreach ($critrows as $c) {
                     $result['criteria'][] = [
                         'id' => (int) $c->id,
                         'description' => $c->description ?? '',
                         'sortorder' => (int) $c->sortorder,
-                        'levels' => $leveldata,
+                        'levels' => $levelsbycriterion[(int) $c->id] ?? [],
                     ];
                 }
             }

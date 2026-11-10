@@ -39,6 +39,7 @@ $string['assign_submission_some_files_not_readable'] = 'Non è stato possibile a
 $string['assign_submission_unsupported'] = 'Per l\'analisi sono supportate solo le consegne di testo online e di file. Questa attività non ha abilitato nessuna delle due.';
 $string['assign_ux_authorship_final_incomplete'] = 'La valutazione finale di paternità richiede il punteggio di confidenza iniziale, le domande e le risposte.';
 $string['assign_ux_authorship_mode_invalid'] = 'Modalità di paternità non valida. Usare confidence, quiz o final.';
+$string['assign_ux_result_invalid'] = 'L\'IA ha proposto una valutazione che non corrisponde alla configurazione di valutazione di questo compito, quindi non è stata usata.';
 $string['assign_ux_result_missing'] = 'La risposta dell\'IA era assente o incompleta.';
 $string['assign_ux_submission_invalid'] = '{$a}';
 $string['cachedef_coursetemplates'] = 'Modelli di struttura del corso memorizzati nella cache dall\'API Dixeo';

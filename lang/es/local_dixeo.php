@@ -39,6 +39,7 @@ $string['assign_submission_some_files_not_readable'] = 'No se pudo analizar el a
 $string['assign_submission_unsupported'] = 'Solo se admiten para el análisis las entregas de texto en línea y de archivos. Esta tarea no tiene activada ninguna de las dos.';
 $string['assign_ux_authorship_final_incomplete'] = 'La evaluación final de autoría requiere la confianza inicial, las preguntas y las respuestas.';
 $string['assign_ux_authorship_mode_invalid'] = 'Modo de autoría no válido. Use confidence, quiz o final.';
+$string['assign_ux_result_invalid'] = 'La IA propuso una calificación que no se ajusta a la configuración de calificación de esta tarea, por lo que no se utilizó.';
 $string['assign_ux_result_missing'] = 'La respuesta de la IA faltaba o estaba incompleta.';
 $string['assign_ux_submission_invalid'] = '{$a}';
 $string['cachedef_coursetemplates'] = 'Plantillas de estructura de curso en caché desde la API de Dixeo';

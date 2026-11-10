@@ -256,7 +256,7 @@ final class assign_ux_service_test extends \advanced_testcase {
         );
 
         $simple = $service->map_grade_result(
-            ['grading_method' => 'simple', 'criteria' => []],
+            ['grading_method' => 'simple', 'maxgrade' => 100.0, 'criteria' => []],
             ['analysis' => 'A', 'feedback' => 'B', 'grade' => 95]
         );
         $this->assertSame('simple', $simple['gradingmethod']);
@@ -265,7 +265,7 @@ final class assign_ux_service_test extends \advanced_testcase {
         $guidectx = ['grading_method' => 'guide', 'criteria' => [['id' => 11, 'maxscore' => 10]]];
         $criteria = [['id' => 11, 'score' => 8, 'remark' => 'Good']];
         $guide = $service->map_grade_result($guidectx, ['analysis' => 'A', 'feedback' => 'B', 'criteria' => $criteria]);
-        $this->assertSame($criteria, $guide['criteria']);
+        $this->assertSame([['id' => 11, 'score' => 8.0, 'remark' => 'Good']], $guide['criteria']);
 
         $this->assertArrayHasKey('error', $service->map_grade_result($guidectx, ['analysis' => 'A', 'feedback' => 'B']));
         $this->assertArrayHasKey('error', $service->map_grade_result($guidectx, null));

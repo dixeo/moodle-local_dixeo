@@ -283,9 +283,13 @@ class assign_ux_service {
     }
 
     /**
-     * Map a completed grade job result.
+     * Map a completed grade job result, refusing any proposal that does not fit the assignment.
      *
-     * The API returns exactly one entry per criterion of the assignment, within its bounds.
+     * Simple grading needs a point grade within [0, maxgrade]; a scale or no grade refuses.
+     * Guide and rubric need exactly one entry per criterion of the definition: a guide score
+     * within [0, maxscore], a rubric level belonging to that criterion. The output keeps only
+     * known keys, criteria in definition order: guide {id, score, remark}, rubric
+     * {id, levelid, remark}.
      *
      * @param array $assignmentcontext From {@see assign_submission_reader::get_assignment_context()}.
      * @param array|null $result Job result array.
@@ -296,7 +300,7 @@ class assign_ux_service {
             return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
         }
 
-        $gradingmethod = $assignmentcontext['grading_method'] ?? 'simple';
+        $gradingmethod = (string) ($assignmentcontext['grading_method'] ?? 'simple');
         $mapped = [
             'gradingmethod' => $gradingmethod,
             'analysis' => trim((string) ($result['analysis'] ?? '')),
@@ -307,14 +311,26 @@ class assign_ux_service {
             if (!isset($result['grade'])) {
                 return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
             }
-            $mapped['grade'] = (float) $result['grade'];
+            $max = (float) ($assignmentcontext['maxgrade'] ?? 0);
+            $grade = self::bounded_number($result['grade'], $max);
+            if ($max <= 0 || $grade === null) {
+                return self::invalid_grade();
+            }
+            $mapped['grade'] = $grade;
             return $mapped;
         }
 
+        if ($gradingmethod !== 'guide' && $gradingmethod !== 'rubric') {
+            return self::invalid_grade();
+        }
         if (!is_array($result['criteria'] ?? null)) {
             return ['error' => get_string('assign_ux_result_missing', 'local_dixeo')];
         }
-        $mapped['criteria'] = $result['criteria'];
+        $criteria = self::map_criteria($gradingmethod, $assignmentcontext['criteria'] ?? [], $result['criteria']);
+        if ($criteria === null) {
+            return self::invalid_grade();
+        }
+        $mapped['criteria'] = $criteria;
         return $mapped;
     }
 
@@ -596,6 +612,109 @@ class assign_ux_service {
             $payload['namespace'] = $this->namespace;
         }
         return $payload;
+    }
+
+    /**
+     * Error returned for a grade proposal that does not fit the assignment.
+     *
+     * @return array{error: string}
+     */
+    private static function invalid_grade(): array {
+        return ['error' => get_string('assign_ux_result_invalid', 'local_dixeo')];
+    }
+
+    /**
+     * A finite number within [0, $max], or null.
+     *
+     * @param mixed $value Raw value from the API.
+     * @param float $max Upper bound.
+     * @return float|null
+     */
+    private static function bounded_number($value, float $max): ?float {
+        if (is_bool($value) || !is_numeric($value)) {
+            return null;
+        }
+        $number = (float) $value;
+        if (!is_finite($number) || $number < 0 || $number > $max) {
+            return null;
+        }
+        return $number;
+    }
+
+    /**
+     * A positive whole-number id from an int or a digit string, or null.
+     *
+     * @param mixed $value Raw value from the API.
+     * @return int|null
+     */
+    private static function whole_id($value): ?int {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+        if (is_string($value) && preg_match('/^[1-9]\d{0,9}$/', $value)) {
+            return (int) $value;
+        }
+        return null;
+    }
+
+    /**
+     * Check proposed guide or rubric criteria against the definition and normalise them.
+     *
+     * @param string $method guide or rubric.
+     * @param mixed $definition Criteria from the assignment context.
+     * @param array $proposed Criteria from the API.
+     * @return list<array<string, mixed>>|null Normalised criteria in definition order, or null when invalid.
+     */
+    private static function map_criteria(string $method, $definition, array $proposed): ?array {
+        if (!is_array($definition) || $definition === []) {
+            return null;
+        }
+        $byid = [];
+        foreach ($definition as $criterion) {
+            $byid[(int) ($criterion['id'] ?? 0)] = $criterion;
+        }
+        unset($byid[0]);
+        if ($byid === []) {
+            return null;
+        }
+
+        $accepted = [];
+        foreach ($proposed as $entry) {
+            $id = is_array($entry) ? self::whole_id($entry['id'] ?? null) : null;
+            if ($id === null || !isset($byid[$id]) || isset($accepted[$id])) {
+                return null;
+            }
+            $remark = is_scalar($entry['remark'] ?? null) ? trim((string) $entry['remark']) : '';
+
+            if ($method === 'guide') {
+                $score = self::bounded_number($entry['score'] ?? null, (float) ($byid[$id]['maxscore'] ?? 0));
+                if ($score === null) {
+                    return null;
+                }
+                $accepted[$id] = ['id' => $id, 'score' => $score, 'remark' => $remark];
+                continue;
+            }
+
+            $levelid = self::whole_id($entry['levelid'] ?? null);
+            $levelids = array_map(
+                static fn($level): int => (int) ($level['id'] ?? 0),
+                is_array($byid[$id]['levels'] ?? null) ? $byid[$id]['levels'] : []
+            );
+            if ($levelid === null || !in_array($levelid, $levelids, true)) {
+                return null;
+            }
+            $accepted[$id] = ['id' => $id, 'levelid' => $levelid, 'remark' => $remark];
+        }
+
+        if (count($accepted) !== count($byid)) {
+            return null;
+        }
+
+        $ordered = [];
+        foreach (array_keys($byid) as $id) {
+            $ordered[] = $accepted[$id];
+        }
+        return $ordered;
     }
 
     /**

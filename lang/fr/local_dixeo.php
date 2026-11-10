@@ -39,6 +39,7 @@ $string['assign_submission_some_files_not_readable'] = 'Le ou les fichiers suiva
 $string['assign_submission_unsupported'] = 'Seules les remises en texte en ligne et par fichier sont prises en charge pour l\'analyse. Cette activité n\'a activé ni l\'un ni l\'autre.';
 $string['assign_ux_authorship_final_incomplete'] = 'L\'évaluation finale d\'authenticité requiert le score de confiance initial, les questions et les réponses.';
 $string['assign_ux_authorship_mode_invalid'] = 'Mode d\'authenticité invalide. Utilisez confidence, quiz ou final.';
+$string['assign_ux_result_invalid'] = 'L\'IA a proposé une note qui ne correspond pas à la configuration de l\'évaluation de ce devoir : elle n\'a donc pas été utilisée.';
 $string['assign_ux_result_missing'] = 'La réponse de l\'IA était manquante ou incomplète.';
 $string['assign_ux_submission_invalid'] = '{$a}';
 $string['cachedef_coursetemplates'] = 'Modèles de structure de cours mis en cache depuis l\'API Dixeo';

@@ -39,6 +39,7 @@ $string['assign_submission_some_files_not_readable'] = 'The following file(s) co
 $string['assign_submission_unsupported'] = 'Only online text and file submissions are supported for analysis. This assignment does not have either enabled.';
 $string['assign_ux_authorship_final_incomplete'] = 'Final authorship evaluation requires initial confidence, questions, and answers.';
 $string['assign_ux_authorship_mode_invalid'] = 'Invalid authorship mode. Use confidence, quiz, or final.';
+$string['assign_ux_result_invalid'] = 'The AI proposed a grade that does not fit this assignment\'s grading setup, so it was not used.';
 $string['assign_ux_result_missing'] = 'The AI response was missing or incomplete.';
 $string['assign_ux_submission_invalid'] = '{$a}';
 $string['cachedef_coursetemplates'] = 'Cached course structure templates from the Dixeo API';
