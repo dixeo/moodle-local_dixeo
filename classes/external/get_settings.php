@@ -32,8 +32,14 @@ use core_external\external_value;
 
 /**
  * Returns the catalogue rows from the settings helper for a system or course context.
+ *
+ * Each row carries the display labels of its feature, plugin group and subcategory, resolved
+ * from the owning component's strings, then from local_dixeo's, then falling back to the id.
  */
 class get_settings extends external_api {
+    /** @var array<string, string> Group labels resolved in this call, keyed by prefix, id and component. */
+    private static array $labels = [];
+
     /**
      * Parameters for the settings read.
      *
@@ -62,9 +68,48 @@ class get_settings extends external_api {
         self::validate_context($context);
         self::warm_designer_templates();
 
+        self::$labels = [];
+        $rows = [];
+        foreach (service_factory::get_settings_config()->get_layers($context) as $row) {
+            $component = (string) $row['component'];
+            $sub = (string) ($row['sub'] ?? '');
+            $row['featurelabel'] = self::group_label('settings_category_', (string) $row['feature'], $component);
+            $row['plugingrouplabel'] = self::group_label('settings_category_', (string) $row['plugingroup'], $component);
+            $row['sublabel'] = $sub === '' ? '' : self::group_label('settings_subcategory_', $sub, $component);
+            $rows[] = $row;
+        }
+
         return [
-            'settings' => service_factory::get_settings_config()->get_layers($context),
+            'settings' => $rows,
         ];
+    }
+
+    /**
+     * Display label of a feature, plugin group or subcategory id.
+     *
+     * The key is the prefix followed by the id, looked up in the row's component, then in
+     * local_dixeo. The id itself is returned when neither defines it.
+     *
+     * @param string $prefix settings_category_ or settings_subcategory_.
+     * @param string $id Feature, plugin group or subcategory id.
+     * @param string $component Component that owns the row.
+     * @return string
+     */
+    private static function group_label(string $prefix, string $id, string $component): string {
+        $memokey = $prefix . $id . '/' . $component;
+        if (array_key_exists($memokey, self::$labels)) {
+            return self::$labels[$memokey];
+        }
+        $strings = get_string_manager();
+        $label = $id;
+        foreach (array_unique([$component, 'local_dixeo']) as $owner) {
+            if ($strings->string_exists($prefix . $id, $owner)) {
+                $label = get_string($prefix . $id, $owner);
+                break;
+            }
+        }
+        self::$labels[$memokey] = $label;
+        return $label;
     }
 
     /**
@@ -87,6 +132,12 @@ class get_settings extends external_api {
                         'Subcategory within the feature and plugin group',
                         VALUE_DEFAULT,
                         ''
+                    ),
+                    'featurelabel' => new external_value(PARAM_TEXT, 'Display label of the feature group'),
+                    'plugingrouplabel' => new external_value(PARAM_TEXT, 'Display label of the plugin group'),
+                    'sublabel' => new external_value(
+                        PARAM_TEXT,
+                        'Display label of the subcategory, or empty when there is none'
                     ),
                     'help' => new external_value(PARAM_ALPHANUMEXT, 'Help string key'),
                     'options' => new external_multiple_structure(

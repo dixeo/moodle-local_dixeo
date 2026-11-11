@@ -27,7 +27,15 @@ namespace local_dixeo\hook;
 
 use local_dixeo\external\service_factory;
 use local_dixeo\service\file_sync_service;
+use local_dixeo\settings\catalogue;
+use local_dixeo\settings\catalogue_fixture_trait;
+use local_dixeo\settings\definition;
 use local_dixeo\settings\resolver;
+
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/local/dixeo/tests/settings/catalogue_fixture_trait.php');
 
 /**
  * Course form tests for the Dixeo section.
@@ -35,6 +43,8 @@ use local_dixeo\settings\resolver;
  * @covers \local_dixeo\hook\course_edit_form
  */
 final class course_edit_form_test extends \advanced_testcase {
+    use catalogue_fixture_trait;
+
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
@@ -92,17 +102,17 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertLessThan($positions[course_edit_form::OPEN_BUTTON], $positions[course_edit_form::HEADER]);
         $this->assertLessThan($positions[course_edit_form::ENABLED], $positions[course_edit_form::OPEN_BUTTON]);
         $this->assertLessThan($positions[course_edit_form::FILESYNC], $positions[course_edit_form::ENABLED]);
-        if ($this->tutor_installed()) {
-            $this->assertLessThan($positions[course_edit_form::TUTOR], $positions[course_edit_form::FILESYNC]);
-            $tutor = $mform->getElement(course_edit_form::TUTOR);
-            $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::TUTOR));
-            $this->assertSame('1', $this->element_value($tutor->getValue()));
+        $tutor = $this->tutor_definition();
+        if ($tutor !== null) {
+            $name = course_edit_form::element_name($tutor);
+            $this->assertLessThan($positions[$name], $positions[course_edit_form::FILESYNC]);
+            $element = $mform->getElement($name);
+            $this->assertSame('selectyesno', $mform->getElementType($name));
+            $this->assertSame('1', $this->element_value($element->getValue()));
             $this->assertStringContainsString(
                 get_string('tutor_enabled_help', 'block_dixeo_tutor'),
-                $tutor->_helpbutton
+                $element->_helpbutton
             );
-        } else {
-            $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
         }
         $this->assertSame(
             service_factory::get_settings_config()->get(
@@ -148,13 +158,14 @@ final class course_edit_form_test extends \advanced_testcase {
             '0',
             $this->element_value($form->get_quick_form()->getElement(course_edit_form::FILESYNC)->getValue())
         );
-        if ($this->tutor_installed()) {
+        $tutor = $this->tutor_definition();
+        if ($tutor !== null) {
             $this->assertSame(
                 '1',
-                $this->element_value($form->get_quick_form()->getElement(course_edit_form::TUTOR)->getValue())
+                $this->element_value(
+                    $form->get_quick_form()->getElement(course_edit_form::element_name($tutor))->getValue()
+                )
             );
-        } else {
-            $this->assertFalse($form->get_quick_form()->elementExists(course_edit_form::TUTOR));
         }
     }
 
@@ -205,7 +216,7 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertFalse($mform->elementExists(course_edit_form::OPEN_BUTTON));
         $this->assertFalse($mform->elementExists(course_edit_form::ENABLED));
         $this->assertFalse($mform->elementExists(course_edit_form::FILESYNC));
-        $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
+        $this->assertSame([], $this->catalogue_elements($mform));
     }
 
     /**
@@ -271,9 +282,11 @@ final class course_edit_form_test extends \advanced_testcase {
     public function test_course_save_stores_tutor_on_and_off(): void {
         global $DB;
 
-        if (!$this->tutor_installed()) {
-            $this->markTestSkipped('Student Tutor is not installed.');
+        $tutor = $this->tutor_definition();
+        if ($tutor === null) {
+            $this->markTestSkipped('Student Tutor is not installed or does not show its switch on the course form.');
         }
+        $name = course_edit_form::element_name($tutor);
 
         $course = $this->getDataGenerator()->create_course();
         $context = \context_course::instance($course->id);
@@ -285,28 +298,145 @@ final class course_edit_form_test extends \advanced_testcase {
         ];
 
         $off = get_course($course->id);
-        $off->{course_edit_form::TUTOR} = '0';
+        $off->{$name} = '0';
         update_course($off);
         $this->assertSame('0', $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_value());
         $this->assertSame(resolver::LAYER_COURSE, $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_source());
         $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
 
         $on = get_course($course->id);
-        $on->{course_edit_form::TUTOR} = '1';
+        $on->{$name} = '1';
         update_course($on);
         $this->assertSame('1', $config->get('block_dixeo_tutor', 'tutor_enabled', $context)->get_value());
         $this->assertTrue($DB->record_exists('local_dixeo_setting', $conditions));
     }
 
     /**
-     * Whether the Student Tutor block is installed.
-     *
-     * The course form omits the tutor switch when the block is not installed.
-     *
-     * @return bool
+     * A course-form setting appears after file sync, with its own label and help.
      */
-    private function tutor_installed(): bool {
-        return \local_dixeo\service\plugin_installation_service::is_plugin_installed('block_dixeo_tutor');
+    public function test_a_course_form_setting_follows_file_sync(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $this->prime_catalogue_fixtures();
+        $name = course_edit_form::element_name($this->fixture('test_course_switch'));
+
+        $mform = $this->edit_form($course, $DB)->get_quick_form();
+
+        $this->assertSame('local_dixeo_cf_local_dixeo_test_course_switch', $name);
+        $this->assertSame('selectyesno', $mform->getElementType($name));
+        $positions = (new \ReflectionProperty($mform, '_elementIndex'))->getValue($mform);
+        $this->assertLessThan($positions[$name], $positions[course_edit_form::FILESYNC]);
+        $this->assertStringContainsString(get_string('enabled_help', 'local_dixeo'), $mform->getElement($name)->_helpbutton);
+    }
+
+    /**
+     * A saved course shows its own value; a new course shows the Dixeo value.
+     */
+    public function test_a_course_form_setting_is_prefilled(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $category = $this->getDataGenerator()->create_category();
+        $config = service_factory::get_settings_config();
+        $this->prime_catalogue_fixtures();
+        $config->set('local_dixeo', 'test_course_switch', \context_system::instance(), '0');
+        $this->prime_catalogue_fixtures();
+        $config->set('local_dixeo', 'test_course_switch', \context_course::instance($course->id), '1');
+        $this->prime_catalogue_fixtures();
+        $name = course_edit_form::element_name($this->fixture('test_course_switch'));
+
+        $saved = $this->edit_form($course, $DB);
+        $saved->definition_after_data();
+        $this->assertSame('1', $this->element_value($saved->get_quick_form()->getElement($name)->getValue()));
+
+        $new = new \testable_course_edit_form(null, [
+            'course' => (object) ['id' => 0, 'category' => $category->id, 'fullname' => 'New', 'shortname' => ''],
+            'category' => $DB->get_record('course_categories', ['id' => $category->id]),
+            'editoroptions' => ['context' => \context_coursecat::instance($category->id), 'subdirs' => 0],
+            'returnto' => new \moodle_url('/'),
+            'returnurl' => new \moodle_url('/'),
+        ]);
+        $new->definition_after_data();
+        $this->assertSame('0', $this->element_value($new->get_quick_form()->getElement($name)->getValue()));
+    }
+
+    /**
+     * Saving the course form stores a course-form setting through the settings helper.
+     */
+    public function test_a_course_form_setting_is_saved(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $this->prime_catalogue_fixtures();
+        $name = course_edit_form::element_name($this->fixture('test_course_switch'));
+
+        $record = get_course($course->id);
+        $record->{$name} = '0';
+        update_course($record);
+
+        $this->prime_catalogue_fixtures();
+        $resolved = service_factory::get_settings_config()->get('local_dixeo', 'test_course_switch', $context);
+        $this->assertSame('0', $resolved->get_value());
+        $this->assertSame(resolver::LAYER_COURSE, $resolved->get_source());
+    }
+
+    /**
+     * Without a course-form definition, the form has no catalogue element.
+     */
+    public function test_no_catalogue_element_without_a_course_form_definition(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $definitions = array_filter(
+            catalogue::load(),
+            static fn(definition $definition): bool => !$definition->shows_on_course_form()
+        );
+        \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'settingscatalogue')
+            ->set(current_language(), ['t' => \core\di::get(\core\clock::class)->time(), 'd' => $definitions]);
+
+        $mform = $this->edit_form($course, $DB)->get_quick_form();
+
+        $this->assertSame([], $this->catalogue_elements($mform));
+    }
+
+    /**
+     * Installed tutor definition when it is shown on the course form, or null.
+     *
+     * @return definition|null
+     */
+    private function tutor_definition(): ?definition {
+        $definition = catalogue::load()['tutor_enabled'] ?? null;
+        if ($definition === null || $definition->get_component() !== 'block_dixeo_tutor') {
+            return null;
+        }
+        return $definition->shows_on_course_form() ? $definition : null;
+    }
+
+    /**
+     * Fixture definition from the primed catalogue.
+     *
+     * @param string $key Fixture key.
+     * @return definition
+     */
+    private function fixture(string $key): definition {
+        return catalogue::load()[$key];
+    }
+
+    /**
+     * Names of the catalogue course-form elements on a form.
+     *
+     * @param \MoodleQuickForm $mform Course edit form.
+     * @return string[]
+     */
+    private function catalogue_elements(\MoodleQuickForm $mform): array {
+        $index = (new \ReflectionProperty($mform, '_elementIndex'))->getValue($mform);
+        return array_values(array_filter(
+            array_keys($index),
+            static fn(string $name): bool => str_starts_with($name, 'local_dixeo_cf_')
+        ));
     }
 
     /**

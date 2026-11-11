@@ -34,22 +34,39 @@ class admin_setting_modal_open {
     /**
      * Admin sections whose settings page shows the button.
      *
+     * local_dixeo, every component with catalogue settings, and every component whose settings
+     * page added the button in this request.
+     *
      * @return string[]
      */
     public static function admin_sections(): array {
-        return [
-            'local_dixeo',
-            'local_dixeo_assistant',
-        ];
+        $sections = ['local_dixeo'];
+        foreach (settings\catalogue::load() as $definition) {
+            $sections[] = $definition->get_component();
+        }
+        $registered = self::registered()->get('components');
+        if (is_array($registered)) {
+            array_push($sections, ...$registered);
+        }
+        return array_values(array_unique($sections));
     }
 
     /**
-     * Add the button as the first control is the caller's responsibility.
+     * Add the button to a plugin settings page and register that page's section.
+     *
+     * Adding the button as the first control is the caller's responsibility.
      *
      * @param \admin_settingpage $page Plugin settings page.
      * @param string $component Component of the plugin that owns the page.
      */
     public static function add(\admin_settingpage $page, string $component): void {
+        $cache = self::registered();
+        $registered = $cache->get('components');
+        $registered = is_array($registered) ? $registered : [];
+        if (!in_array($component, $registered, true)) {
+            $registered[] = $component;
+            $cache->set('components', $registered);
+        }
         $page->add(new \admin_setting_description(
             $component . '/settings_modal_open',
             '',
@@ -96,6 +113,15 @@ class admin_setting_modal_open {
             ]),
             'local-dixeo-settings-open mb-3'
         );
+    }
+
+    /**
+     * Request cache of the components whose settings page added the button.
+     *
+     * @return \cache
+     */
+    private static function registered(): \cache {
+        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'modalsections');
     }
 
     /**

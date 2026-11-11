@@ -1732,6 +1732,28 @@ define([
     };
 
     /**
+     * Display names of the feature, plugin group and subcategory ids, from the labels on each row.
+     *
+     * @param {Object[]} settings Catalogue rows from get_settings.
+     * @returns {Object} Group id to display name.
+     */
+    const groupLabels = function(settings) {
+        const names = {};
+        settings.forEach(function(setting) {
+            [
+                [setting.feature, setting.featurelabel],
+                [setting.plugingroup, setting.plugingrouplabel],
+                [setting.sub, setting.sublabel],
+            ].forEach(function(pair) {
+                if (pair[0] && pair[1] && !Object.prototype.hasOwnProperty.call(names, pair[0])) {
+                    names[pair[0]] = pair[1];
+                }
+            });
+        });
+        return names;
+    };
+
+    /**
      * Replace the list with one read-only row per setting.
      *
      * @param {HTMLElement} shell
@@ -1766,21 +1788,6 @@ define([
         requests.push({key: 'settings_modal_all_plugins', component: 'local_dixeo'});
         requests.push({key: 'settings_modal_preferences', component: 'local_dixeo'});
         requests.push({key: 'settings_modal_saving', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_filesync', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_dixeo_core', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_tutor', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_dixeo_tutor', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_imagegeneration', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_designer', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_dixeo_designer', component: 'local_dixeo'});
-        requests.push({key: 'settings_category_assignment', component: 'plagiarism_dixeo'});
-        requests.push({key: 'settings_subcategory_feedback', component: 'plagiarism_dixeo'});
-        requests.push({key: 'settings_subcategory_authorship', component: 'plagiarism_dixeo'});
-        requests.push({key: 'settings_subcategory_grading', component: 'plagiarism_dixeo'});
-        requests.push({key: 'settings_category_plagiarism_dixeo', component: 'plagiarism_dixeo'});
-        requests.push({key: 'certificate_settings', component: 'block_dixeo_designer'});
-        requests.push({key: 'lti_publication', component: 'block_dixeo_designer'});
-        requests.push({key: 'self_enrol_heading', component: 'block_dixeo_designer'});
         const activityColumnAt = requests.length;
         requests.push({key: 'settings_column_activity', component: 'local_dixeo'});
         const fixedCount = requests.length;
@@ -1847,23 +1854,7 @@ define([
                 allPlugins: strings[extraAt + 3],
                 preferences: strings[extraAt + 4],
                 savingLabel: strings[extraAt + 5],
-                categoryNames: {
-                    filesync: strings[extraAt + 6],
-                    'dixeo_core': strings[extraAt + 7],
-                    tutor: strings[extraAt + 8],
-                    'dixeo_tutor': strings[extraAt + 9],
-                    imagegeneration: strings[extraAt + 10],
-                    designer: strings[extraAt + 11],
-                    'dixeo_designer': strings[extraAt + 12],
-                    assignment: strings[extraAt + 13],
-                    feedback: strings[extraAt + 14],
-                    authorship: strings[extraAt + 15],
-                    grading: strings[extraAt + 16],
-                    'plagiarism_dixeo': strings[extraAt + 17],
-                    certificate: strings[extraAt + 18],
-                    lti: strings[extraAt + 19],
-                    selfenrol: strings[extraAt + 20],
-                },
+                categoryNames: groupLabels(settings),
                 contextid: contextid,
                 preferenceDrafts: {},
                 saving: false,

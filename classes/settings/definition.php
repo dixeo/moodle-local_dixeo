@@ -57,6 +57,7 @@ final class definition {
      * @param string $sub Subcategory id within the feature and plugin group. Empty when the group has none.
      * @param int|null $min Inclusive lower bound for a number, or null when the number is unbounded.
      * @param int|null $max Inclusive upper bound for a number, or null when the number is unbounded.
+     * @param bool $courseform True when the course edit form shows a yes/no control for the course value.
      */
     public function __construct(
         /** @var string Storage key, unique within the component. */
@@ -103,6 +104,8 @@ final class definition {
         private ?int $min = null,
         /** @var int|null Inclusive upper bound for a number. */
         private ?int $max = null,
+        /** @var bool True when the course edit form shows a yes/no control for the course value. */
+        private bool $courseform = false,
     ) {
     }
 
@@ -213,6 +216,20 @@ final class definition {
             }
             $sub = $raw['sub'];
         }
+        $courseform = false;
+        if (array_key_exists('courseform', $raw)) {
+            if (!is_bool($raw['courseform'])) {
+                throw new \coding_exception("Dixeo setting \"{$key}\" must declare courseform as a boolean.");
+            }
+            $courseform = $raw['courseform'];
+        }
+        if ($courseform && ($type !== 'bool' || !in_array('course', $levels, true))) {
+            throw new \coding_exception(
+                "Dixeo setting \"{$key}\" can be shown on the course form only as a bool at the course level."
+            );
+        }
+
+        [$min, $max] = self::require_number_range($key, $type, $default, $raw);
 
         return new self(
             $key,
@@ -235,7 +252,9 @@ final class definition {
             $parentofflocks,
             $requires,
             $sub,
-            ...self::require_number_range($key, $type, $default, $raw),
+            $min,
+            $max,
+            $courseform,
         );
     }
 
@@ -625,5 +644,14 @@ final class definition {
      */
     public function get_max(): ?int {
         return $this->max;
+    }
+
+    /**
+     * True when the course edit form shows a yes/no control for the course value.
+     *
+     * @return bool
+     */
+    public function shows_on_course_form(): bool {
+        return $this->courseform;
     }
 }

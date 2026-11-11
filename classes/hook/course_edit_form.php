@@ -17,12 +17,15 @@
 namespace local_dixeo\hook;
 
 use local_dixeo\external\service_factory;
+use local_dixeo\settings\catalogue;
+use local_dixeo\settings\definition;
 
 /**
  * Dixeo course settings on the course edit form.
  *
  * The section is omitted when the Dixeo layer is off. The settings button is the first control.
- * The course switch, file sync and the tutor switch follow it.
+ * The course switch and file sync follow it, then one yes/no control for each catalogue setting
+ * that declares courseform, in catalogue order.
  * A save that omits a field leaves that stored value unchanged.
  *
  * @package    local_dixeo
@@ -42,11 +45,11 @@ class course_edit_form {
     /** @var string Course edit form element for file sync on or paused. */
     public const FILESYNC = 'local_dixeo_filesync_enabled';
 
-    /** @var string Course edit form element for the tutor on/off switch. */
-    public const TUTOR = 'local_dixeo_tutor_enabled';
+    /** @var string Prefix of the course edit form elements for catalogue settings shown on the form. */
+    private const CATALOGUE_PREFIX = 'local_dixeo_cf_';
 
     /**
-     * Add the Dixeo header, the settings button, the course switch, file sync, then the tutor switch.
+     * Add the Dixeo header, the settings button, the course switch, file sync, then the catalogue course-form settings.
      *
      * The button is the first control in the section. Nothing is added when the Dixeo layer is off.
      *
@@ -79,16 +82,21 @@ class course_edit_form {
         $mform->addElement('selectyesno', self::FILESYNC, get_string('filesync_enabled', 'local_dixeo'));
         $mform->setType(self::FILESYNC, PARAM_INT);
         $mform->addHelpButton(self::FILESYNC, 'filesync_enabled', 'local_dixeo');
-        if (self::tutor_available()) {
-            $mform->addElement('selectyesno', self::TUTOR, get_string('tutor_enabled', 'block_dixeo_tutor'));
-            $mform->setType(self::TUTOR, PARAM_INT);
-            $mform->addHelpButton(self::TUTOR, 'tutor_enabled', 'block_dixeo_tutor');
+        foreach (self::course_form_definitions() as $definition) {
+            $name = self::element_name($definition);
+            $component = $definition->get_component();
+            $mform->addElement('selectyesno', $name, get_string($definition->get_shortname(), $component));
+            $mform->setType($name, PARAM_INT);
+            $help = $definition->get_help();
+            if (str_ends_with($help, '_help')) {
+                $mform->addHelpButton($name, substr($help, 0, -strlen('_help')), $component);
+            }
         }
         $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
     }
 
     /**
-     * Fill the course switch, file sync, and the tutor switch. A saved course also gives the settings
+     * Fill the course switch, file sync, and the catalogue course-form settings. A saved course also gives the settings
      * button its course id, so the modal can show that course's file sync status.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
@@ -111,11 +119,11 @@ class course_edit_form {
             }
             $mform->getElement(self::OPEN_BUTTON)->updateAttributes($attributes);
         }
-        if (
-            !$mform->elementExists(self::ENABLED)
-            && !$mform->elementExists(self::FILESYNC)
-            && !$mform->elementExists(self::TUTOR)
-        ) {
+        $catalogue = array_filter(
+            self::course_form_definitions(),
+            static fn(definition $definition): bool => $mform->elementExists(self::element_name($definition))
+        );
+        if (!$mform->elementExists(self::ENABLED) && !$mform->elementExists(self::FILESYNC) && !$catalogue) {
             return;
         }
 
@@ -138,17 +146,17 @@ class course_edit_form {
             }
             $mform->getElement(self::FILESYNC)->setValue($filesync);
         }
-        if ($mform->elementExists(self::TUTOR)) {
+        foreach ($catalogue as $definition) {
+            $component = $definition->get_component();
+            $key = $definition->get_key();
             if ($coursecontext !== null) {
-                $tutor = $config->get('block_dixeo_tutor', 'tutor_enabled', $coursecontext)->get_value();
+                $value = $config->get($component, $key, $coursecontext)->get_value();
+            } else if ($definition->retains_value()) {
+                $value = $config->new_course_default_value($component, $key);
             } else {
-                $tutor = $config->get(
-                    'block_dixeo_tutor',
-                    'tutor_enabled_default',
-                    \context_system::instance()
-                )->get_value();
+                $value = $config->get($component, $key, \context_system::instance())->get_value();
             }
-            $mform->getElement(self::TUTOR)->setValue($tutor);
+            $mform->getElement(self::element_name($definition))->setValue($value);
         }
     }
 
@@ -161,7 +169,6 @@ class course_edit_form {
         $data = $hook->get_data();
         $enabled = null;
         $filesync = null;
-        $tutor = null;
         if (property_exists($data, self::ENABLED)) {
             $enabled = (string) $data->{self::ENABLED};
             unset($data->{self::ENABLED});
@@ -170,11 +177,15 @@ class course_edit_form {
             $filesync = (string) $data->{self::FILESYNC};
             unset($data->{self::FILESYNC});
         }
-        if (property_exists($data, self::TUTOR)) {
-            $tutor = (string) $data->{self::TUTOR};
-            unset($data->{self::TUTOR});
+        $catalogue = [];
+        foreach (self::course_form_definitions() as $definition) {
+            $name = self::element_name($definition);
+            if (property_exists($data, $name)) {
+                $catalogue[] = [$definition, (string) $data->{$name}];
+                unset($data->{$name});
+            }
         }
-        if ($enabled === null && $filesync === null && $tutor === null) {
+        if ($enabled === null && $filesync === null && !$catalogue) {
             return;
         }
 
@@ -191,18 +202,31 @@ class course_edit_form {
         if ($filesync !== null) {
             $config->set('local_dixeo', 'filesync_enabled', $context, $filesync);
         }
-        if ($tutor !== null) {
-            $config->set('block_dixeo_tutor', 'tutor_enabled', $context, $tutor);
+        foreach ($catalogue as [$definition, $value]) {
+            $config->set($definition->get_component(), $definition->get_key(), $context, $value);
         }
     }
 
     /**
-     * The tutor switch is shown when the Student Tutor block is installed.
+     * Course edit form element name for a catalogue setting shown on the form.
      *
-     * @return bool
+     * @param definition $definition Catalogue setting that declares courseform.
+     * @return string
      */
-    private static function tutor_available(): bool {
-        return \local_dixeo\service\plugin_installation_service::is_plugin_installed('block_dixeo_tutor');
+    public static function element_name(definition $definition): string {
+        return self::CATALOGUE_PREFIX . $definition->get_component() . '_' . $definition->get_key();
+    }
+
+    /**
+     * Catalogue settings shown on the course form, in catalogue order.
+     *
+     * @return definition[]
+     */
+    private static function course_form_definitions(): array {
+        return array_values(array_filter(
+            catalogue::load(),
+            static fn(definition $definition): bool => $definition->shows_on_course_form()
+        ));
     }
 
     /**

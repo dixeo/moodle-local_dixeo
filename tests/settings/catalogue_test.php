@@ -270,7 +270,6 @@ final class catalogue_test extends \advanced_testcase {
             $this->assertSame('lti', $settings['lti_publication_enabled']->get_sub());
             $this->assertSame('number', $settings['lti_maxenrolled']->get_type());
             $this->assertSame('0', $settings['lti_maxenrolled']->get_default());
-            $this->assertSame(['0', '1'], $settings['lti_membersync']->get_options());
             $this->assertSame(
                 [
                     (string) \enrol_lti\helper::MEMBER_SYNC_ENROL_AND_UNENROL,
@@ -391,6 +390,61 @@ final class catalogue_test extends \advanced_testcase {
                 'name' => 'this_setting_does_not_exist_dixeo',
             ]),
         ]);
+    }
+
+    /**
+     * A course-level bool may be shown on the course form.
+     */
+    public function test_courseform_is_accepted_on_a_course_level_bool(): void {
+        $definition = definition::from_array($this->courseform_row('bool', ['dixeo', 'course']));
+
+        $this->assertTrue($definition->shows_on_course_form());
+        $this->assertFalse(definition::from_array(
+            ['courseform' => false] + $this->courseform_row('bool', ['dixeo', 'course'])
+        )->shows_on_course_form());
+    }
+
+    /**
+     * A select cannot be shown on the course form.
+     */
+    public function test_courseform_is_rejected_on_a_select(): void {
+        $row = $this->courseform_row('select', ['dixeo', 'course']);
+        $row['options'] = ['a', 'b'];
+        $row['default'] = 'a';
+
+        $this->expectException(\coding_exception::class);
+        definition::from_array($row);
+    }
+
+    /**
+     * A Dixeo-only bool cannot be shown on the course form.
+     */
+    public function test_courseform_is_rejected_on_a_dixeo_only_bool(): void {
+        $this->expectException(\coding_exception::class);
+        definition::from_array($this->courseform_row('bool', ['dixeo']));
+    }
+
+    /**
+     * Catalogue row that asks to be shown on the course form.
+     *
+     * @param string $type Control type.
+     * @param string[] $levels Levels.
+     * @return array
+     */
+    private function courseform_row(string $type, array $levels): array {
+        return [
+            'key' => 'sample_courseform',
+            'shortname' => 'sample_courseform',
+            'component' => 'local_dixeo',
+            'type' => $type,
+            'default' => '0',
+            'levels' => $levels,
+            'feature' => 'dixeo',
+            'plugingroup' => 'dixeo_core',
+            'help' => 'enabled_help',
+            'sensitive' => false,
+            'courseform' => true,
+        ];
     }
 
     /**

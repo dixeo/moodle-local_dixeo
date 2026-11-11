@@ -34,12 +34,26 @@ trait catalogue_fixture_trait {
     /**
      * Fixture catalogue rows, owned by local_dixeo.
      *
-     * test_course_text is a course-only textarea.
+     * test_course_text is a course-only textarea. test_course_switch is a bool at the Dixeo and
+     * course levels that the course edit form shows.
      *
      * @return array[]
      */
     protected function catalogue_fixture_rows(): array {
         return [
+            [
+                'key' => 'test_course_switch',
+                'shortname' => 'enabled',
+                'component' => 'local_dixeo',
+                'type' => 'bool',
+                'default' => '1',
+                'levels' => ['dixeo', 'course'],
+                'feature' => 'dixeo',
+                'plugingroup' => 'dixeo_core',
+                'help' => 'enabled_help',
+                'sensitive' => false,
+                'courseform' => true,
+            ],
             [
                 'key' => 'test_course_text',
                 'shortname' => 'test_course_text',
@@ -59,8 +73,17 @@ trait catalogue_fixture_trait {
      * Make catalogue::load() return the installed definitions plus the fixture rows.
      */
     protected function prime_catalogue_fixtures(): void {
+        $this->prime_catalogue_with($this->catalogue_fixture_rows());
+    }
+
+    /**
+     * Make catalogue::load() return the installed definitions plus the given rows.
+     *
+     * @param array[] $rows Catalogue rows shaped like the return value of local_dixeo_dixeo_settings().
+     */
+    protected function prime_catalogue_with(array $rows): void {
         $installed = catalogue::load();
-        $fixtures = catalogue::from_definitions($this->catalogue_fixture_rows());
+        $fixtures = catalogue::from_definitions($rows);
         $definitions = array_merge($installed, $fixtures);
         \cache::make_from_params(\cache_store::MODE_REQUEST, 'local_dixeo', 'settingscatalogue')
             ->set(current_language(), [
