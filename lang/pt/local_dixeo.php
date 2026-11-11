@@ -568,6 +568,7 @@ $string['state_frozen'] = 'Congelado';
 $string['state_suspended'] = 'Suspenso';
 $string['task_aggregate_tutor_usage'] = 'Agregar analíticas de utilização do tutor Dixeo';
 $string['task_cleanup_image_jobs'] = 'Limpar registos de tarefas de imagem Dixeo';
+$string['task_cleanup_settings'] = 'Limpar as definições do Dixeo armazenadas';
 $string['task_erase_tutor_conversations'] = 'Eliminar as conversas do tutor na Dixeo';
 $string['task_poll_image'] = 'Consultar tarefa de imagem Dixeo';
 $string['task_poll_image_generation'] = 'Consultar a tarefa de geração de imagens Dixeo';
