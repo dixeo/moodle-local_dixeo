@@ -181,7 +181,7 @@ function local_dixeo_dixeo_settings(): array {
             'levels' => ['dixeo', 'course'],
             'feature' => 'imagegeneration',
             'plugingroup' => 'dixeo_core',
-            'help' => 'image_generation_enabled_desc',
+            'help' => 'image_generation_enabled_help',
             'sensitive' => false,
         ],
         [
@@ -194,8 +194,9 @@ function local_dixeo_dixeo_settings(): array {
             'levels' => ['dixeo', 'course'],
             'feature' => 'imagegeneration',
             'plugingroup' => 'dixeo_core',
-            'help' => 'image_generation_course_mode_desc',
+            'help' => 'image_generation_course_mode_help',
             'sensitive' => false,
+            'requires' => 'image_generation_enabled',
         ],
         [
             'key' => 'image_generation_section_mode',
@@ -207,8 +208,9 @@ function local_dixeo_dixeo_settings(): array {
             'levels' => ['dixeo', 'course'],
             'feature' => 'imagegeneration',
             'plugingroup' => 'dixeo_core',
-            'help' => 'image_generation_section_mode_desc',
+            'help' => 'image_generation_section_mode_help',
             'sensitive' => false,
+            'requires' => 'image_generation_enabled',
         ],
         [
             'key' => 'image_generation_content_mode',
@@ -220,8 +222,9 @@ function local_dixeo_dixeo_settings(): array {
             'levels' => ['dixeo', 'course'],
             'feature' => 'imagegeneration',
             'plugingroup' => 'dixeo_core',
-            'help' => 'image_generation_content_mode_desc',
+            'help' => 'image_generation_content_mode_help',
             'sensitive' => false,
+            'requires' => 'image_generation_enabled',
         ],
     ];
 }

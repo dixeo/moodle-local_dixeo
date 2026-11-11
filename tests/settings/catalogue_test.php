@@ -393,6 +393,32 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * The image mode rows depend on the image generation switch.
+     */
+    public function test_image_modes_require_image_generation(): void {
+        $settings = catalogue::load();
+
+        foreach (['image_generation_course_mode', 'image_generation_section_mode', 'image_generation_content_mode'] as $key) {
+            $this->assertSame('image_generation_enabled', $settings[$key]->get_requires(), $key);
+        }
+    }
+
+    /**
+     * Every local_dixeo help key names an existing string.
+     */
+    public function test_every_local_dixeo_help_key_exists(): void {
+        foreach (catalogue::load() as $definition) {
+            if ($definition->get_component() !== 'local_dixeo') {
+                continue;
+            }
+            $this->assertTrue(
+                get_string_manager()->string_exists($definition->get_help(), 'local_dixeo'),
+                $definition->get_help()
+            );
+        }
+    }
+
+    /**
      * A course-level bool may be shown on the course form.
      */
     public function test_courseform_is_accepted_on_a_course_level_bool(): void {
