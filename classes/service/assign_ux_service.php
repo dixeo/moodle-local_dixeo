@@ -157,16 +157,23 @@ class assign_ux_service {
      * @param int $courseid Course id.
      * @param int $cmid Assign course module id.
      * @param int $studentuserid Student whose submission is reviewed.
+     * @param job_quota|null $quota Limit on the student's recent jobs for this assignment.
      * @return operation_result
      * @throws \moodle_exception
      * @throws api_exception
      * @throws consent_required_exception When the acting user or the student has not accepted the current terms.
+     * @throws \local_dixeo\exception\job_quota_exceeded_exception When the quota is used up.
      */
-    public function submit_review_and_wait(int $courseid, int $cmid, int $studentuserid): operation_result {
+    public function submit_review_and_wait(
+        int $courseid,
+        int $cmid,
+        int $studentuserid,
+        ?job_quota $quota = null
+    ): operation_result {
         $this->assert_may_send($courseid, $studentuserid);
         $request = $this->build_assignment_request($courseid, $cmid, $studentuserid);
 
-        return $this->submit(self::ENDPOINT_REVIEW, $request, 'assign_review', $cmid);
+        return $this->submit(self::ENDPOINT_REVIEW, $request, 'assign_review', $cmid, $quota);
     }
 
     /**

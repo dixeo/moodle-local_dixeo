@@ -87,6 +87,53 @@ final class assign_ux_service_test extends \advanced_testcase {
         $this->assertSame('job-review-1', $result->jobid);
     }
 
+    public function test_submit_review_and_wait_passes_quota_to_job_service(): void {
+        $this->resetAfterTest();
+        [$course, $assign, $student] = $this->create_review_fixture();
+        $quota = new \local_dixeo\dto\job_quota(10, HOURSECS);
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_and_wait')
+            ->with(
+                '/v1/assign/review',
+                $this->anything(),
+                'assign_review',
+                'plagiarism_dixeo',
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                $this->identicalTo($quota)
+            )
+            ->willReturn(operation_result::completed('job-review-1', ['feedback' => 'ok']));
+
+        $service = new assign_ux_service($mockjob, null, null, 'test-ns');
+        $service->submit_review_and_wait((int) $course->id, (int) $assign->cmid, (int) $student->id, $quota);
+    }
+
+    public function test_submit_review_and_wait_passes_null_without_quota(): void {
+        $this->resetAfterTest();
+        [$course, $assign, $student] = $this->create_review_fixture();
+
+        $mockjob = $this->createMock(job_service::class);
+        $mockjob->expects($this->once())
+            ->method('submit_and_wait')
+            ->with(
+                '/v1/assign/review',
+                $this->anything(),
+                'assign_review',
+                'plagiarism_dixeo',
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                $this->isNull()
+            )
+            ->willReturn(operation_result::completed('job-review-1', ['feedback' => 'ok']));
+
+        $service = new assign_ux_service($mockjob, null, null, 'test-ns');
+        $service->submit_review_and_wait((int) $course->id, (int) $assign->cmid, (int) $student->id);
+    }
+
     public function test_submit_grade_sends_pdf_submission_as_file(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
@@ -277,6 +324,26 @@ final class assign_ux_service_test extends \advanced_testcase {
         $this->assertSame($stub, service_factory::get_assign_ux_service());
         service_factory::reset();
         $this->assertInstanceOf(assign_ux_service::class, service_factory::get_assign_ux_service());
+    }
+
+    /**
+     * Create a course, an online text assignment and a student with a draft, with terms accepted.
+     *
+     * @return array{0: \stdClass, 1: \stdClass, 2: \stdClass} Course, assign module and student.
+     */
+    private function create_review_fixture(): array {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'assignsubmission_onlinetext_enabled' => 1,
+            'assignsubmission_file_enabled' => 0,
+        ]);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->accept_terms((int) get_admin()->id, (int) $student->id);
+        $this->create_onlinetext_submission((int) $assign->id, (int) $student->id, '<p>Draft</p>');
+
+        return [$course, $assign, $student];
     }
 
     /**
