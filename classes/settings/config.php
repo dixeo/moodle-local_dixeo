@@ -219,6 +219,30 @@ final class config {
     }
 
     /**
+     * Store the catalogue default of each Dixeo-level setting of a component that has no stored value.
+     *
+     * Called by a component from its install script. A stored value is kept, and course- or
+     * activity-only settings are skipped. Only the catalogue and config_plugins are used, so this
+     * also works while local_dixeo itself is not installed yet.
+     *
+     * @param string $component Frankenstyle component whose defaults are stored.
+     */
+    public static function install_dixeo_defaults(string $component): void {
+        foreach (catalogue::load() as $definition) {
+            if ($definition->get_component() !== $component) {
+                continue;
+            }
+            if (!in_array(resolver::LAYER_DIXEO, $definition->get_levels(), true)) {
+                continue;
+            }
+            if (get_config($component, $definition->get_key()) !== false) {
+                continue;
+            }
+            set_config($definition->get_key(), $definition->get_default(), $component);
+        }
+    }
+
+    /**
      * Store the current Dixeo value of every activity-level setting on a new module.
      *
      * The row is kept even when it equals the Dixeo value. Settings that omit the activity

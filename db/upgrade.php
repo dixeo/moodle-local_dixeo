@@ -750,16 +750,12 @@ function local_dixeo_ensure_setting_table(): bool {
  * @return void
  */
 function local_dixeo_install_dixeo_setting_defaults(): void {
+    $components = [];
     foreach (\local_dixeo\settings\catalogue::load() as $definition) {
-        if (!in_array('dixeo', $definition->get_levels(), true)) {
-            continue;
-        }
-        $component = $definition->get_component();
-        $name = $definition->get_key();
-        if (get_config($component, $name) !== false) {
-            continue;
-        }
-        set_config($name, $definition->get_default(), $component);
+        $components[$definition->get_component()] = true;
+    }
+    foreach (array_keys($components) as $component) {
+        \local_dixeo\settings\config::install_dixeo_defaults($component);
     }
 }
 
