@@ -25,8 +25,14 @@
 
 namespace local_dixeo;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/local/dixeo/tests/settings/catalogue_fixture_trait.php');
+
 use local_dixeo\external\save_settings;
 use local_dixeo\external\service_factory;
+use local_dixeo\settings\catalogue_fixture_trait;
 use local_dixeo\settings\config;
 
 /**
@@ -35,6 +41,8 @@ use local_dixeo\settings\config;
  * @covers \local_dixeo\external\save_settings
  */
 final class save_settings_test extends \advanced_testcase {
+    use catalogue_fixture_trait;
+
     /**
      * A course intent is stored, cleared when emptied, and does not touch an omitted switch.
      */
@@ -50,16 +58,17 @@ final class save_settings_test extends \advanced_testcase {
 
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $this->setUser($teacher);
+        $this->prime_catalogue_fixtures();
         save_settings::execute($context->id, [[
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
             'value' => 'Course intent',
         ]]);
 
         $this->assertSame('Course intent', $DB->get_field(config::TABLE, 'value', [
             'contextid' => $context->id,
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
         ]));
         $this->assertSame('0', $DB->get_field(config::TABLE, 'value', [
             'contextid' => $context->id,
@@ -67,16 +76,17 @@ final class save_settings_test extends \advanced_testcase {
             'name' => 'enabled',
         ]));
 
+        $this->prime_catalogue_fixtures();
         save_settings::execute($context->id, [[
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
             'value' => '',
         ]]);
 
         $this->assertFalse($DB->record_exists(config::TABLE, [
             'contextid' => $context->id,
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
         ]));
         $this->assertSame('0', $DB->get_field(config::TABLE, 'value', [
             'contextid' => $context->id,
@@ -95,10 +105,11 @@ final class save_settings_test extends \advanced_testcase {
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
         $before = (int) $DB->get_field('course', 'cacherev', ['id' => $course->id]);
+        $this->prime_catalogue_fixtures();
 
         save_settings::execute(\context_course::instance($course->id)->id, [[
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
             'value' => 'Course intent',
         ]]);
 
@@ -114,11 +125,12 @@ final class save_settings_test extends \advanced_testcase {
         $context = \context_course::instance($course->id);
         $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->setUser($student);
+        $this->prime_catalogue_fixtures();
 
         $this->expectException(\required_capability_exception::class);
         save_settings::execute($context->id, [[
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
             'value' => 'Course intent',
         ]]);
     }

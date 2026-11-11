@@ -42,19 +42,13 @@ final class course_edit_form_test extends \advanced_testcase {
     }
 
     /**
-     * The Dixeo header and textarea show the stored course text.
+     * The Dixeo header, the settings button and the course switches are shown, with no learning intent field.
      */
-    public function test_form_shows_the_stored_course_text(): void {
+    public function test_form_shows_the_dixeo_section(): void {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/course/tests/fixtures/testable_course_edit_form.php');
 
         $course = $this->getDataGenerator()->create_course();
-        service_factory::get_settings_config()->set(
-            'local_dixeo',
-            'learning_intent',
-            \context_course::instance($course->id),
-            'Course intent'
-        );
 
         $form = $this->edit_form($course, $DB);
         $form->definition_after_data();
@@ -65,7 +59,7 @@ final class course_edit_form_test extends \advanced_testcase {
             get_string('settings_category', 'local_dixeo'),
             $mform->getElement(course_edit_form::HEADER)->toHtml()
         );
-        $this->assertSame('Course intent', $mform->getElement(course_edit_form::FIELD)->getValue());
+        $this->assertFalse($mform->elementExists('local_dixeo_learning_intent'));
 
         $button = $mform->getElement(course_edit_form::OPEN_BUTTON);
         $this->assertSame('button', $button->getAttribute('type'));
@@ -100,7 +94,6 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertLessThan($positions[course_edit_form::FILESYNC], $positions[course_edit_form::ENABLED]);
         if ($this->tutor_installed()) {
             $this->assertLessThan($positions[course_edit_form::TUTOR], $positions[course_edit_form::FILESYNC]);
-            $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::TUTOR]);
             $tutor = $mform->getElement(course_edit_form::TUTOR);
             $this->assertSame('selectyesno', $mform->getElementType(course_edit_form::TUTOR));
             $this->assertSame('1', $this->element_value($tutor->getValue()));
@@ -109,7 +102,6 @@ final class course_edit_form_test extends \advanced_testcase {
                 $tutor->_helpbutton
             );
         } else {
-            $this->assertLessThan($positions[course_edit_form::FIELD], $positions[course_edit_form::FILESYNC]);
             $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
         }
         $this->assertSame(
@@ -167,7 +159,7 @@ final class course_edit_form_test extends \advanced_testcase {
     }
 
     /**
-     * Course off stays on the form, including the switch and learning intent.
+     * Course off stays on the form, including the switch.
      */
     public function test_course_off_still_shows_the_dixeo_section(): void {
         global $CFG, $DB;
@@ -187,7 +179,7 @@ final class course_edit_form_test extends \advanced_testcase {
 
         $this->assertTrue($mform->elementExists(course_edit_form::HEADER));
         $this->assertTrue($mform->elementExists(course_edit_form::OPEN_BUTTON));
-        $this->assertTrue($mform->elementExists(course_edit_form::FIELD));
+        $this->assertTrue($mform->elementExists(course_edit_form::FILESYNC));
         $this->assertSame('0', $this->element_value($mform->getElement(course_edit_form::ENABLED)->getValue()));
     }
 
@@ -214,34 +206,6 @@ final class course_edit_form_test extends \advanced_testcase {
         $this->assertFalse($mform->elementExists(course_edit_form::ENABLED));
         $this->assertFalse($mform->elementExists(course_edit_form::FILESYNC));
         $this->assertFalse($mform->elementExists(course_edit_form::TUTOR));
-        $this->assertFalse($mform->elementExists(course_edit_form::FIELD));
-    }
-
-    /**
-     * Saving the course form stores text and drops the row when the text is empty.
-     */
-    public function test_course_save_stores_text_and_clears_the_default(): void {
-        $course = $this->getDataGenerator()->create_course();
-        $record = get_course($course->id);
-        $record->{course_edit_form::FIELD} = 'Course intent';
-        update_course($record);
-
-        $context = \context_course::instance($course->id);
-        $config = service_factory::get_settings_config();
-        $resolved = $config->get('local_dixeo', 'learning_intent', $context);
-        $this->assertSame('Course intent', $resolved->get_value());
-        $this->assertSame(resolver::LAYER_COURSE, $resolved->get_source());
-
-        $unchanged = get_course($course->id);
-        update_course($unchanged);
-        $this->assertSame('Course intent', $config->get('local_dixeo', 'learning_intent', $context)->get_value());
-
-        $cleared = get_course($course->id);
-        $cleared->{course_edit_form::FIELD} = '';
-        update_course($cleared);
-        $empty = $config->get('local_dixeo', 'learning_intent', $context);
-        $this->assertSame('', $empty->get_value());
-        $this->assertSame(resolver::LAYER_DIXEO, $empty->get_source());
     }
 
     /**

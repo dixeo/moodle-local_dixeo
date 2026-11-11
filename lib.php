@@ -122,18 +122,6 @@ function local_dixeo_is_valid_job_uuid(string $jobid): bool {
 function local_dixeo_dixeo_settings(): array {
     return [
         [
-            'key' => 'learning_intent',
-            'shortname' => 'learning_intent',
-            'component' => 'local_dixeo',
-            'type' => 'textarea',
-            'default' => '',
-            'levels' => ['course'],
-            'feature' => 'courses',
-            'plugingroup' => 'dixeo_core',
-            'help' => 'learning_intent_help',
-            'sensitive' => false,
-        ],
-        [
             'key' => 'enabled',
             'shortname' => 'enabled',
             'component' => 'local_dixeo',

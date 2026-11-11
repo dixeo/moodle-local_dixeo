@@ -37,25 +37,26 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
-     * Learning intent is a course-only textarea and does not override a core setting.
+     * The file sync pill is a Dixeo setting and does not override a core setting.
      */
-    public function test_load_returns_learning_intent_without_core_target(): void {
+    public function test_load_returns_filesync_pill_without_core_target(): void {
         $settings = catalogue::load();
 
-        $this->assertArrayHasKey('learning_intent', $settings);
-        $setting = $settings['learning_intent'];
-        $this->assertSame('learning_intent', $setting->get_shortname());
+        $this->assertArrayHasKey('filesync_pill', $settings);
+        $setting = $settings['filesync_pill'];
+        $this->assertSame('filesync_pill', $setting->get_shortname());
         $this->assertSame('local_dixeo', $setting->get_component());
-        $this->assertSame('textarea', $setting->get_type());
-        $this->assertSame('', $setting->get_default());
-        $this->assertSame(['course'], $setting->get_levels());
-        $this->assertSame('courses', $setting->get_feature());
+        $this->assertSame('select', $setting->get_type());
+        $this->assertSame('coursetitle', $setting->get_default());
+        $this->assertSame(['dixeo', 'course'], $setting->get_levels());
+        $this->assertSame('filesync', $setting->get_feature());
         $this->assertSame('dixeo_core', $setting->get_plugingroup());
-        $this->assertSame('learning_intent_help', $setting->get_help());
+        $this->assertSame('filesync_pill_help', $setting->get_help());
         $this->assertFalse($setting->is_sensitive());
         $this->assertFalse($setting->has_core());
-        $this->assertTrue(get_string_manager()->string_exists('learning_intent', 'local_dixeo'));
-        $this->assertTrue(get_string_manager()->string_exists('learning_intent_help', 'local_dixeo'));
+        $this->assertArrayNotHasKey('learning_intent', $settings);
+        $this->assertTrue(get_string_manager()->string_exists('filesync_pill', 'local_dixeo'));
+        $this->assertTrue(get_string_manager()->string_exists('filesync_pill_help', 'local_dixeo'));
     }
 
     /**
@@ -408,7 +409,7 @@ final class catalogue_test extends \advanced_testcase {
             'levels' => ['dixeo'],
             'feature' => 'courses',
             'plugingroup' => 'dixeo_core',
-            'help' => 'learning_intent_help',
+            'help' => 'enabled_help',
             'sensitive' => false,
             'core' => $core,
         ];

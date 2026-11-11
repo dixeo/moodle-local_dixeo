@@ -25,12 +25,19 @@
 
 namespace local_dixeo;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/local/dixeo/tests/settings/catalogue_fixture_trait.php');
+
 /**
  * Admin checkbox tests for the Dixeo master switch.
  *
  * @covers \local_dixeo\admin_setting_enabled
  */
 final class admin_setting_enabled_test extends \advanced_testcase {
+    use \local_dixeo\settings\catalogue_fixture_trait;
+
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
@@ -139,6 +146,7 @@ final class admin_setting_enabled_test extends \advanced_testcase {
         global $CFG;
         $this->resetAfterTest();
         require_once($CFG->dirroot . '/local/dixeo/db/upgrade.php');
+        $this->prime_catalogue_fixtures();
 
         $definitions = \local_dixeo\settings\catalogue::load();
         $dixeo = [];
@@ -151,7 +159,7 @@ final class admin_setting_enabled_test extends \advanced_testcase {
         }
         $this->assertNotEmpty($dixeo);
         unset_config('filesync_enabled', 'local_dixeo');
-        unset_config('learning_intent', 'local_dixeo');
+        unset_config('test_course_text', 'local_dixeo');
 
         \local_dixeo_install_dixeo_setting_defaults();
 
@@ -163,7 +171,7 @@ final class admin_setting_enabled_test extends \advanced_testcase {
             );
         }
         $this->assertFalse(get_config('local_dixeo', 'filesync_enabled'));
-        $this->assertFalse(get_config('local_dixeo', 'learning_intent'));
+        $this->assertFalse(get_config('local_dixeo', 'test_course_text'));
 
         set_config('image_generation_enabled', '1', 'local_dixeo');
         \local_dixeo_install_dixeo_setting_defaults();

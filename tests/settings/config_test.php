@@ -25,12 +25,19 @@
 
 namespace local_dixeo\settings;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/local/dixeo/tests/settings/catalogue_fixture_trait.php');
+
 /**
  * Storage and capability tests for catalogue settings.
  *
  * @covers \local_dixeo\settings\config
  */
 final class config_test extends \advanced_testcase {
+    use catalogue_fixture_trait;
+
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
@@ -41,10 +48,11 @@ final class config_test extends \advanced_testcase {
      */
     public function test_unset_course_returns_the_shipped_default(): void {
         $this->setAdminUser();
-        set_config('learning_intent', 'Should be ignored', 'local_dixeo');
+        set_config('test_course_text', 'Should be ignored', 'local_dixeo');
 
         $course = $this->getDataGenerator()->create_course();
-        $resolved = (new config())->get('local_dixeo', 'learning_intent', \context_course::instance($course->id));
+        $this->prime_catalogue_fixtures();
+        $resolved = (new config())->get('local_dixeo', 'test_course_text', \context_course::instance($course->id));
 
         $this->assertSame('', $resolved->get_value());
         $this->assertSame(resolver::LAYER_DIXEO, $resolved->get_source());
@@ -59,31 +67,35 @@ final class config_test extends \advanced_testcase {
         $config = new config();
         $course = $this->getDataGenerator()->create_course();
         $context = \context_course::instance($course->id);
+        $this->prime_catalogue_fixtures();
 
-        $config->set('local_dixeo', 'learning_intent', $context, 'Course intent');
+        $config->set('local_dixeo', 'test_course_text', $context, 'Course intent');
+        $this->prime_catalogue_fixtures();
 
         $this->assertTrue($DB->record_exists(config::TABLE, $this->course_conditions($context)));
-        $resolved = $config->get('local_dixeo', 'learning_intent', $context);
+        $resolved = $config->get('local_dixeo', 'test_course_text', $context);
         $this->assertSame('Course intent', $resolved->get_value());
         $this->assertSame(resolver::LAYER_COURSE, $resolved->get_source());
-        $this->assertFalse(get_config('local_dixeo', 'learning_intent'));
+        $this->assertFalse(get_config('local_dixeo', 'test_course_text'));
 
-        $config->set('local_dixeo', 'learning_intent', $context, '');
+        $config->set('local_dixeo', 'test_course_text', $context, '');
+        $this->prime_catalogue_fixtures();
 
         $this->assertFalse($DB->record_exists(config::TABLE, $this->course_conditions($context)));
-        $cleared = $config->get('local_dixeo', 'learning_intent', $context);
+        $cleared = $config->get('local_dixeo', 'test_course_text', $context);
         $this->assertSame('', $cleared->get_value());
         $this->assertSame(resolver::LAYER_DIXEO, $cleared->get_source());
     }
 
     /**
-     * Learning intent has no Dixeo level.
+     * A course-only setting has no Dixeo level.
      */
     public function test_system_context_is_rejected(): void {
         $this->setAdminUser();
+        $this->prime_catalogue_fixtures();
 
         $this->expectException(\coding_exception::class);
-        (new config())->set('local_dixeo', 'learning_intent', \context_system::instance(), 'Site intent');
+        (new config())->set('local_dixeo', 'test_course_text', \context_system::instance(), 'Site intent');
     }
 
     /**
@@ -94,11 +106,12 @@ final class config_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
         $this->setUser($user);
+        $this->prime_catalogue_fixtures();
 
         $this->expectException(\required_capability_exception::class);
         (new config())->set(
             'local_dixeo',
-            'learning_intent',
+            'test_course_text',
             \context_course::instance($course->id),
             'Course intent'
         );
@@ -110,9 +123,10 @@ final class config_test extends \advanced_testcase {
     public function test_other_contexts_are_rejected(): void {
         $this->setAdminUser();
         $category = $this->getDataGenerator()->create_category();
+        $this->prime_catalogue_fixtures();
 
         $this->expectException(\coding_exception::class);
-        (new config())->get('local_dixeo', 'learning_intent', \context_coursecat::instance($category->id));
+        (new config())->get('local_dixeo', 'test_course_text', \context_coursecat::instance($category->id));
     }
 
     /**
@@ -205,9 +219,10 @@ final class config_test extends \advanced_testcase {
      */
     public function test_apply_new_course_default_rejects_a_non_retained_setting(): void {
         $course = $this->getDataGenerator()->create_course();
+        $this->prime_catalogue_fixtures();
 
         $this->expectException(\coding_exception::class);
-        (new config())->apply_new_course_default('local_dixeo', 'learning_intent', \context_course::instance($course->id));
+        (new config())->apply_new_course_default('local_dixeo', 'test_course_text', \context_course::instance($course->id));
     }
 
     /**
@@ -312,13 +327,14 @@ final class config_test extends \advanced_testcase {
      */
     public function test_system_layers_list_dixeo_settings(): void {
         $this->setAdminUser();
+        $this->prime_catalogue_fixtures();
         $rows = (new config())->get_layers(\context_system::instance());
         $names = array_column($rows, 'name');
 
         $this->assertContains('enabled', $names);
         $this->assertContains('filesync_enabled_default', $names);
         $this->assertContains('filesync_pill', $names);
-        $this->assertNotContains('learning_intent', $names);
+        $this->assertNotContains('test_course_text', $names);
         $this->assertNotContains('filesync_enabled', $names);
         $this->assertSame([], $this->layer_named($rows, 'filesync_enabled_default')['options']);
         $this->assertSame(
@@ -388,10 +404,11 @@ final class config_test extends \advanced_testcase {
         $context = \context_course::instance($course->id);
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $this->setUser($teacher);
+        $this->prime_catalogue_fixtures();
 
         $names = array_column((new config())->get_layers($context), 'name');
         $this->assertContains('enabled', $names);
-        $this->assertContains('learning_intent', $names);
+        $this->assertContains('test_course_text', $names);
         $this->assertContains('filesync_pill', $names);
         $this->assertContains('filesync_enabled', $names);
         $this->assertNotContains('filesync_enabled_default', $names);
@@ -516,13 +533,14 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
-     * An empty learning intent has no course row and no Dixeo layer.
+     * Empty course text has no course row and no Dixeo layer.
      */
-    public function test_empty_learning_intent_is_not_customised(): void {
+    public function test_empty_course_text_is_not_customised(): void {
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
+        $this->prime_catalogue_fixtures();
         $rows = (new config())->get_layers(\context_course::instance($course->id));
-        $intent = $this->layer_named($rows, 'learning_intent');
+        $intent = $this->layer_named($rows, 'test_course_text');
 
         $this->assertSame('', $intent['value']);
         $this->assertSame(resolver::LAYER_DIXEO, $intent['source']);
@@ -556,28 +574,32 @@ final class config_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $context = \context_course::instance($course->id);
 
+        $this->prime_catalogue_fixtures();
         $sink = $this->redirectEvents();
-        $config->set('local_dixeo', 'learning_intent', $context, 'Course intent');
+        $config->set('local_dixeo', 'test_course_text', $context, 'Course intent');
         $events = $this->setting_events($sink);
         $this->assertCount(1, $events);
         $this->assertStringNotContainsString('Course intent', $events[0]->get_description());
         $this->assertSame('local_dixeo', $events[0]->other['component']);
-        $this->assertSame('learning_intent', $events[0]->other['name']);
+        $this->assertSame('test_course_text', $events[0]->other['name']);
         $this->assertArrayNotHasKey('value', $events[0]->other);
         $this->assertEquals($context->id, $events[0]->contextid);
 
         $sink->clear();
-        $config->set('local_dixeo', 'learning_intent', $context, 'Course intent');
+        $this->prime_catalogue_fixtures();
+        $config->set('local_dixeo', 'test_course_text', $context, 'Course intent');
         $this->assertCount(0, $this->setting_events($sink));
 
         $sink->clear();
-        $config->set('local_dixeo', 'learning_intent', $context, '');
+        $this->prime_catalogue_fixtures();
+        $config->set('local_dixeo', 'test_course_text', $context, '');
         $cleared = $this->setting_events($sink);
         $this->assertCount(1, $cleared);
         $this->assertStringNotContainsString('Course intent', $cleared[0]->get_description());
 
         $sink->clear();
-        $config->set('local_dixeo', 'learning_intent', $context, '');
+        $this->prime_catalogue_fixtures();
+        $config->set('local_dixeo', 'test_course_text', $context, '');
         $this->assertCount(0, $this->setting_events($sink));
     }
 
@@ -694,7 +716,7 @@ final class config_test extends \advanced_testcase {
     }
 
     /**
-     * Database conditions for the course learning-intent row.
+     * Database conditions for the course text fixture row.
      *
      * @param \context_course $context Course context.
      * @return array<string, int|string>
@@ -703,7 +725,7 @@ final class config_test extends \advanced_testcase {
         return [
             'contextid' => $context->id,
             'component' => 'local_dixeo',
-            'name' => 'learning_intent',
+            'name' => 'test_course_text',
         ];
     }
 

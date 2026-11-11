@@ -22,7 +22,7 @@ use local_dixeo\external\service_factory;
  * Dixeo course settings on the course edit form.
  *
  * The section is omitted when the Dixeo layer is off. The settings button is the first control.
- * The course switch, file sync, the tutor switch, and learning intent follow it.
+ * The course switch, file sync and the tutor switch follow it.
  * A save that omits a field leaves that stored value unchanged.
  *
  * @package    local_dixeo
@@ -30,9 +30,6 @@ use local_dixeo\external\service_factory;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class course_edit_form {
-    /** @var string Course edit form element for learning intent. */
-    public const FIELD = 'local_dixeo_learning_intent';
-
     /** @var string Header element that groups Dixeo course fields. */
     public const HEADER = 'local_dixeo_settings';
 
@@ -49,7 +46,7 @@ class course_edit_form {
     public const TUTOR = 'local_dixeo_tutor_enabled';
 
     /**
-     * Add the Dixeo header, the settings button, the course switch, file sync, the tutor switch, then learning intent.
+     * Add the Dixeo header, the settings button, the course switch, file sync, then the tutor switch.
      *
      * The button is the first control in the section. Nothing is added when the Dixeo layer is off.
      *
@@ -87,19 +84,11 @@ class course_edit_form {
             $mform->setType(self::TUTOR, PARAM_INT);
             $mform->addHelpButton(self::TUTOR, 'tutor_enabled', 'block_dixeo_tutor');
         }
-        $mform->addElement(
-            'textarea',
-            self::FIELD,
-            get_string('learning_intent', 'local_dixeo'),
-            'wrap="virtual" rows="5" cols="50"'
-        );
-        $mform->setType(self::FIELD, PARAM_TEXT);
-        $mform->addHelpButton(self::FIELD, 'learning_intent', 'local_dixeo');
         $PAGE->requires->js_call_amd('local_dixeo/settings_modal', 'init');
     }
 
     /**
-     * Fill learning intent, the course switch, file sync, and the tutor switch. A saved course also gives the settings
+     * Fill the course switch, file sync, and the tutor switch. A saved course also gives the settings
      * button its course id, so the modal can show that course's file sync status.
      *
      * @param \core_course\hook\after_form_definition_after_data $hook Course form after-data hook.
@@ -123,8 +112,7 @@ class course_edit_form {
             $mform->getElement(self::OPEN_BUTTON)->updateAttributes($attributes);
         }
         if (
-            !$mform->elementExists(self::FIELD)
-            && !$mform->elementExists(self::ENABLED)
+            !$mform->elementExists(self::ENABLED)
             && !$mform->elementExists(self::FILESYNC)
             && !$mform->elementExists(self::TUTOR)
         ) {
@@ -132,13 +120,6 @@ class course_edit_form {
         }
 
         $config = service_factory::get_settings_config();
-        if ($mform->elementExists(self::FIELD)) {
-            $intent = '';
-            if ($coursecontext !== null) {
-                $intent = $config->get('local_dixeo', 'learning_intent', $coursecontext)->get_value();
-            }
-            $mform->getElement(self::FIELD)->setValue($intent);
-        }
         if ($mform->elementExists(self::ENABLED)) {
             $enabledcontext = $coursecontext ?? \context_system::instance();
             $mform->getElement(self::ENABLED)->setValue(
@@ -178,14 +159,9 @@ class course_edit_form {
      */
     public static function submission(\core_course\hook\after_form_submission $hook): void {
         $data = $hook->get_data();
-        $intent = null;
         $enabled = null;
         $filesync = null;
         $tutor = null;
-        if (property_exists($data, self::FIELD)) {
-            $intent = (string) $data->{self::FIELD};
-            unset($data->{self::FIELD});
-        }
         if (property_exists($data, self::ENABLED)) {
             $enabled = (string) $data->{self::ENABLED};
             unset($data->{self::ENABLED});
@@ -198,7 +174,7 @@ class course_edit_form {
             $tutor = (string) $data->{self::TUTOR};
             unset($data->{self::TUTOR});
         }
-        if ($intent === null && $enabled === null && $filesync === null && $tutor === null) {
+        if ($enabled === null && $filesync === null && $tutor === null) {
             return;
         }
 
@@ -209,9 +185,6 @@ class course_edit_form {
 
         $config = service_factory::get_settings_config();
         $context = \context_course::instance($courseid);
-        if ($intent !== null) {
-            $config->set('local_dixeo', 'learning_intent', $context, $intent);
-        }
         if ($enabled !== null) {
             $config->set('local_dixeo', 'enabled', $context, $enabled);
         }

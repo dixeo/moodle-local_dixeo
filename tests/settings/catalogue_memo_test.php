@@ -25,12 +25,19 @@
 
 namespace local_dixeo\settings;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/local/dixeo/tests/settings/catalogue_fixture_trait.php');
+
 /**
  * The catalogue is scanned once per request and language, and a write scans it again.
  *
  * @covers \local_dixeo\settings\catalogue
  */
 final class catalogue_memo_test extends \advanced_testcase {
+    use catalogue_fixture_trait;
+
     /** @var string Key added to the memoised definitions to tell a memo hit from a fresh scan. */
     private const MARKER = 'zz_memo_marker';
 
@@ -127,12 +134,27 @@ final class catalogue_memo_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
         $this->mock_clock_with_frozen();
+        $context = \context_course::instance((int) $this->getDataGenerator()->create_course()->id);
+        $this->prime_catalogue_fixtures();
         $this->plant_marker();
 
-        (new config())->set('local_dixeo', 'learning_intent', \context_course::instance(
-            (int) $this->getDataGenerator()->create_course()->id
-        ), 'Know the basics');
+        (new config())->set('local_dixeo', 'test_course_text', $context, 'Know the basics');
 
         $this->assertArrayNotHasKey(self::MARKER, catalogue::load());
+    }
+
+    /**
+     * Definitions primed in the memo are what load() returns, which the test fixture trait relies on.
+     */
+    public function test_a_primed_memo_is_returned_by_load(): void {
+        $this->resetAfterTest();
+        $this->mock_clock_with_frozen();
+
+        $this->prime_catalogue_fixtures();
+        $definitions = catalogue::load();
+
+        $this->assertArrayHasKey('test_course_text', $definitions);
+        $this->assertArrayHasKey('enabled', $definitions);
+        $this->assertSame(['course'], $definitions['test_course_text']->get_levels());
     }
 }

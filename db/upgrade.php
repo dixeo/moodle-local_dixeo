@@ -680,6 +680,11 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026110401, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026111200) {
+        local_dixeo_remove_learning_intent();
+        upgrade_plugin_savepoint(true, 2026111200, 'local', 'dixeo');
+    }
+
     return true;
 }
 
@@ -895,4 +900,18 @@ function local_dixeo_remove_empty_duplicate_top_categories(): void {
             $DB->delete_records('question_categories', ['id' => $top->id]);
         }
     }
+}
+
+/**
+ * Delete every stored value of the retired learning intent setting.
+ *
+ * @return void
+ */
+function local_dixeo_remove_learning_intent(): void {
+    global $DB;
+
+    if ($DB->get_manager()->table_exists('local_dixeo_setting')) {
+        $DB->delete_records('local_dixeo_setting', ['component' => 'local_dixeo', 'name' => 'learning_intent']);
+    }
+    unset_config('learning_intent', 'local_dixeo');
 }

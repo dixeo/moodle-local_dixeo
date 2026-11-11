@@ -17,7 +17,7 @@
 /**
  * Hook callbacks for the Dixeo plugin.
  *
- * Injects course-page indicators and adds Learning intent to the course edit form.
+ * Injects course-page indicators and adds the Dixeo section to the course edit form.
  *
  * @package    local_dixeo
  * @copyright  2025 Edunao SAS (contact@edunao.com)
