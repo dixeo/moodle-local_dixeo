@@ -79,4 +79,54 @@ final class config_default_copy_test extends \advanced_testcase {
         $this->assertCount(1, $writes);
         $this->assertArrayNotHasKey('defaultcopy', reset($writes)->other);
     }
+
+    public function test_copy_skips_settings_without_dixeo_level(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $definition = null;
+        foreach (catalogue::load() as $candidate) {
+            $levels = $candidate->get_levels();
+            if (
+                in_array(resolver::LAYER_ACTIVITY, $levels, true)
+                && !in_array(resolver::LAYER_DIXEO, $levels, true)
+            ) {
+                $definition = $candidate;
+                break;
+            }
+        }
+        if ($definition === null) {
+            $this->markTestSkipped('No installed plugin declares an activity-only setting.');
+        }
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $context = \context_module::instance($page->cmid);
+        $DB->delete_records(config::TABLE, ['contextid' => $context->id]);
+        $config = new config();
+
+        $sink = $this->redirectEvents();
+        $config->copy_activity_defaults($context);
+        $events = $sink->get_events();
+        $sink->close();
+
+        $this->assertFalse($DB->record_exists(config::TABLE, [
+            'contextid' => $context->id,
+            'component' => $definition->get_component(),
+            'name' => $definition->get_key(),
+        ]));
+        $this->assertSame(
+            $definition->get_default(),
+            $config->get($definition->get_component(), $definition->get_key(), $context)->get_value()
+        );
+        foreach ($events as $event) {
+            if ($event instanceof setting_updated) {
+                $this->assertFalse(
+                    $event->other['component'] === $definition->get_component()
+                        && $event->other['name'] === $definition->get_key()
+                );
+            }
+        }
+    }
 }

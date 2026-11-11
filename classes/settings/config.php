@@ -222,7 +222,8 @@ final class config {
      * Store the current Dixeo value of every activity-level setting on a new module.
      *
      * The row is kept even when it equals the Dixeo value. Settings that omit the activity
-     * level stay on the Dixeo layer. The caller decides which modules receive a copy.
+     * level stay on the Dixeo layer. Settings without a Dixeo level get no copy and resolve
+     * to their catalogue default. The caller decides which modules receive a copy.
      * Each resulting setting_updated event carries other['defaultcopy'] = true.
      *
      * @param \context_module $context The new module.
@@ -232,7 +233,11 @@ final class config {
         $this->copyingdefaults = true;
         try {
             foreach (catalogue::load() as $definition) {
-                if (!in_array(resolver::LAYER_ACTIVITY, $definition->get_levels(), true)) {
+                $levels = $definition->get_levels();
+                if (
+                    !in_array(resolver::LAYER_ACTIVITY, $levels, true)
+                    || !in_array(resolver::LAYER_DIXEO, $levels, true)
+                ) {
                     continue;
                 }
                 $value = $this->get($definition->get_component(), $definition->get_key(), $system)->get_value();

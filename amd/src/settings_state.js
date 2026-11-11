@@ -126,7 +126,10 @@ define([], function() {
     };
 
     /**
-     * Value a course row inherits. Dixeo when that layer exists, otherwise the site value.
+     * Value a course or activity row inherits.
+     *
+     * Dixeo when that layer exists, otherwise the site value. A setting with neither layer,
+     * such as an activity-only setting, inherits its catalogue default.
      *
      * @param {Object} setting Catalogue row from get_settings.
      * @returns {string}
@@ -137,7 +140,13 @@ define([], function() {
             return dixeo;
         }
         const site = layerRaw(setting, 'site');
-        return site === null ? '' : site;
+        if (site !== null) {
+            return site;
+        }
+        if (setting.defaultvalue !== undefined && setting.defaultvalue !== null) {
+            return String(setting.defaultvalue);
+        }
+        return '';
     };
 
     /**
