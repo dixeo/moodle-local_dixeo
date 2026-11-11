@@ -27,7 +27,7 @@ namespace local_dixeo\settings;
  */
 final class definition {
     /** @var string[] Levels a setting may declare. */
-    public const LEVELS = ['dixeo', 'course', 'activity', 'user'];
+    public const LEVELS = ['dixeo', 'course', 'activity'];
 
     /** @var string[] Control types the catalogue accepts. */
     public const TYPES = ['bool', 'select', 'multiselect', 'text', 'number', 'textarea'];
@@ -35,7 +35,7 @@ final class definition {
     /**
      * Store one catalogue setting.
      *
-     * @param string $key Storage key, unique within the component.
+     * @param string $key Storage key, unique across all catalogue components.
      * @param string $shortname Shortname shown in the settings manager.
      * @param string $component Frankenstyle component that owns the setting.
      * @param string $type One of {@see self::TYPES}.
@@ -60,7 +60,7 @@ final class definition {
      * @param bool $courseform True when the course edit form shows a yes/no control for the course value.
      */
     public function __construct(
-        /** @var string Storage key, unique within the component. */
+        /** @var string Storage key, unique across all catalogue components. */
         private string $key,
         /** @var string Shortname shown in the settings manager. */
         private string $shortname,

@@ -419,6 +419,17 @@ final class catalogue_test extends \advanced_testcase {
     }
 
     /**
+     * The user level is not a catalogue level.
+     */
+    public function test_user_level_is_rejected(): void {
+        $row = $this->courseform_row('bool', ['user']);
+        unset($row['courseform']);
+
+        $this->expectException(\coding_exception::class);
+        definition::from_array($row);
+    }
+
+    /**
      * A course-level bool may be shown on the course form.
      */
     public function test_courseform_is_accepted_on_a_course_level_bool(): void {
