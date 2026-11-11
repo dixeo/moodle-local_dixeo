@@ -34,6 +34,8 @@ namespace local_dixeo\event;
  * - name: catalogue key.
  * - defaultcopy: optional, true when the write copies the Dixeo value onto a new activity
  *   rather than recording a choice made for it.
+ * - restored: optional, true when the write stores a value read from a course or activity
+ *   backup rather than a choice made by the restoring user.
  */
 class setting_updated extends \core\event\base {
     /**

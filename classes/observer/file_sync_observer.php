@@ -37,6 +37,7 @@ use core\event\course_module_updated;
 use core\event\course_module_deleted;
 use local_dixeo\event\setting_updated;
 use local_dixeo\external\service_factory;
+use local_dixeo\service\consent_service;
 
 /**
  * Observer for file sync related events.
@@ -63,7 +64,9 @@ class file_sync_observer {
     /**
      * Keep the operational file sync flag aligned with the stored course setting.
      *
-     * Does not write the setting again. Off does not delete remote files.
+     * Does not write the setting again. Off does not delete remote files. A restored On starts
+     * sync only when Dixeo runs in the course and the restoring user has accepted the current
+     * terms; otherwise the stored value waits for a later change.
      *
      * @param setting_updated $event The event.
      * @return void
@@ -82,11 +85,19 @@ class file_sync_observer {
             return;
         }
 
-        $value = service_factory::get_settings_config()->get(
-            'local_dixeo',
-            'filesync_enabled',
-            $event->get_context()
-        )->get_value();
+        $config = service_factory::get_settings_config();
+        $value = $config->get('local_dixeo', 'filesync_enabled', $event->get_context())->get_value();
+        // A restored On starts sync only where Dixeo runs and the restoring user has accepted the terms.
+        if (
+            !empty($event->other['restored'])
+            && $value === '1'
+            && (
+                !$config->enabled_for($event->get_context())
+                || !(new consent_service())->terms_current((int) $event->userid)
+            )
+        ) {
+            return;
+        }
         service_factory::get_file_sync_service()->apply_course_filesync(
             $courseid,
             (int) $event->userid,

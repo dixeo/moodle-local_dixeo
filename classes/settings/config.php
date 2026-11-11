@@ -56,6 +56,9 @@ final class config {
     /** @var bool True while {@see self::copy_activity_defaults()} stores the Dixeo values. */
     private bool $copyingdefaults = false;
 
+    /** @var bool True while {@see self::restore_value()} stores a value from a backup. */
+    private bool $restoring = false;
+
     /**
      * Effective value at $context, falling back through the parent chain.
      *
@@ -216,6 +219,29 @@ final class config {
         }
         $this->write_stored($definition, $context, $level, $value);
         $this->notify_updated($definition, $context);
+    }
+
+    /**
+     * Store a course or activity value read from a backup.
+     *
+     * The write skips the capability check, like other system writes, and its setting_updated
+     * event carries other['restored'] = true so observers can tell it from a choice made by
+     * the restoring user.
+     *
+     * @param string $component Frankenstyle component.
+     * @param string $name Catalogue key.
+     * @param \context $context Course or module context of the restored item.
+     * @param string $value Value from the backup.
+     * @throws \coding_exception When the catalogue refuses the setting, context or value.
+     * @throws \moodle_exception When a number is out of range.
+     */
+    public function restore_value(string $component, string $name, \context $context, string $value): void {
+        $this->restoring = true;
+        try {
+            $this->set($component, $name, $context, $value, false);
+        } finally {
+            $this->restoring = false;
+        }
     }
 
     /**
@@ -976,6 +1002,9 @@ final class config {
         ];
         if ($this->copyingdefaults) {
             $other['defaultcopy'] = true;
+        }
+        if ($this->restoring) {
+            $other['restored'] = true;
         }
         \local_dixeo\event\setting_updated::create([
             'context' => $context,
