@@ -22,7 +22,6 @@
  */
 
 define([
-    'core/ajax',
     'core/config',
     'core/modal',
     'core/notification',
@@ -32,8 +31,35 @@ define([
     'core_form/changechecker',
     'local_dixeo/consent_gate',
     'local_dixeo/settings_state',
-], function(Ajax, Config, Modal, Notification, Str, Templates, UserDate, ChangeChecker, ConsentGate, State) {
+    'local_dixeo/network',
+], function(Config, Modal, Notification, Str, Templates, UserDate, ChangeChecker, ConsentGate, State, Network) {
     let bound = false;
+
+    const connection = Network.forComponent({component: 'local_dixeo'});
+
+    /**
+     * Read one web service, retrying it through short connection losses.
+     *
+     * @param {string} methodname
+     * @param {Object} args
+     * @returns {Promise}
+     */
+    const read = function(methodname, args) {
+        return Network.retryRead(function() {
+            return Network.call({methodname: methodname, args: args}, {timeout: Network.TIMEOUT_STATUS_MS});
+        });
+    };
+
+    /**
+     * Send one change. It is never sent again automatically.
+     *
+     * @param {string} methodname
+     * @param {Object} args
+     * @returns {Promise}
+     */
+    const write = function(methodname, args) {
+        return Network.call({methodname: methodname, args: args}, {timeout: Network.TIMEOUT_ACTION_MS});
+    };
 
     /** @type {WeakMap} Draft for the open shell. Discarded when the modal closes. */
     const sessions = new WeakMap();
@@ -563,10 +589,7 @@ define([
         let statusStrings = null;
         return loadStatusStrings().then(function(strings) {
             statusStrings = strings;
-            return Ajax.call([{
-                methodname: 'local_dixeo_get_file_sync_status',
-                args: {courseid: courseid},
-            }])[0];
+            return read('local_dixeo_get_file_sync_status', {courseid: courseid});
         }).then(function(status) {
             if (!shell.isConnected) {
                 return null;
@@ -578,7 +601,7 @@ define([
                 return paintDixeoOff(shell);
             }
             if (notify) {
-                Notification.exception(error);
+                connection.exception(error);
             }
             return null;
         });
@@ -755,10 +778,7 @@ define([
             row.hidden = shell.dataset.consentshow !== '1';
             return Promise.resolve(shell.dataset.consentshow === '1');
         }
-        return Ajax.call([{
-            methodname: 'local_dixeo_get_consent_manage',
-            args: {},
-        }])[0].then(function(result) {
+        return read('local_dixeo_get_consent_manage', {}).then(function(result) {
             const status = row.querySelector('[data-region="consent-status"]');
             const show = !!(result && result.show);
             shell.dataset.consentready = '1';
@@ -815,13 +835,10 @@ define([
         if (action === 'saveprocessing' && (!(processing && processing.checked) || !(terms && terms.checked))) {
             return Promise.resolve(null);
         }
-        return Ajax.call([{
-            methodname: 'local_dixeo_save_consent',
-            args: {
-                action: action,
-                processing: !!(processing && processing.checked),
-            },
-        }])[0].then(function(saved) {
+        return write('local_dixeo_save_consent', {
+            action: action,
+            processing: !!(processing && processing.checked),
+        }).then(function(saved) {
             if (saved && saved.message) {
                 Notification.addNotification({message: saved.message, type: 'success'});
             }
@@ -842,7 +859,7 @@ define([
     const bindConsentSubmit = function(shell, modal) {
         modal.getRoot().on('submit', 'form', function(event) {
             event.preventDefault();
-            saveConsentForm(shell, modal, event.target).catch(Notification.exception);
+            saveConsentForm(shell, modal, event.target).catch(connection.exception);
         });
     };
 
@@ -862,10 +879,7 @@ define([
         let loaded = null;
         return Str.get_string('consent_title', 'local_dixeo').then(function(title) {
             consentTitle = title;
-            return Ajax.call([{
-                methodname: 'local_dixeo_get_consent_manage',
-                args: {},
-            }])[0];
+            return read('local_dixeo_get_consent_manage', {});
         }).then(function(result) {
             loaded = result;
             if (!result || !result.show) {
@@ -886,7 +900,7 @@ define([
             paintConsent(shell, modal, loaded);
             bindConsentSubmit(shell, modal);
             return null;
-        }).catch(Notification.exception).then(function() {
+        }).catch(connection.exception).then(function() {
             delete button.dataset.busy;
             return null;
         });
@@ -991,10 +1005,7 @@ define([
             if (shell.dataset.preferencesready === '1') {
                 return null;
             }
-            return Ajax.call([{
-                methodname: 'local_dixeo_get_preferences',
-                args: {},
-            }])[0];
+            return read('local_dixeo_get_preferences', {});
         }).then(function(result) {
             const session = sessions.get(shell);
             if (result) {
@@ -1096,43 +1107,32 @@ define([
         let request;
         let uptodate = false;
         if (action === 'resync') {
-            request = Ajax.call([{
-                methodname: 'local_dixeo_trigger_file_sync',
-                args: {courseid: courseid},
-            }])[0];
+            request = write('local_dixeo_trigger_file_sync', {courseid: courseid});
         } else if (action === 'enable') {
             let enabledResult = null;
-            request = Ajax.call([{
-                methodname: 'local_dixeo_set_file_sync_enabled',
-                args: {courseid: courseid, enabled: true, removefiles: false},
-            }])[0].then(function(result) {
+            request = write('local_dixeo_set_file_sync_enabled', {
+                courseid: courseid,
+                enabled: true,
+                removefiles: false,
+            }).then(function(result) {
                 enabledResult = result;
                 if (!result || result.success === false) {
                     return null;
                 }
-                return Ajax.call([{
-                    methodname: 'local_dixeo_trigger_file_sync',
-                    args: {courseid: courseid},
-                }])[0];
+                return write('local_dixeo_trigger_file_sync', {courseid: courseid});
             }).then(function() {
                 return enabledResult;
             }).catch(function(error) {
                 if (enabledResult && enabledResult.success !== false) {
-                    Notification.exception(error);
+                    connection.exception(error);
                     return enabledResult;
                 }
                 throw error;
             });
         } else if (action === 'disable') {
-            request = Ajax.call([{
-                methodname: 'local_dixeo_set_file_sync_enabled',
-                args: {courseid: courseid, enabled: false, removefiles: true},
-            }])[0];
+            request = write('local_dixeo_set_file_sync_enabled', {courseid: courseid, enabled: false, removefiles: true});
         } else {
-            request = Ajax.call([{
-                methodname: 'local_dixeo_set_file_sync_enabled',
-                args: {courseid: courseid, enabled: false, removefiles: false},
-            }])[0];
+            request = write('local_dixeo_set_file_sync_enabled', {courseid: courseid, enabled: false, removefiles: false});
         }
         return request.then(function(result) {
             if (result && result.success === false) {
@@ -1148,7 +1148,7 @@ define([
             uptodate = !!(result && result.uptodate);
             return refreshStatus(shell, true);
         }).catch(function(error) {
-            Notification.exception(error);
+            connection.exception(error);
             return refreshStatus(shell, false);
         }).then(function() {
             const message = shell.querySelector('[data-region="status-message"]');
@@ -1188,10 +1188,7 @@ define([
             confirmed = true;
             button.dataset.busy = '1';
             button.disabled = true;
-            return Ajax.call([{
-                methodname: 'block_dixeo_tutor_delete_conversation',
-                args: {courseid: courseid},
-            }])[0];
+            return write('block_dixeo_tutor_delete_conversation', {courseid: courseid});
         }).then(function() {
             if (!confirmed) {
                 return null;
@@ -1202,7 +1199,7 @@ define([
             return null;
         }).catch(function(error) {
             if (confirmed) {
-                Notification.exception(error);
+                connection.exception(error);
             }
             return null;
         }).then(function() {
@@ -1938,10 +1935,7 @@ define([
             loadingStrings = strings;
             phase = 'ajax';
             showPanelOverlay(shell, strings[0], 'loading');
-            return Ajax.call([{
-                methodname: 'local_dixeo_get_settings',
-                args: {contextid: id},
-            }])[0];
+            return read('local_dixeo_get_settings', {contextid: id});
         }).then(function(result) {
             phase = 'render';
             if (!shell.isConnected) {
@@ -2364,23 +2358,17 @@ define([
             let saveError = null;
             const writes = [];
             if (settings.length) {
-                writes.push(Ajax.call([{
-                    methodname: 'local_dixeo_save_settings',
-                    args: {
-                        contextid: session.contextid,
-                        settings: settings,
-                    },
-                }])[0]);
+                writes.push(write('local_dixeo_save_settings', {
+                    contextid: session.contextid,
+                    settings: settings,
+                }));
             }
             if (preferences.length) {
-                writes.push(Ajax.call([{
-                    methodname: 'local_dixeo_set_preferences',
-                    args: {
-                        contextid: session.contextid || parseInt(shell.dataset.contextid || '0', 10) || 0,
-                        courseid: parseInt(shell.dataset.courseid || '0', 10) || 0,
-                        preferences: preferences,
-                    },
-                }])[0]);
+                writes.push(write('local_dixeo_set_preferences', {
+                    contextid: session.contextid || parseInt(shell.dataset.contextid || '0', 10) || 0,
+                    courseid: parseInt(shell.dataset.courseid || '0', 10) || 0,
+                    preferences: preferences,
+                }));
             }
             Promise.all(writes).then(function() {
                 if (!shell.isConnected) {
@@ -2399,7 +2387,7 @@ define([
                 setUiLocked(shell, false);
                 publishDirty(shell);
                 saveError = error;
-                return fallbackReady;
+                return Network.isConnectionError(error) ? connection.connectionMessage() : fallbackReady;
             }).then(function(fallback) {
                 if (!saveError) {
                     return null;

@@ -21,7 +21,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['jquery', 'core/ajax'], function($, Ajax) {
+define(['local_dixeo/network'], function(Network) {
+
+    const connection = Network.forComponent({component: 'local_dixeo'});
 
     /**
      * Read period bounds from the select element data attributes.
@@ -48,19 +50,29 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
          */
         transport: function(selector, query, success, failure) {
             const bounds = getPeriodBounds(selector);
-            const request = {
+            const request = () => ({
                 methodname: 'local_dixeo_search_credit_report_courses',
                 args: {
                     query: query,
                     timestart: bounds.timestart,
                     timeend: bounds.timeend,
                 },
-            };
+            });
 
-            const promises = Ajax.call([request]);
-            $.when(promises[0]).done(function(response) {
+            // A lost connection shows the connection message and leaves an empty list, so the
+            // autocomplete does not open a second dialog for the same failure.
+            Network.retryRead(() => Network.call(request(), {timeout: Network.TIMEOUT_STATUS_MS})).then(function(response) {
                 success(response.list || []);
-            }).fail(failure);
+                return null;
+            }).catch(function(error) {
+                if (Network.isConnectionError(error)) {
+                    connection.exception(error);
+                    success([]);
+                    return null;
+                }
+                failure(error);
+                return null;
+            });
         },
 
         /**

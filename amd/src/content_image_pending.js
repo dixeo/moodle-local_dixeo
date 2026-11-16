@@ -27,8 +27,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['core/str', 'core/ajax'], function(Str, Ajax) {
+define(['core/str', 'local_dixeo/network'], function(Str, Network) {
     'use strict';
+
+    const connection = Network.forComponent({component: 'local_dixeo'});
 
     const IMG_SELECTOR = 'img.dixeo-img-gen-pending, img.dixeo-img-gen-failed';
     const FRAME_CLASS = 'dixeo-img-gen-frame';
@@ -62,6 +64,9 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
 
     /** @type {number} */
     let pagePollStartedAt = 0;
+
+    /** @type {boolean} Whether a restart on the browser online event is registered. */
+    let onlineRestartPending = false;
 
     /**
      * @returns {Promise<{generating: string, failed: string}>}
@@ -523,10 +528,10 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
         if (!ids.length) {
             return Promise.resolve();
         }
-        return Ajax.call([{
+        return Network.retryRead(() => Network.call({
             methodname: 'local_dixeo_get_content_image_status',
             args: {placeholderids: ids},
-        }])[0].then((response) => {
+        }, {timeout: Network.TIMEOUT_STATUS_MS})).then((response) => {
             const items = response && response.items ? response.items : [];
             items.forEach((item) => {
                 if (item.status !== 'failed') {
@@ -557,11 +562,52 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
     };
 
     /**
+     * Show the connection message on every pending image, without a dialog.
+     */
+    const showConnectionNotice = () => {
+        connection.connectionMessage().then((message) => {
+            document.querySelectorAll('img.dixeo-img-gen-pending').forEach((img) => {
+                if (!isHtmlImage(img)) {
+                    return;
+                }
+                const host = img.closest(`.${WRAP_CLASS}`) || img.closest(`.${FRAME_CLASS}`);
+                if (host) {
+                    showFailureNotice(host, message);
+                }
+            });
+            return undefined;
+        }).catch(() => undefined);
+    };
+
+    /**
+     * Resume page polling once when the browser reports the connection is back.
+     *
+     * @param {{generating: string, failed: string}} strings
+     */
+    const restartWhenOnline = (strings) => {
+        if (onlineRestartPending) {
+            return;
+        }
+        onlineRestartPending = true;
+        window.addEventListener('online', () => {
+            onlineRestartPending = false;
+            if (!pagePollTimer && collectPendingPlaceholderIds().length) {
+                startPagePolling(strings);
+            }
+        }, {once: true});
+    };
+
+    /**
      * Poll server status for pending content images on the course page.
+     *
+     * Connection failures are retried silently for the retry window. Past it, polling stops,
+     * the connection message is shown on the images, and polling resumes once the browser is
+     * back online.
      *
      * @param {{generating: string, failed: string}} strings
      */
     const startPagePolling = (strings) => {
+        const retryWindow = Network.createRetryWindow();
         const pollOnce = () => {
             if (pagePollStartedAt && (Date.now() - pagePollStartedAt) > MAX_POLL_MS) {
                 stopPagePolling();
@@ -576,10 +622,11 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                 return;
             }
             pagePollInFlight = true;
-            Ajax.call([{
+            Network.call({
                 methodname: 'local_dixeo_get_content_image_status',
                 args: {placeholderids: ids},
-            }])[0].then((response) => {
+            }, {timeout: Network.TIMEOUT_STATUS_MS}).then((response) => {
+                retryWindow.succeeded();
                 const items = response && response.items ? response.items : [];
                 items.forEach((item) => {
                     if (item.status === 'pending' || item.status === 'processing') {
@@ -591,9 +638,14 @@ define(['core/str', 'core/ajax'], function(Str, Ajax) {
                     stopPagePolling();
                 }
                 return undefined;
-            }).catch(() => {
-                // Keep polling on transient errors.
-            }).always(() => {
+            }).catch((err) => {
+                if (Network.isConnectionError(err) && !retryWindow.shouldRetry(err)) {
+                    stopPagePolling();
+                    showConnectionNotice();
+                    restartWhenOnline(strings);
+                }
+                // Server errors keep polling until the page cap.
+            }).finally(() => {
                 pagePollInFlight = false;
             });
         };

@@ -277,6 +277,8 @@ $string['error:tutor_synthesis_unavailable'] = 'Dieser Dienst ist nicht verfügb
 $string['error:unavailable'] = 'Der KI-Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.';
 $string['error:unexpected'] = 'Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut oder bitten Sie Ihre Administration, die Website-Protokolle zu prüfen.';
 $string['error:validation_failed'] = 'Die Anfrage ist ungültig. Prüfen Sie die Werte und versuchen Sie es erneut.';
+$string['error_connection'] = 'Die Verbindung zum Server wurde unterbrochen. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.';
+$string['error_connection_synthesis'] = 'Die Verbindung wurde unterbrochen, während die Synthese angefordert wurde. Sie wurde möglicherweise trotzdem gestartet: Laden Sie die Seite neu, bevor Sie sie erneut anfordern.';
 $string['eventcreditreportexported'] = 'Kreditnutzungsbericht exportiert';
 $string['eventcreditreportexporteddesc'] = 'Der Benutzer mit der ID \'{$a->userid}\' hat den Kreditnutzungsbericht exportiert (Ansicht={$a->view}, Format={$a->dataformat}, Zeilen={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Kreditnutzungsbericht angesehen';

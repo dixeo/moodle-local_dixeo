@@ -22,12 +22,16 @@
  */
 
 define([
-    'core/ajax',
     'core/templates',
-    'core/notification',
-], function(Ajax, Templates, Notification) {
+    'local_dixeo/network',
+], function(Templates, Network) {
     const POLL_MS = 2000;
     const MAX_POLLS = 90;
+
+    const connection = Network.forComponent({
+        component: 'local_dixeo',
+        keys: ['error_connection_synthesis'],
+    });
 
     /**
      * Render the block body from a web service view model and update the button.
@@ -54,17 +58,21 @@ define([
      *
      * @param {string} methodname Web service name.
      * @param {Object} args Arguments.
+     * @param {number} timeout Milliseconds.
      * @return {Promise<Object>}
      */
-    const call = (methodname, args) => {
-        return Ajax.call([{
+    const call = (methodname, args, timeout) => {
+        return Network.call({
             methodname: methodname,
             args: args,
-        }])[0];
+        }, {timeout: timeout});
     };
 
     /**
      * Wire the course synthesis block.
+     *
+     * A request whose answer is lost is never sent again: the block follows the server state
+     * instead, which reports a pending job when the request arrived.
      */
     const init = () => {
         const root = document.getElementById('dixeo-tutor-synthesis');
@@ -77,13 +85,46 @@ define([
             timestart: Number(root.dataset.timestart),
             timeend: Number(root.dataset.timeend),
         };
+        const button = root.querySelector('[data-action="tutor-synthesis"]');
+        const retryWindow = Network.createRetryWindow();
         let polls = 0;
+        // Set while following the server state after a request whose answer was lost.
+        let stallWatch = null;
+        // Whether the server reported the lost request as a pending job.
+        let lostSeenPending = false;
+
+        /**
+         * Stop following a lost request and tell the user it may have started anyway.
+         *
+         * @param {Object|null} view Last view read from the server.
+         * @return {Promise}
+         */
+        const giveUpLostRequest = (view) => {
+            stallWatch = null;
+            const rendered = view ? render(root, view) : Promise.resolve();
+            button.disabled = false;
+            return rendered.then(() => connection.alertString('error_connection_synthesis'));
+        };
 
         const poll = () => {
             polls = polls + 1;
             window.setTimeout(() => {
-                call('local_dixeo_get_tutor_synthesis', args).then((view) => {
+                call('local_dixeo_get_tutor_synthesis', args, Network.TIMEOUT_STATUS_MS).then((view) => {
+                    retryWindow.succeeded();
+                    if (stallWatch) {
+                        stallWatch.observe(String(view.pending), view.pending);
+                        lostSeenPending = lostSeenPending || view.pending;
+                        if (stallWatch.stalled() || polls >= MAX_POLLS) {
+                            return giveUpLostRequest(view);
+                        }
+                        if (!view.pending && !lostSeenPending) {
+                            // The lost request has not shown up on the server yet.
+                            poll();
+                            return view;
+                        }
+                    }
                     if (!view.pending) {
+                        stallWatch = null;
                         return render(root, view);
                     }
                     // The pending body is already shown: rendering it again would repeat the status.
@@ -91,22 +132,39 @@ define([
                         poll();
                     }
                     return view;
-                }).catch(Notification.exception);
+                }).catch((error) => {
+                    if (retryWindow.shouldRetry(error) && polls < MAX_POLLS) {
+                        poll();
+                        return null;
+                    }
+                    if (stallWatch) {
+                        return giveUpLostRequest(null);
+                    }
+                    button.disabled = false;
+                    return connection.exception(error);
+                });
             }, POLL_MS);
         };
 
-        const button = root.querySelector('[data-action="tutor-synthesis"]');
         button.addEventListener('click', () => {
             button.disabled = true;
-            return call('local_dixeo_request_tutor_synthesis', args).then((view) => {
+            return call('local_dixeo_request_tutor_synthesis', args, Network.TIMEOUT_ACTION_MS).then((view) => {
                 if (view.pending) {
                     polls = 0;
                     poll();
                 }
                 return render(root, view);
             }).catch((error) => {
+                if (Network.isConnectionError(error)) {
+                    stallWatch = Network.createStallWatch();
+                    lostSeenPending = false;
+                    polls = 0;
+                    retryWindow.succeeded();
+                    poll();
+                    return null;
+                }
                 button.disabled = false;
-                Notification.exception(error);
+                return connection.exception(error);
             });
         });
         if (root.dataset.pending === '1') {

@@ -277,6 +277,8 @@ $string['error:tutor_synthesis_unavailable'] = 'Este servicio no está disponibl
 $string['error:unavailable'] = 'El servicio de IA no está disponible temporalmente. Inténtelo de nuevo más tarde.';
 $string['error:unexpected'] = 'Se ha producido un error. Vuelva a intentarlo o pida a su administrador que revise los registros del sitio.';
 $string['error:validation_failed'] = 'La solicitud no es válida. Revise los valores e inténtelo de nuevo.';
+$string['error_connection'] = 'Se perdió la conexión con el servidor. Comprueba tu red e inténtalo de nuevo.';
+$string['error_connection_synthesis'] = 'Se perdió la conexión mientras se solicitaba la síntesis. Es posible que se haya iniciado de todos modos: vuelve a cargar la página antes de solicitarla de nuevo.';
 $string['eventcreditreportexported'] = 'Informe de uso de créditos exportado';
 $string['eventcreditreportexporteddesc'] = 'El usuario con id \'{$a->userid}\' exportó el informe de uso de créditos (vista={$a->view}, formato={$a->dataformat}, filas={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Informe de uso de créditos consultado';

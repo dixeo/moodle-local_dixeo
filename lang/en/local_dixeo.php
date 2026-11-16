@@ -277,6 +277,8 @@ $string['error:tutor_synthesis_unavailable'] = 'This service is not available. C
 $string['error:unavailable'] = 'The AI service is temporarily unavailable. Please try again later.';
 $string['error:unexpected'] = 'Something went wrong. Please try again, or ask your administrator to check the site logs.';
 $string['error:validation_failed'] = 'The request is invalid. Check the values and try again.';
+$string['error_connection'] = 'The connection to the server was lost. Check your network and try again.';
+$string['error_connection_synthesis'] = 'The connection was lost while the synthesis was being requested. It may have been started anyway: reload the page before requesting it again.';
 $string['eventcreditreportexported'] = 'Credit usage report exported';
 $string['eventcreditreportexporteddesc'] = 'The user with id \'{$a->userid}\' exported the credit usage report (view={$a->view}, format={$a->dataformat}, rows={$a->rowcount}).';
 $string['eventcreditreportviewed'] = 'Credit usage report viewed';

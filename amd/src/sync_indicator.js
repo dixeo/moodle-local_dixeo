@@ -9,7 +9,18 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['core/ajax', 'core/str', 'core_course/events'], function(Ajax, Str, CourseEvents) {
+define(['core/str', 'core_course/events', 'local_dixeo/network'], function(Str, CourseEvents, Network) {
+
+const connection = Network.forComponent({component: 'local_dixeo'});
+
+/** Connection failures of the status poll, retried silently within the grace window. */
+const retryWindow = Network.createRetryWindow();
+
+/** @type {boolean} Whether the poll stopped because the connection is lost. */
+let offline = false;
+
+/** @type {string} Connection message shown on the pill while offline. */
+let offlineLabel = '';
 
 /** @type {number|null} Scheduled poll timer ID. */
 let pollTimer = null;
@@ -96,6 +107,10 @@ const init = (courseid, status, enabled, filesTotal, filesCompleted, placement, 
     // the loop stays fast while a sync is pending or running.
     loadLabels().then(() => {
         updateIndicatorUI();
+        return null;
+    }).catch(() => null);
+    connection.connectionMessage().then((message) => {
+        offlineLabel = message;
         return null;
     }).catch(() => null);
     schedulePoll(2000);
@@ -261,7 +276,14 @@ const setupEventListeners = () => {
         if (document.hidden) {
             cancelPoll();
         } else {
-            schedulePoll();
+            resumePolling();
+        }
+    });
+
+    // A poll stopped by a lost connection resumes when the browser is back online.
+    window.addEventListener('online', () => {
+        if (offline) {
+            resumePolling();
         }
     });
 
@@ -298,17 +320,52 @@ const schedulePoll = (delay) => {
 
     const wait = typeof delay === 'number' ? delay : pollDelay();
 
-    pollTimer = setTimeout(async() => {
+    pollTimer = setTimeout(() => {
         pollTimer = null;
-        try {
-            const status = await pollStatus();
-            updateFromStatus(status);
-        } catch (error) {
-            window.console.error('Poll failed:', error);
-        }
-        schedulePoll();
+        runPoll().then((keepPolling) => {
+            if (keepPolling) {
+                schedulePoll();
+            }
+            return null;
+        }).catch(() => null);
     }, wait);
 };
+
+/**
+ * Restart polling, giving a poll stopped by a lost connection a fresh retry window.
+ */
+const resumePolling = () => {
+    if (offline) {
+        retryWindow.succeeded();
+    }
+    schedulePoll();
+};
+
+/**
+ * Read the status once and apply it. Only one read is pending at a time.
+ *
+ * Resolves to whether polling should continue: connection failures are retried silently
+ * within the retry window, then the pill shows the offline state and polling stops.
+ *
+ * @returns {Promise<boolean>}
+ */
+const runPoll = Network.singleFlight(() => pollStatus().then((status) => {
+    retryWindow.succeeded();
+    offline = false;
+    updateFromStatus(status);
+    return true;
+}).catch((error) => {
+    if (Network.isConnectionError(error)) {
+        if (retryWindow.shouldRetry(error)) {
+            return true;
+        }
+        offline = true;
+        updateIndicatorUI();
+        return false;
+    }
+    window.console.error('Poll failed:', error);
+    return true;
+}));
 
 /**
  * Cancel any scheduled poll.
@@ -324,15 +381,14 @@ const cancelPoll = () => {
  * Poll immediately and reschedule.
  * Used for immediate feedback (e.g., after course editor state change).
  */
-const pollNow = async() => {
+const pollNow = () => {
     cancelPoll();
-    try {
-        const status = await pollStatus();
-        updateFromStatus(status);
-    } catch (error) {
-        window.console.error('Poll failed:', error);
-    }
-    schedulePoll();
+    runPoll().then((keepPolling) => {
+        if (keepPolling) {
+            schedulePoll();
+        }
+        return null;
+    }).catch(() => null);
 };
 
 /**
@@ -341,12 +397,12 @@ const pollNow = async() => {
  * @returns {Promise<Object>} The status object.
  */
 const pollStatus = () => {
-    return Ajax.call([{
+    return Network.call({
         methodname: 'local_dixeo_get_file_sync_status',
         args: {
             courseid: courseId,
         },
-    }])[0];
+    }, {timeout: Network.TIMEOUT_STATUS_MS});
 };
 
 /**
@@ -392,11 +448,18 @@ const updateIndicatorUI = (status = null) => {
     } else if (partial) {
         statusClass = 'partial';
     }
+    if (offline) {
+        statusClass = 'error';
+    }
     STATUS_MODIFIERS.forEach((name) => {
         button.classList.remove(`dixeo-sync-btn--${name}`);
     });
     button.classList.add(`dixeo-sync-btn--${statusClass}`);
-    if (labels) {
+    updateOfflineIcon(button);
+    if (offline && offlineLabel) {
+        button.title = offlineLabel;
+        button.setAttribute('aria-label', offlineLabel);
+    } else if (labels) {
         let tip = labels.filesync_status_none;
         const key = `filesync_status_${currentStatus}`;
         if (!isEnabled) {
@@ -413,6 +476,39 @@ const updateIndicatorUI = (status = null) => {
 
     if (status) {
         updateBadgeCount(status.filescompleted, status.filestotal);
+    }
+};
+
+/**
+ * Swap the status dot for a warning icon while the connection is lost, so the state is not
+ * conveyed by colour only.
+ *
+ * @param {HTMLElement} button The pill button.
+ */
+const updateOfflineIcon = (button) => {
+    const dot = button.querySelector('.dixeo-sync-btn__dot');
+    let icon = button.querySelector('.dixeo-sync-btn__offline');
+    if (offline) {
+        if (!icon) {
+            icon = document.createElement('i');
+            icon.className = 'dixeo-sync-btn__offline fa fa-exclamation-triangle';
+            icon.setAttribute('aria-hidden', 'true');
+            if (dot) {
+                dot.after(icon);
+            } else {
+                button.appendChild(icon);
+            }
+        }
+        if (dot) {
+            dot.classList.add('d-none');
+        }
+        return;
+    }
+    if (icon) {
+        icon.remove();
+    }
+    if (dot) {
+        dot.classList.remove('d-none');
     }
 };
 

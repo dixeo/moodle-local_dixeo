@@ -24,10 +24,11 @@
 define([
     'core/chartjs',
     'core/form-autocomplete',
-    'core/notification',
     'core/str',
-], function(Chart, AutoComplete, Notification, Str) {
+    'local_dixeo/network',
+], function(Chart, AutoComplete, Str, Network) {
     const getStrings = Str.get_strings;
+    const connection = Network.forComponent({component: 'local_dixeo'});
 
     const ENUM_FILTER_SELECTORS = [
         '#component',
@@ -84,7 +85,7 @@ define([
             true,
             '',
             true,
-        ))).catch(Notification.exception);
+        ))).catch(connection.exception);
     };
 
     /**
@@ -110,7 +111,7 @@ define([
             true,
             '',
             true,
-        ))).catch(Notification.exception);
+        ))).catch(connection.exception);
     };
 
     /**
