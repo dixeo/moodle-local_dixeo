@@ -38,8 +38,9 @@ class shortcode_service {
     /**
      * Process HTML for one html_field_target field; returns updated HTML.
      *
-     * Shortcodes are removed without queueing when content image generation is off or the user
-     * has not accepted the current Dixeo Terms of Use.
+     * Shortcodes are removed without queueing when the user lacks local/dixeo:contentimagegenerate
+     * in the course, when content image generation is off, or when the user has not accepted the
+     * current Dixeo Terms of Use. Every check uses the given $userid, never $USER.
      *
      * @param string $html
      * @param html_field_target $htmlfieldtarget
@@ -52,6 +53,9 @@ class shortcode_service {
         }
 
         $courseid = (int) $htmlfieldtarget->courseid;
+        if (!capability::can_generate($courseid, $userid)) {
+            return shortcode_parser::strip_all($html);
+        }
         if (
             !policy::is_enabled(
                 policy::ENTITY_CONTENT,

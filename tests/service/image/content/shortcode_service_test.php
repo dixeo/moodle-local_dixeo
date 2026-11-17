@@ -203,7 +203,7 @@ final class shortcode_service_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
         $context = \context_module::instance($page->cmid);
-        $user = $this->getDataGenerator()->create_user();
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $this->setUser($user);
         $filesbefore = $DB->count_records('files', ['contextid' => $context->id]);
 
@@ -234,5 +234,83 @@ final class shortcode_service_test extends \advanced_testcase {
 
         $this->assertSame('', trim($service->process_html('[img-gen prompt="Remove me"]', $target, 0)));
         $this->assertSame(0, $DB->count_records('local_dixeo_image_job'));
+    }
+
+    /**
+     * A teacher with the content image capability prohibited gets the shortcodes removed, even while $USER may generate.
+     */
+    public function test_process_html_strips_without_generate_capability(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
+        $roleid = (int) $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
+        assign_capability(
+            'local/dixeo:contentimagegenerate',
+            CAP_PROHIBIT,
+            $roleid,
+            \context_course::instance($course->id)->id,
+            true
+        );
+        $this->setAdminUser();
+
+        $processed = (new shortcode_service())->process_html(
+            'Intro [img-gen prompt="One"] [img-gen prompt="Two"] end',
+            $this->page_content_target($page),
+            (int) $teacher->id
+        );
+
+        $this->assertStringNotContainsString('[img-gen', $processed);
+        $this->assertStringNotContainsString('data-dixeo-img-gen=', $processed);
+        $this->assertStringContainsString('Intro', $processed);
+        $this->assertSame(0, $DB->count_records('local_dixeo_image_job'));
+        $this->assertCount(0, \core\task\manager::get_adhoc_tasks(poll_image_job::class));
+    }
+
+    /**
+     * A teacher holding the content image capability gets one job per shortcode.
+     */
+    public function test_process_html_queues_for_teacher_with_generate_capability(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
+        $this->setUser($teacher);
+
+        $processed = (new shortcode_service())->process_html(
+            '[img-gen prompt="One"] [img-gen prompt="Two"]',
+            $this->page_content_target($page),
+            (int) $teacher->id
+        );
+
+        $this->assertSame(2, substr_count($processed, 'data-dixeo-img-gen='));
+        $this->assertSame(2, $DB->count_records('local_dixeo_image_job'));
+    }
+
+    /**
+     * Content field target of a page module.
+     *
+     * @param \stdClass $page Page module record from the data generator.
+     * @return html_field_target
+     */
+    private function page_content_target(\stdClass $page): html_field_target {
+        return new html_field_target(
+            'page',
+            'content',
+            'mod_page',
+            'content',
+            0,
+            'page',
+            'content',
+            (int) $page->id,
+            \context_module::instance($page->cmid)->id,
+            (int) $page->course,
+            (int) $page->cmid,
+            'contentformat'
+        );
     }
 }

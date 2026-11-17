@@ -41,6 +41,20 @@ final class capability {
     }
 
     /**
+     * Whether a user may generate embedded content images in a course. Never uses $USER.
+     *
+     * @param int $courseid Course id; ids below 1 never allow generation.
+     * @param int $userid Acting user id; ids below 1 never allow generation.
+     * @return bool
+     */
+    public static function can_generate(int $courseid, int $userid): bool {
+        if ($courseid < 1 || $userid < 1) {
+            return false;
+        }
+        return has_capability('local/dixeo:contentimagegenerate', \context_course::instance($courseid), $userid);
+    }
+
+    /**
      * Require local/dixeo:contentimageedit in the course.
      *
      * @param int $courseid
