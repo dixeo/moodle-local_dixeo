@@ -35,6 +35,7 @@ use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\url_helper;
 use local_dixeo\service\image\content_target;
+use local_dixeo\service\image\placeholder_ids;
 use local_dixeo\service\image\target_factory;
 
 /**
@@ -49,8 +50,8 @@ class get_content_image_status extends external_api {
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
             'placeholderids' => new external_multiple_structure(
-                new external_value(PARAM_RAW, 'Placeholder UUID'),
-                'Placeholder ids to poll'
+                new external_value(PARAM_ALPHANUMEXT, 'Placeholder UUID'),
+                'Placeholder ids to poll (at most ' . placeholder_ids::MAX_PER_REQUEST . ')'
             ),
         ]);
     }
@@ -76,13 +77,15 @@ class get_content_image_status extends external_api {
     /**
      * Return status details for the given content image placeholders.
      *
-     * Always returns one item per requested id. Missing/inaccessible jobs are
-     * reported as status "idle" so the page poller can clear pending UI.
+     * Returns one item per distinct well-formed id; malformed ids are dropped. Missing or
+     * inaccessible jobs are reported as status "idle" so the page poller can clear pending UI.
      *
      * @param array $placeholderids Placeholder UUIDs to poll.
      * @return array
+     * @throws \invalid_parameter_exception When more than placeholder_ids::MAX_PER_REQUEST ids are sent.
      */
     public static function execute(array $placeholderids): array {
+        $placeholderids = placeholder_ids::normalise($placeholderids);
         $params = self::validate_parameters(self::execute_parameters(), [
             'placeholderids' => $placeholderids,
         ]);
@@ -91,11 +94,6 @@ class get_content_image_status extends external_api {
         $seencontexts = [];
 
         foreach ($params['placeholderids'] as $placeholderid) {
-            $placeholderid = trim((string) $placeholderid);
-            if ($placeholderid === '') {
-                continue;
-            }
-
             $job = job_repository::get_by_placeholderid($placeholderid);
             if (!$job || empty($job->contextid)) {
                 $items[] = self::idle_item($placeholderid);

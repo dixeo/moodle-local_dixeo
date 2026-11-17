@@ -46,6 +46,7 @@ define(['core/str', 'local_dixeo/network'], function(Str, Network) {
     const POLL_INTERVAL_MS = 3000;
     /** Cap client polling (~10 min) for stuck pending HTML without a live job. */
     const MAX_POLL_MS = 10 * 60 * 1000;
+    const MAX_IDS_PER_REQUEST = 50; // Mirrors \local_dixeo\service\image\placeholder_ids::MAX_PER_REQUEST.
 
     /** @type {{generating: string, failed: string}|null} */
     let labels = null;
@@ -518,6 +519,27 @@ define(['core/str', 'local_dixeo/network'], function(Str, Network) {
     };
 
     /**
+     * Fetch the status of every given placeholder, in chunks the server accepts, in one HTTP round trip.
+     *
+     * Rejects when any chunk fails.
+     *
+     * @param {string[]} ids Distinct placeholder ids
+     * @returns {Promise<object[]>} Status items of every chunk, in request order
+     */
+    const fetchStatusItems = (ids) => {
+        const requests = [];
+        for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
+            requests.push({
+                methodname: 'local_dixeo_get_content_image_status',
+                args: {placeholderids: ids.slice(i, i + MAX_IDS_PER_REQUEST)},
+            });
+        }
+        return Promise.all(Network.callMany(requests, {timeout: Network.TIMEOUT_STATUS_MS})).then((responses) =>
+            responses.reduce((items, response) => items.concat(response && response.items ? response.items : []), [])
+        );
+    };
+
+    /**
      * Replace generic failed pills with the reason stored on the image job.
      *
      * @param {{generating: string, failed: string}} strings
@@ -528,11 +550,7 @@ define(['core/str', 'local_dixeo/network'], function(Str, Network) {
         if (!ids.length) {
             return Promise.resolve();
         }
-        return Network.retryRead(() => Network.call({
-            methodname: 'local_dixeo_get_content_image_status',
-            args: {placeholderids: ids},
-        }, {timeout: Network.TIMEOUT_STATUS_MS})).then((response) => {
-            const items = response && response.items ? response.items : [];
+        return Network.retryRead(() => fetchStatusItems(ids)).then((items) => {
             items.forEach((item) => {
                 if (item.status !== 'failed') {
                     return;
@@ -622,12 +640,8 @@ define(['core/str', 'local_dixeo/network'], function(Str, Network) {
                 return;
             }
             pagePollInFlight = true;
-            Network.call({
-                methodname: 'local_dixeo_get_content_image_status',
-                args: {placeholderids: ids},
-            }, {timeout: Network.TIMEOUT_STATUS_MS}).then((response) => {
+            fetchStatusItems(ids).then((items) => {
                 retryWindow.succeeded();
-                const items = response && response.items ? response.items : [];
                 items.forEach((item) => {
                     if (item.status === 'pending' || item.status === 'processing') {
                         return;

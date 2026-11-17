@@ -45,4 +45,65 @@ final class get_content_image_status_test extends \advanced_testcase {
         $this->assertSame('00000000-0000-0000-0000-000000000099', $result['items'][0]['placeholderid']);
         $this->assertSame('', $result['items'][0]['imageurl']);
     }
+
+    /**
+     * More ids than one request accepts are refused before any database query.
+     */
+    public function test_oversized_list_is_refused_before_any_query(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $ids = [];
+        for ($i = 0; $i < \local_dixeo\service\image\placeholder_ids::MAX_PER_REQUEST + 1; $i++) {
+            $ids[] = \core\uuid::generate();
+        }
+
+        $before = $DB->perf_get_queries();
+        try {
+            get_content_image_status::execute($ids);
+            $this->fail('An oversized placeholder id list must be refused.');
+        } catch (\invalid_parameter_exception $e) {
+            $this->assertStringContainsString('Too many placeholder ids', $e->getMessage());
+        }
+        $this->assertSame($before, $DB->perf_get_queries());
+    }
+
+    /**
+     * Repeated ids produce a single item each.
+     */
+    public function test_duplicate_ids_return_one_item_each(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $first = \core\uuid::generate();
+        $second = \core\uuid::generate();
+        $result = get_content_image_status::execute([$first, $second, $first]);
+        $result = get_content_image_status::clean_returnvalue(
+            get_content_image_status::execute_returns(),
+            $result
+        );
+
+        $this->assertCount(2, $result['items']);
+        $this->assertSame([$first, $second], array_column($result['items'], 'placeholderid'));
+    }
+
+    /**
+     * Ids that are not well-formed UUIDs produce no item.
+     */
+    public function test_malformed_ids_produce_no_item(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $result = get_content_image_status::execute([
+            'abc',
+            '00000000-0000-0000-0000-0000000000999',
+        ]);
+        $result = get_content_image_status::clean_returnvalue(
+            get_content_image_status::execute_returns(),
+            $result
+        );
+
+        $this->assertSame([], $result['items']);
+    }
 }
