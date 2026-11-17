@@ -33,8 +33,8 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
-use local_dixeo\repository\tutor_usage_rollup_repository;
 use local_dixeo\service\generation_language_helper;
+use local_dixeo\service\tutor_usage_retention;
 use local_dixeo\task\erase_tutor_conversations;
 
 /**
@@ -867,7 +867,7 @@ class provider implements
             $DB->delete_records(self::TABLE_CONSENT);
             $DB->delete_records(self::TABLE_JOBS, ['courseid' => 0]);
             $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => 0]);
-            self::delete_course_tutor_usage(0);
+            tutor_usage_retention::delete_courses([0]);
             return;
         }
 
@@ -890,7 +890,7 @@ class provider implements
         $DB->delete_records(self::TABLE_JOBS, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_IMAGE_JOB, ['courseid' => $courseid]);
-        self::delete_course_tutor_usage($courseid);
+        tutor_usage_retention::delete_courses([$courseid]);
         $DB->delete_records(self::TABLE_TUTOR_SYNTHESIS, ['courseid' => $courseid]);
 
         if ($remotedeleted) {
@@ -938,7 +938,7 @@ class provider implements
                     'userid' => $userid,
                     'courseid' => 0,
                 ]);
-                self::delete_user_tutor_usage($userid, 0);
+                tutor_usage_retention::delete_user($userid);
                 continue;
             }
             if ($context->contextlevel === CONTEXT_COURSE) {
@@ -996,9 +996,7 @@ class provider implements
             $params5
         );
 
-        foreach ($courseids as $courseid) {
-            self::delete_user_tutor_usage($userid, (int) $courseid);
-        }
+        tutor_usage_retention::delete_user($userid, $courseids);
         self::clear_tutor_synthesis_requester($userid, $courseids);
 
         $failure = null;
@@ -1009,60 +1007,6 @@ class provider implements
         if ($failure !== null) {
             throw $failure;
         }
-    }
-
-    /**
-     * Delete tutor usage analytics for one user in a course or site scope.
-     *
-     * @param int $userid User id.
-     * @param int $courseid Course id, or 0 for site-wide rows.
-     */
-    private static function delete_user_tutor_usage(int $userid, int $courseid): void {
-        global $DB;
-
-        $params = ['userid' => $userid];
-        $coursesql = '';
-        if ($courseid > 0) {
-            $coursesql = ' AND courseid = :courseid';
-            $params['courseid'] = $courseid;
-        }
-
-        tutor_usage_rollup_repository::with_lock(static function () use ($DB, $coursesql, $params): void {
-            foreach (self::tutor_usage_tables() as $table) {
-                $DB->delete_records_select($table, 'userid = :userid' . $coursesql, $params);
-            }
-        });
-    }
-
-    /**
-     * Delete all tutor usage analytics of one course, or the site-wide rows for course id 0.
-     *
-     * Runs under the rollup lock so a day build cannot write rows from events read before the deletion.
-     *
-     * @param int $courseid Course id, or 0 for site-wide rows.
-     */
-    private static function delete_course_tutor_usage(int $courseid): void {
-        global $DB;
-
-        tutor_usage_rollup_repository::with_lock(static function () use ($DB, $courseid): void {
-            foreach (self::tutor_usage_tables() as $table) {
-                $DB->delete_records($table, ['courseid' => $courseid]);
-            }
-        });
-    }
-
-    /**
-     * Tutor usage analytics tables that hold personal data.
-     *
-     * @return string[]
-     */
-    private static function tutor_usage_tables(): array {
-        return [
-            self::TABLE_TUTOR_USAGE_EVENT,
-            self::TABLE_TUTOR_USAGE_DAILY,
-            self::TABLE_TUTOR_USAGE_SESSION,
-            self::TABLE_TUTOR_USAGE_OPEN,
-        ];
     }
 
     /**
@@ -1202,11 +1146,7 @@ class provider implements
                 "courseid = 0 AND userid {$insql}",
                 $params
             );
-            tutor_usage_rollup_repository::with_lock(static function () use ($DB, $insql, $params): void {
-                foreach (self::tutor_usage_tables() as $table) {
-                    $DB->delete_records_select($table, "userid {$insql}", $params);
-                }
-            });
+            tutor_usage_retention::delete_users($userids);
             return;
         }
 
@@ -1266,9 +1206,7 @@ class provider implements
             $params5
         );
 
-        foreach ($userids as $targetuserid) {
-            self::delete_user_tutor_usage((int) $targetuserid, $courseid);
-        }
+        tutor_usage_retention::delete_users($userids, $courseid);
         self::clear_tutor_synthesis_requesters($courseid, $userids);
 
         $failure = null;

@@ -18,14 +18,17 @@ namespace local_dixeo\observer;
 
 use core\event\course_deleted;
 use core\event\user_deleted;
+use local_dixeo\service\tutor_usage_retention;
 use local_dixeo\task\erase_tutor_conversations;
 
 /**
- * Queues the erasure at Dixeo of the tutor conversations of a deleted course or user.
+ * Removes the tutor data of a deleted course or user.
  *
  * The contexts are gone once the deletion completes, so the privacy API can no longer reach
- * these conversations. The erasure runs as an adhoc task with its own retry budget, and
- * nothing is queued on a site that never sent data to Dixeo.
+ * this data. The erasure of the conversations at Dixeo runs as an adhoc task with its own
+ * retry budget, and nothing is queued on a site that never sent data to Dixeo. The local tutor
+ * usage analytics of a deleted course are deleted at once; they are keyed by course id, so the
+ * course context is not needed.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -33,13 +36,14 @@ use local_dixeo\task\erase_tutor_conversations;
  */
 class tutor_conversation_observer {
     /**
-     * Queue the erasure of every conversation of a deleted course.
+     * Queue the erasure of every conversation of a deleted course and delete its tutor usage analytics.
      *
      * @param course_deleted $event The event.
      * @return void
      */
     public static function course_deleted(course_deleted $event): void {
         erase_tutor_conversations::queue((int) $event->objectid, null);
+        tutor_usage_retention::delete_courses([(int) $event->objectid]);
     }
 
     /**

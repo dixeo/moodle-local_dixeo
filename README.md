@@ -70,6 +70,10 @@ While API credentials are set, the hourly credit usage sync reads the site's cre
 transactions from Dixeo, even when the Dixeo switch is off. It sends no course or user
 content. Clearing the API key, not the Dixeo switch, stops all traffic to Dixeo.
 
+## Data retention
+
+Tutor usage analytics are kept with no time limit. They are deleted when the course or the user is deleted, when the user withdraws consent, and on privacy requests.
+
 ## Capabilities
 
 | Capability | Description | Default Roles |

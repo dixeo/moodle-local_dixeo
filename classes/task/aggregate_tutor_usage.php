@@ -17,13 +17,16 @@
 namespace local_dixeo\task;
 
 use local_dixeo\service\tutor_usage_aggregator;
+use local_dixeo\service\tutor_usage_retention;
+use local_dixeo\util\site_calendar;
 
 /**
  * Hourly build of tutor usage statistics.
  *
- * Each run resets the daily totals when the site timezone changed, closes the past days
- * (daily totals and sessions) from the last watermark through yesterday, then rebuilds
- * days that received late events and back-fills older days within a bounded budget.
+ * Each run resets the daily totals when the site timezone changed, deletes the rows of
+ * deleted courses once per site day, closes the past days (daily totals and sessions) from
+ * the last watermark through yesterday, then rebuilds days that received late events and
+ * back-fills older days within a bounded budget.
  * The task is local only and sends nothing to Dixeo, so it also runs while Dixeo is off.
  *
  * @package    local_dixeo
@@ -31,6 +34,9 @@ use local_dixeo\service\tutor_usage_aggregator;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class aggregate_tutor_usage extends \core\task\scheduled_task {
+    /** @var string Task state: site day start of the last deleted-course sweep. */
+    public const CONFIG_ORPHAN_SWEEP_DAY = 'tutor_usage_orphan_sweep_day';
+
     /**
      * Localised task name.
      *
@@ -49,6 +55,8 @@ class aggregate_tutor_usage extends \core\task\scheduled_task {
         if ($aggregator->ensure_rollup_timezone()) {
             mtrace('Tutor usage daily totals reset for the site timezone');
         }
+
+        $this->sweep_orphaned_courses();
 
         $result = $aggregator->aggregate_pending_days();
         $daycount = count($result['days']);
@@ -81,5 +89,22 @@ class aggregate_tutor_usage extends \core\task\scheduled_task {
             $backfill['built'],
             $backfill['done'] ? ', complete' : ''
         ));
+    }
+
+    /**
+     * Delete the tutor usage rows of deleted courses, at most once per site day.
+     *
+     * Runs before the day builds, so the back-fill never rebuilds daily rows of a deleted course.
+     *
+     * @return void
+     */
+    protected function sweep_orphaned_courses(): void {
+        $today = site_calendar::day_start(\core\di::get(\core\clock::class)->time());
+        if ((int) get_config('local_dixeo', self::CONFIG_ORPHAN_SWEEP_DAY) === $today) {
+            return;
+        }
+        $purged = tutor_usage_retention::delete_orphaned_courses();
+        set_config(self::CONFIG_ORPHAN_SWEEP_DAY, $today, 'local_dixeo');
+        mtrace(sprintf('Tutor usage deleted the rows of %d deleted course(s)', $purged));
     }
 }
