@@ -787,4 +787,130 @@ final class credit_usage_report_service_test extends \advanced_testcase {
             'timeend' => 1 + credit_usage_report_service::MAX_CUSTOM_RANGE_SECONDS + 1,
         ]);
     }
+
+    /**
+     * Histogram buckets sum every row, including rows created in the same second.
+     */
+    public function test_histogram_sums_rows_with_equal_time(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $time = time();
+        foreach ([3, 4] as $index => $credits) {
+            $DB->insert_record(credit_usage_repository::TABLE, (object) [
+                'transactionid' => 'tx-same-second-' . $index,
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -$credits,
+                'credits' => $credits,
+                'timecreated' => $time,
+                'timesynced' => $time,
+            ]);
+        }
+
+        $histogram = (new credit_usage_report_service())->get_histogram([
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => usergetmidnight($time),
+            'timeend' => usergetmidnight($time) + DAYSECS - 1,
+        ]);
+
+        $this->assertSame([7], $histogram['values']);
+    }
+
+    /**
+     * The queries of a page of rows do not grow with the number of distinct users and courses.
+     */
+    public function test_get_rows_queries_do_not_grow_with_distinct_entities(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $time = time();
+        $courses = [];
+        $users = [];
+        $cmids = [];
+        for ($i = 0; $i < 50; $i++) {
+            $courses[$i] = $this->getDataGenerator()->create_course();
+            $users[$i] = $this->getDataGenerator()->create_user();
+            $cmids[$i] = (int) $this->getDataGenerator()->create_module('page', ['course' => $courses[$i]->id])->cmid;
+            get_fast_modinfo($courses[$i]->id);
+        }
+
+        $service = new credit_usage_report_service();
+        $filters = [
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $time - DAYSECS,
+            'timeend' => $time + DAYSECS,
+        ];
+        $counts = [];
+        foreach ([10, 50] as $distinct) {
+            $DB->delete_records(credit_usage_repository::TABLE);
+            $rows = [];
+            for ($i = 0; $i < 50; $i++) {
+                $entity = $i % $distinct;
+                $rows[] = [
+                    'transactionid' => "tx-{$distinct}-{$i}",
+                    'type' => credit_transaction::TYPE_DEDUCTION,
+                    'amount' => -1,
+                    'credits' => 1,
+                    'userid' => (int) $users[$entity]->id,
+                    'courseid' => (int) $courses[$entity]->id,
+                    'cmid' => $i % 2 ? $cmids[$entity] : 0,
+                    'timecreated' => $time - $i,
+                    'timesynced' => $time,
+                ];
+            }
+            $DB->insert_records(credit_usage_repository::TABLE, $rows);
+
+            // The first read warms the caches of the courses on the page.
+            $service->get_rows($filters, 0, 50);
+            $before = $DB->perf_get_queries();
+            $result = $service->get_rows($filters, 0, 50);
+            $counts[$distinct] = $DB->perf_get_queries() - $before;
+            $this->assertCount(50, $result['rows']);
+            $this->assertSame(fullname($users[0]), $result['rows'][0]['userlabel']);
+            $this->assertTrue($result['rows'][1]['hasactivitycontext']);
+        }
+
+        $this->assertSame($counts[10], $counts[50]);
+    }
+
+    /**
+     * Export rows stream in report order with the same labels as the screen.
+     */
+    public function test_export_rows_follow_report_order(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $time = time();
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $rows = [];
+        for ($i = 0; $i < 3; $i++) {
+            $rows[] = [
+                'transactionid' => 'tx-export-' . $i,
+                'type' => credit_transaction::TYPE_DEDUCTION,
+                'amount' => -($i + 1),
+                'credits' => $i + 1,
+                'userid' => (int) $user->id,
+                'courseid' => (int) $course->id,
+                'timecreated' => $time - $i,
+                'timesynced' => $time,
+            ];
+        }
+        $DB->insert_records(credit_usage_repository::TABLE, $rows);
+
+        $service = new credit_usage_report_service();
+        $filters = [
+            'type' => credit_transaction::TYPE_DEDUCTION,
+            'timestart' => $time - DAYSECS,
+            'timeend' => $time + DAYSECS,
+        ];
+        $export = iterator_to_array($service->export_rows($filters), false);
+        $screen = $service->get_rows($filters, 0, 50)['rows'];
+
+        $this->assertSame(3, $service->count_rows($filters));
+        $this->assertSame(array_column($screen, 'creditsformatted'), array_column($export, 'credits'));
+        $this->assertSame(['1', '2', '3'], array_column($export, 'credits'));
+        $this->assertSame(fullname($user), $export[0]['user']);
+        $this->assertSame(format_string($course->fullname), $export[0]['course']);
+    }
 }

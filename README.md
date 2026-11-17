@@ -66,6 +66,10 @@ In case of delay or difficulty, please contact support@dixeo.com.
 | **API Key** | Your Dixeo API key (required) |
 | **Namespace** | Site identifier for multi-site isolation (default: `default`) |
 
+While API credentials are set, the hourly credit usage sync reads the site's credit
+transactions from Dixeo, even when the Dixeo switch is off. It sends no course or user
+content. Clearing the API key, not the Dixeo switch, stops all traffic to Dixeo.
+
 ## Capabilities
 
 | Capability | Description | Default Roles |

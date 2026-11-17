@@ -26,6 +26,12 @@ use local_dixeo\service\credit_usage_report_service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class credit_report_request {
+    /** @var int Largest number of rows on one page. */
+    public const MAX_PERPAGE = 100;
+
+    /** @var int Largest number of values kept for each multi-value filter. */
+    public const MAX_FILTER_VALUES = 100;
+
     /** @var string View mode. */
     public string $view;
 
@@ -76,13 +82,13 @@ final class credit_report_request {
             optional_param('dateto', '', PARAM_TEXT)
         );
         $request->page = optional_param('page', 0, PARAM_INT);
-        $request->perpage = optional_param('perpage', 50, PARAM_INT);
+        $request->perpage = min(self::MAX_PERPAGE, max(1, optional_param('perpage', 50, PARAM_INT)));
         $request->filters = credit_report_filters::from_raw([
-            'components' => optional_param_array('component', [], PARAM_ALPHANUMEXT),
-            'jobtypes' => optional_param_array('jobtype', [], PARAM_ALPHANUMEXT),
-            'moduletypes' => optional_param_array('moduletype', [], PARAM_ALPHANUMEXT),
-            'userids' => array_values(array_filter(optional_param_array('userid', [], PARAM_INT))),
-            'courseids' => array_values(array_filter(optional_param_array('courseid', [], PARAM_INT))),
+            'components' => self::limit_values(optional_param_array('component', [], PARAM_ALPHANUMEXT)),
+            'jobtypes' => self::limit_values(optional_param_array('jobtype', [], PARAM_ALPHANUMEXT)),
+            'moduletypes' => self::limit_values(optional_param_array('moduletype', [], PARAM_ALPHANUMEXT)),
+            'userids' => self::limit_values(array_filter(optional_param_array('userid', [], PARAM_INT))),
+            'courseids' => self::limit_values(array_filter(optional_param_array('courseid', [], PARAM_INT))),
         ]);
         return $request;
     }
@@ -100,15 +106,25 @@ final class credit_report_request {
         $request->datefrom = (int) ($params['datefrom'] ?? 0);
         $request->dateto = (int) ($params['dateto'] ?? 0);
         $request->page = (int) ($params['page'] ?? 0);
-        $request->perpage = (int) ($params['perpage'] ?? 50);
+        $request->perpage = min(self::MAX_PERPAGE, max(1, (int) ($params['perpage'] ?? 50)));
         $request->filters = credit_report_filters::from_raw([
-            'components' => $params['components'] ?? [],
-            'jobtypes' => $params['jobtypes'] ?? [],
-            'moduletypes' => $params['moduletypes'] ?? [],
-            'userids' => $params['userids'] ?? [],
-            'courseids' => $params['courseids'] ?? [],
+            'components' => self::limit_values((array) ($params['components'] ?? [])),
+            'jobtypes' => self::limit_values((array) ($params['jobtypes'] ?? [])),
+            'moduletypes' => self::limit_values((array) ($params['moduletypes'] ?? [])),
+            'userids' => self::limit_values((array) ($params['userids'] ?? [])),
+            'courseids' => self::limit_values((array) ($params['courseids'] ?? [])),
         ]);
         return $request;
+    }
+
+    /**
+     * Keep the first MAX_FILTER_VALUES values of a cleaned multi-value filter.
+     *
+     * @param array $values Cleaned values.
+     * @return array
+     */
+    private static function limit_values(array $values): array {
+        return array_slice(array_values($values), 0, self::MAX_FILTER_VALUES);
     }
 
     /**

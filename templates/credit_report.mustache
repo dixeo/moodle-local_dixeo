@@ -35,6 +35,11 @@
     * reseturl - string - URL to reset filters.
     * haschartdata - bool - Whether chart data is available.
     * hasrows - bool - Whether table rows are available.
+    * lastsynced - string - Date of the last successful credit sync, or "Never synced".
+    * lastsyncedlabel - string - "Last synced" text shown next to the refresh button.
+    * refreshurl - string - URL the "Refresh now" form posts to.
+    * refreshparams - array - Hidden name/value fields carrying the report parameters.
+    * sesskey - string - Session key.
 
     Example context (json):
     {
@@ -118,7 +123,12 @@
         "paginationbar": "",
         "haspagination": false,
         "exportselector": "<div class=\"form-inline\"><label>Download as</label></div>",
-        "reseturl": "https://example.com/local/dixeo/credit_report.php"
+        "reseturl": "https://example.com/local/dixeo/credit_report.php",
+        "lastsynced": "14 July 2026, 10:00 AM",
+        "lastsyncedlabel": "Last synced: 14 July 2026, 10:00 AM",
+        "refreshurl": "https://example.com/local/dixeo/credit_report_refresh.php",
+        "refreshparams": [{"name": "view", "value": "week"}],
+        "sesskey": "abc123"
     }
 }}
 {{#error}}
@@ -130,6 +140,16 @@
 
 {{^error}}
 <div class="local-dixeo-credit-report-page">
+    <div class="d-flex flex-wrap align-items-center justify-content-end gap-2 mb-3 local-dixeo-credit-report-sync">
+        <span class="text-muted me-2">{{lastsyncedlabel}}</span>
+        <form method="post" action="{{refreshurl}}" class="mb-0">
+            <input type="hidden" name="sesskey" value="{{sesskey}}">
+            {{#refreshparams}}
+                <input type="hidden" name="{{name}}" value="{{value}}">
+            {{/refreshparams}}
+            <button type="submit" class="btn btn-secondary btn-sm">{{#str}}credit_report_refresh, local_dixeo{{/str}}</button>
+        </form>
+    </div>
     <div class="card mb-4 local-dixeo-credit-report">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h4 class="mb-0">{{#str}}credit_report_filters, local_dixeo{{/str}}</h4>
@@ -349,7 +369,19 @@
                 {{/haspagination}}
             {{/hasrows}}
             {{^hasrows}}
-                <div class="alert alert-info mb-0">{{#str}}credit_report_no_rows, local_dixeo{{/str}}</div>
+                <div class="alert alert-info mb-0">
+                    <p>{{#str}}credit_report_no_rows, local_dixeo{{/str}}</p>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="me-2">{{lastsyncedlabel}}</span>
+                        <form method="post" action="{{refreshurl}}" class="mb-0">
+                            <input type="hidden" name="sesskey" value="{{sesskey}}">
+                            {{#refreshparams}}
+                                <input type="hidden" name="{{name}}" value="{{value}}">
+                            {{/refreshparams}}
+                            <button type="submit" class="btn btn-secondary btn-sm">{{#str}}credit_report_refresh, local_dixeo{{/str}}</button>
+                        </form>
+                    </div>
+                </div>
             {{/hasrows}}
         </div>
     </div>

@@ -178,6 +178,27 @@ class job_repository {
     }
 
     /**
+     * Local job bindings of several remote jobs.
+     *
+     * @param string[] $jobids Remote job UUIDs.
+     * @return array<string, \stdClass> Job id to record; unknown ids are absent.
+     */
+    public function get_by_jobids(array $jobids): array {
+        global $DB;
+
+        $jobids = array_values(array_unique(array_filter(array_map('trim', $jobids), static fn($id) => $id !== '')));
+        if ($jobids === []) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal($jobids, SQL_PARAMS_NAMED, 'jobid');
+        $jobs = [];
+        foreach ($DB->get_records_select(self::TABLE, "jobid {$insql}", $params) as $record) {
+            $jobs[(string) $record->jobid] = $record;
+        }
+        return $jobs;
+    }
+
+    /**
      * Whether the job is registered to the given course.
      *
      * @param string $jobid Remote job UUID.

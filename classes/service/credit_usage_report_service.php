@@ -41,6 +41,9 @@ class credit_usage_report_service {
     /** @var int Maximum custom range length in seconds (366 days). */
     public const MAX_CUSTOM_RANGE_SECONDS = 31622400;
 
+    /** @var int Rows formatted per bulk label load during an export. */
+    public const EXPORT_CHUNK_SIZE = 500;
+
     /**
      * Parse a report date-from request value to a user-timezone midnight timestamp.
      *
@@ -389,13 +392,15 @@ class credit_usage_report_service {
                  WHERE {$built['sql']}
               ORDER BY cu.timecreated ASC";
 
-        $records = $DB->get_records_sql($sql, $built['params']);
+        // A recordset keeps every row, including rows created in the same second.
+        $records = $DB->get_recordset_sql($sql, $built['params']);
         $buckets = [];
 
         foreach ($records as $record) {
             $day = userdate((int) $record->timecreated, '%Y-%m-%d');
             $buckets[$day] = ($buckets[$day] ?? 0) + (int) $record->credits;
         }
+        $records->close();
 
         $labels = [];
         $values = [];
@@ -555,13 +560,14 @@ class credit_usage_report_service {
         $sql = "SELECT cu.*
                   FROM {" . credit_usage_repository::TABLE . "} cu
                  WHERE {$built['sql']}
-              ORDER BY cu.timecreated DESC";
+              ORDER BY cu.timecreated DESC, cu.id DESC";
 
         $records = $DB->get_records_sql($sql, $built['params'], $page * $perpage, $perpage);
+        $labels = $this->load_labels($records);
         $rows = [];
 
         foreach ($records as $record) {
-            $rows[] = $this->format_row($record);
+            $rows[] = $this->format_row($record, $labels);
         }
 
         return [
@@ -588,40 +594,172 @@ class credit_usage_report_service {
     }
 
     /**
-     * Get record IDs for export in report order.
+     * Number of rows matching the filters.
      *
      * @param array $filters Report filters.
-     * @return int[]
+     * @return int
      */
-    public function get_export_record_ids(array $filters): array {
+    public function count_rows(array $filters): int {
         global $DB;
 
         $built = $this->build_conditions($filters);
-        $sql = "SELECT cu.id
-                  FROM {" . credit_usage_repository::TABLE . "} cu
-                 WHERE {$built['sql']}
-              ORDER BY cu.timecreated DESC";
-
-        return array_map('intval', $DB->get_fieldset_sql($sql, $built['params']));
+        return (int) $DB->count_records_sql(
+            "SELECT COUNT(1) FROM {" . credit_usage_repository::TABLE . "} cu WHERE {$built['sql']}",
+            $built['params']
+        );
     }
 
     /**
-     * Format a database row for dataformat export.
+     * Export rows in report order, streamed from one recordset.
      *
-     * @param \stdClass $record Usage record.
-     * @return array<string, string|int>
+     * Labels are loaded in bulk for each chunk of EXPORT_CHUNK_SIZE rows.
+     *
+     * @param array $filters Report filters.
+     * @return \Generator<int, array<string, string|int>>
      */
-    public function format_export_row(\stdClass $record): array {
-        $row = $this->format_row($record);
+    public function export_rows(array $filters): \Generator {
+        global $DB;
+
+        $built = $this->build_conditions($filters);
+        $records = $DB->get_recordset_sql(
+            "SELECT cu.*
+               FROM {" . credit_usage_repository::TABLE . "} cu
+              WHERE {$built['sql']}
+           ORDER BY cu.timecreated DESC, cu.id DESC",
+            $built['params']
+        );
+        try {
+            $chunk = [];
+            foreach ($records as $record) {
+                $chunk[] = $record;
+                if (count($chunk) >= self::EXPORT_CHUNK_SIZE) {
+                    yield from $this->format_export_chunk($chunk);
+                    $chunk = [];
+                }
+            }
+            if ($chunk !== []) {
+                yield from $this->format_export_chunk($chunk);
+            }
+        } finally {
+            $records->close();
+        }
+    }
+
+    /**
+     * Format a chunk of usage records for dataformat export.
+     *
+     * @param \stdClass[] $records Usage records.
+     * @return array<int, array<string, string|int>>
+     */
+    private function format_export_chunk(array $records): array {
+        $labels = $this->load_labels($records);
+        $rows = [];
+        foreach ($records as $record) {
+            $row = $this->format_row($record, $labels);
+            $rows[] = [
+                'credits' => $row['creditsformatted'],
+                'component' => $row['componentlabel'],
+                'action' => $row['actionlabel'],
+                'moduletype' => $row['moduletypelabel'],
+                'date' => $row['dateformatted'],
+                'user' => $row['userlabel'],
+                'course' => $row['coursecontextlabel'],
+            ];
+        }
+        return $rows;
+    }
+
+    /**
+     * Users, courses and course modules referenced by usage records, loaded in bulk.
+     *
+     * @param \stdClass[] $records Usage records.
+     * @return array{users: array, courses: array, cms: array, contextcmids: array}
+     */
+    private function load_labels(array $records): array {
+        global $DB;
+
+        $userids = [];
+        $courseids = [];
+        $contextids = [];
+        $cmids = [];
+        foreach ($records as $record) {
+            if (!empty($record->userid)) {
+                $userids[(int) $record->userid] = true;
+            }
+            if (!empty($record->courseid)) {
+                $courseids[(int) $record->courseid] = true;
+            }
+            if (!empty($record->cmid)) {
+                $cmids[(int) $record->cmid] = true;
+            } else if (!empty($record->contextid)) {
+                $contextids[(int) $record->contextid] = true;
+            }
+        }
+
+        // Records that only know their module context resolve their module id from it.
+        $contextcmids = [];
+        if ($contextids !== []) {
+            [$insql, $params] = $DB->get_in_or_equal(array_keys($contextids), SQL_PARAMS_NAMED, 'ctx');
+            $params['modulelevel'] = CONTEXT_MODULE;
+            $contexts = $DB->get_records_select(
+                'context',
+                "id {$insql} AND contextlevel = :modulelevel",
+                $params,
+                '',
+                'id, instanceid'
+            );
+            foreach ($contexts as $context) {
+                $contextcmids[(int) $context->id] = (int) $context->instanceid;
+                $cmids[(int) $context->instanceid] = true;
+            }
+        }
+
+        $cmcourses = [];
+        if ($cmids !== []) {
+            $cmcourses = $DB->get_records_list('course_modules', 'id', array_keys($cmids), '', 'id, course');
+            foreach ($cmcourses as $cm) {
+                $courseids[(int) $cm->course] = true;
+            }
+        }
+
+        $users = [];
+        if ($userids !== []) {
+            $namefields = \core_user\fields::for_name()->get_sql('', false, '', '', false)->selects;
+            $users = $DB->get_records_list('user', 'id', array_keys($userids), '', 'id, deleted, ' . $namefields);
+        }
+        // Full course records let get_fast_modinfo() validate its cache without reading the course again.
+        $courses = $courseids !== []
+            ? $DB->get_records_list('course', 'id', array_keys($courseids))
+            : [];
+
+        $cms = [];
+        $coursemodules = [];
+        foreach ($cmcourses as $cm) {
+            $coursemodules[(int) $cm->course][] = (int) $cm->id;
+        }
+        foreach ($coursemodules as $courseid => $ids) {
+            if (!isset($courses[$courseid])) {
+                continue;
+            }
+            try {
+                $modinfo = get_fast_modinfo($courses[$courseid]);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            foreach ($ids as $cmid) {
+                try {
+                    $cms[$cmid] = $modinfo->get_cm($cmid);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+        }
 
         return [
-            'credits' => $row['creditsformatted'],
-            'component' => $row['componentlabel'],
-            'action' => $row['actionlabel'],
-            'moduletype' => $row['moduletypelabel'],
-            'date' => $row['dateformatted'],
-            'user' => $row['userlabel'],
-            'course' => $row['coursecontextlabel'],
+            'users' => $users,
+            'courses' => $courses,
+            'cms' => $cms,
+            'contextcmids' => $contextcmids,
         ];
     }
 
@@ -629,15 +767,14 @@ class credit_usage_report_service {
      * Format a database row for template output.
      *
      * @param \stdClass $record Usage record.
+     * @param array $labels Users, courses and modules from load_labels().
      * @return array
      */
-    private function format_row(\stdClass $record): array {
-        global $DB;
-
+    private function format_row(\stdClass $record, array $labels): array {
         $userlabel = get_string('credit_user_unknown', 'local_dixeo');
         $userurl = null;
         if (!empty($record->userid)) {
-            $user = \core_user::get_user((int) $record->userid, '*', IGNORE_MISSING);
+            $user = $labels['users'][(int) $record->userid] ?? null;
             if ($user) {
                 $userlabel = fullname($user);
                 $userurl = (new \moodle_url('/user/profile.php', ['id' => $user->id]))->out(false);
@@ -653,27 +790,22 @@ class credit_usage_report_service {
 
         $cmid = (int) ($record->cmid ?? 0);
         if ($cmid < 1 && !empty($record->contextid)) {
-            $context = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
-            if ($context && $context->contextlevel === CONTEXT_MODULE) {
-                $cmid = (int) $context->instanceid;
-            }
+            $cmid = (int) ($labels['contextcmids'][(int) $record->contextid] ?? 0);
         }
 
-        if ($cmid > 0) {
-            $cm = get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING);
-            if ($cm) {
-                $course = $DB->get_record('course', ['id' => (int) $cm->course], '*', IGNORE_MISSING);
-                if ($course) {
-                    $courselabel = format_string($course->fullname);
-                    $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);
-                    $activitylabel = format_string($cm->name);
-                    $activityurl = (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->id]))->out(false);
-                    $hasactivitycontext = true;
-                    $coursecontextlabel = $courselabel . ': ' . $activitylabel;
-                }
+        $cm = $cmid > 0 ? ($labels['cms'][$cmid] ?? null) : null;
+        if ($cm) {
+            $course = $labels['courses'][(int) $cm->course] ?? null;
+            if ($course) {
+                $courselabel = format_string($course->fullname);
+                $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);
+                $activitylabel = format_string($cm->name);
+                $activityurl = (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->id]))->out(false);
+                $hasactivitycontext = true;
+                $coursecontextlabel = $courselabel . ': ' . $activitylabel;
             }
-        } else if (!empty($record->courseid)) {
-            $course = $DB->get_record('course', ['id' => (int) $record->courseid], '*', IGNORE_MISSING);
+        } else if ($cmid < 1 && !empty($record->courseid)) {
+            $course = $labels['courses'][(int) $record->courseid] ?? null;
             if ($course) {
                 $courselabel = format_string($course->fullname);
                 $courseurl = (new \moodle_url('/course/view.php', ['id' => $course->id]))->out(false);

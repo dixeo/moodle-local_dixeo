@@ -31,6 +31,9 @@ use local_dixeo\util\credit_moduletype_mapper;
 /**
  * Renderable for the credit report page.
  *
+ * The page reads only local data; credit transactions are synced by the scheduled task
+ * and by the "Refresh now" button.
+ *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -39,13 +42,18 @@ class credit_report_page implements renderable, templatable {
     /** @var credit_report_request Parsed request. */
     protected credit_report_request $request;
 
+    /** @var credit_service Credit service, used only to check that the API is configured. */
+    protected credit_service $creditservice;
+
     /**
      * Constructor.
      *
      * @param array $params Report request parameters.
+     * @param credit_service|null $creditservice Credit service.
      */
-    public function __construct(array $params) {
+    public function __construct(array $params, ?credit_service $creditservice = null) {
         $this->request = credit_report_request::from_renderable_params($params);
+        $this->creditservice = $creditservice ?? new credit_service();
     }
 
     /**
@@ -55,8 +63,7 @@ class credit_report_page implements renderable, templatable {
      * @return array The template data.
      */
     public function export_for_template(renderer_base $output): array {
-        $creditservice = new credit_service();
-        if (!$creditservice->is_configured()) {
+        if (!$this->creditservice->is_configured()) {
             return [
                 'configured' => false,
                 'error' => get_string('api_key_not_configured', 'local_dixeo'),
@@ -65,7 +72,6 @@ class credit_report_page implements renderable, templatable {
         }
 
         try {
-            (new credit_usage_sync_service($creditservice))->sync_recent();
             return $this->build_template_data($output);
         } catch (\moodle_exception $e) {
             if ($e->errorcode === 'credit_report_range_too_long') {
@@ -106,7 +112,7 @@ class credit_report_page implements renderable, templatable {
         $entityoptions = $filters->get_applied_entity_options($reportservice);
 
         $page = max(0, $request->page);
-        $perpage = max(1, $request->perpage);
+        $perpage = $request->perpage;
         $rowsresult = $reportservice->get_rows($servicefilters, $page, $perpage);
         $kpis = $reportservice->get_kpis($servicefilters);
         $histogram = $reportservice->get_histogram($servicefilters);
@@ -131,6 +137,11 @@ class credit_report_page implements renderable, templatable {
         $exportselector = $this->build_export_selector($output, $request);
 
         credit_report_viewed::create_for_request($request, (int) $rowsresult['total'])->trigger();
+
+        $lastsuccess = credit_usage_sync_service::get_last_success();
+        $lastsynced = $lastsuccess > 0
+            ? userdate($lastsuccess, get_string('strftimedatetime', 'langconfig'))
+            : get_string('credit_report_never_synced', 'local_dixeo');
 
         return [
             'configured' => true,
@@ -237,6 +248,13 @@ class credit_report_page implements renderable, templatable {
             'haspagination' => $haspagination,
             'exportselector' => $exportselector,
             'reseturl' => $this->report_url([]),
+            'lastsynced' => $lastsynced,
+            'lastsyncedlabel' => $lastsuccess > 0
+                ? get_string('credit_report_last_synced', 'local_dixeo', $lastsynced)
+                : get_string('credit_report_never_synced', 'local_dixeo'),
+            'refreshurl' => (new \moodle_url('/local/dixeo/credit_report_refresh.php'))->out(false),
+            'refreshparams' => $this->refresh_hidden_params($request),
+            'sesskey' => sesskey(),
         ];
     }
 
@@ -277,6 +295,21 @@ class credit_report_page implements renderable, templatable {
             'sesskey' => sesskey(),
             'submit' => get_string('download'),
         ]);
+    }
+
+    /**
+     * Hidden fields of the "Refresh now" form, so the report returns with the same parameters.
+     *
+     * @param credit_report_request $request Current report request.
+     * @return array<int, array{name: string, value: string}>
+     */
+    protected function refresh_hidden_params(credit_report_request $request): array {
+        $params = $request->to_export_hidden_params();
+        if ($request->page > 0) {
+            $params[] = ['name' => 'page', 'value' => (string) $request->page];
+        }
+        $params[] = ['name' => 'perpage', 'value' => (string) $request->perpage];
+        return $params;
     }
 
     /**
