@@ -1664,4 +1664,27 @@ final class tutor_usage_report_test extends \advanced_testcase {
         include(__DIR__ . "/../lang/{$lang}/local_dixeo.php");
         return $string;
     }
+
+    /**
+     * An anchor that is not a real Y-m-d date resolves to the current period.
+     */
+    public function test_resolve_period_ignores_malformed_anchor(): void {
+        $this->resetAfterTest();
+        $service = new tutor_usage_report_service();
+        $current = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK, null);
+
+        foreach (['x', '+500 years', '2026-02-31'] as $anchor) {
+            $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK, $anchor);
+            $this->assertSame($current['timestart'], $period['timestart'], $anchor);
+            $this->assertSame($current['timeend'], $period['timeend'], $anchor);
+        }
+    }
+
+    /**
+     * The request keeps only a real Y-m-d anchor.
+     */
+    public function test_request_drops_malformed_anchor(): void {
+        $this->assertSame('', tutor_usage_report_request::from_renderable_params(['anchor' => '+500 years'])->anchor);
+        $this->assertSame('2026-11-17', tutor_usage_report_request::from_renderable_params(['anchor' => '2026-11-17'])->anchor);
+    }
 }

@@ -17,6 +17,7 @@
 namespace local_dixeo\output;
 
 use local_dixeo\service\credit_usage_report_service;
+use local_dixeo\util\site_calendar;
 
 /**
  * Parsed credit report request parameters.
@@ -74,7 +75,7 @@ final class credit_report_request {
     public static function from_globals(): self {
         $request = new self();
         $request->view = optional_param('view', credit_usage_report_service::VIEW_WEEK, PARAM_ALPHA);
-        $request->anchor = optional_param('anchor', '', PARAM_TEXT);
+        $request->anchor = site_calendar::normalise_date_param(optional_param('anchor', '', PARAM_ALPHANUMEXT));
         $request->datefrom = credit_usage_report_service::parse_date_from_param(
             optional_param('datefrom', '', PARAM_TEXT)
         );
@@ -102,7 +103,7 @@ final class credit_report_request {
     public static function from_renderable_params(array $params): self {
         $request = new self();
         $request->view = $params['view'] ?? credit_usage_report_service::VIEW_WEEK;
-        $request->anchor = $params['anchor'] ?? '';
+        $request->anchor = site_calendar::normalise_date_param((string) ($params['anchor'] ?? ''));
         $request->datefrom = (int) ($params['datefrom'] ?? 0);
         $request->dateto = (int) ($params['dateto'] ?? 0);
         $request->page = (int) ($params['page'] ?? 0);

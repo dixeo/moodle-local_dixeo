@@ -479,7 +479,7 @@ class tutor_usage_report_service {
      * Resolve period boundaries from view parameters, in the site timezone.
      *
      * @param string $view View mode.
-     * @param string|null $anchor Anchor date Y-m-d.
+     * @param string|null $anchor Anchor date Y-m-d; anything else means today.
      * @param int|null $datefrom Custom start timestamp.
      * @param int|null $dateto Custom end timestamp.
      * @return array
@@ -491,8 +491,9 @@ class tutor_usage_report_service {
         ?int $datefrom = null,
         ?int $dateto = null
     ): array {
+        $anchor = site_calendar::normalise_date_param((string) $anchor);
         $timezone = \core_date::get_server_timezone_object();
-        $anchordate = new \DateTime($anchor ?: 'today', $timezone);
+        $anchordate = new \DateTime($anchor !== '' ? $anchor : 'today', $timezone);
 
         if ($view === self::VIEW_MONTH) {
             $start = (clone $anchordate)->modify('first day of this month')->setTime(0, 0, 0);

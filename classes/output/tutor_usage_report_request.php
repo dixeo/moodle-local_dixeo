@@ -17,6 +17,7 @@
 namespace local_dixeo\output;
 
 use local_dixeo\service\tutor_usage_report_service;
+use local_dixeo\util\site_calendar;
 
 /**
  * Parsed tutor usage report request parameters.
@@ -126,7 +127,7 @@ final class tutor_usage_report_request {
         $request->courseid = optional_param('courseid', 0, PARAM_INT);
         $request->userid = optional_param('userid', 0, PARAM_INT);
         $request->view = optional_param('view', tutor_usage_report_service::VIEW_WEEK, PARAM_ALPHA);
-        $request->anchor = optional_param('anchor', '', PARAM_TEXT);
+        $request->anchor = site_calendar::normalise_date_param(optional_param('anchor', '', PARAM_ALPHANUMEXT));
         $request->datefrom = tutor_usage_report_service::parse_date_from_param(
             optional_param('datefrom', '', PARAM_TEXT)
         );
@@ -204,7 +205,7 @@ final class tutor_usage_report_request {
         $request->courseid = (int) ($params['courseid'] ?? 0);
         $request->userid = (int) ($params['userid'] ?? 0);
         $request->view = $params['view'] ?? tutor_usage_report_service::VIEW_WEEK;
-        $request->anchor = $params['anchor'] ?? '';
+        $request->anchor = site_calendar::normalise_date_param((string) ($params['anchor'] ?? ''));
         $request->datefrom = (int) ($params['datefrom'] ?? 0);
         $request->dateto = (int) ($params['dateto'] ?? 0);
         $request->rolescope = tutor_usage_report_service::normalize_role_scope(

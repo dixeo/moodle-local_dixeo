@@ -145,6 +145,23 @@ final class site_calendar {
     }
 
     /**
+     * Canonical Y-m-d calendar date from a request value, or '' when it is not a real date.
+     *
+     * Rejects relative formats, overflow dates (2026-02-31) and anything not exactly Y-m-d.
+     * The check does not depend on any timezone.
+     *
+     * @param string $value Raw request value.
+     * @return string The value when it is a real Y-m-d date, otherwise ''.
+     */
+    public static function normalise_date_param(string $value): string {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return '';
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
+        return ($date !== false && $date->format('Y-m-d') === $value) ? $value : '';
+    }
+
+    /**
      * Format a timestamp in the site timezone.
      *
      * @param int $timestamp Unix timestamp.
