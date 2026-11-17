@@ -105,7 +105,7 @@ final class tutor_usage_dataset {
         $covered = $this->covered_days();
         if ($covered !== []) {
             [$daysql, $params] = $this->covered_condition($covered);
-            $records = $this->recordset(
+            $records = $this->records(
                 "SELECT d.userid, " . $this->sum_columns() . ",
                         MAX(d.lastactive) AS lastactive, COUNT(DISTINCT d.daystart) AS activedays
                    FROM {" . tutor_usage_rollup_repository::TABLE_DAILY . "} d
@@ -116,7 +116,6 @@ final class tutor_usage_dataset {
             foreach ($records as $record) {
                 $this->add_partial($peruser[(int) $record->userid], $record, (int) $record->activedays);
             }
-            $records->close();
         }
 
         $live = $this->live();
@@ -150,7 +149,7 @@ final class tutor_usage_dataset {
             for ($k = 0; $k < site_calendar::SLOTS; $k++) {
                 $columns[] = "SUM(d.slot{$k}) AS slot{$k}";
             }
-            $records = $this->recordset(
+            $records = $this->records(
                 "SELECT d.daystart, " . implode(', ', $columns) . "
                    FROM {" . tutor_usage_rollup_repository::TABLE_DAILY . "} d
                   WHERE {$daysql}
@@ -160,7 +159,6 @@ final class tutor_usage_dataset {
             foreach ($records as $record) {
                 $this->add_day($perday[(int) $record->daystart], $record);
             }
-            $records->close();
         }
 
         foreach ($this->live()['days'] as $daystart => $partial) {
@@ -190,6 +188,8 @@ final class tutor_usage_dataset {
      * @return array
      */
     public function per_entity(): array {
+        global $DB;
+
         if ($this->perentity !== null) {
             return $this->perentity;
         }
@@ -203,8 +203,10 @@ final class tutor_usage_dataset {
         if ($covered !== []) {
             [$daysql, $params] = $this->covered_condition($covered);
             [$pairsql, $pairparams] = $this->scope->pair_in_scope('g');
-            $records = $this->recordset(
-                "SELECT g.*, CASE WHEN {$pairsql} THEN 1 ELSE 0 END AS incoursescope
+            // The course id alone is repeated once per user, so the row key is the pair.
+            $rowkey = $DB->sql_concat('g.courseid', "'-'", 'g.userid');
+            $records = $this->records(
+                "SELECT {$rowkey} AS rowkey, g.*, CASE WHEN {$pairsql} THEN 1 ELSE 0 END AS incoursescope
                    FROM (SELECT d.courseid, d.userid, " . $this->sum_columns() . ",
                                 MAX(d.lastactive) AS lastactive, COUNT(1) AS activedays
                            FROM {" . tutor_usage_rollup_repository::TABLE_DAILY . "} d
@@ -218,7 +220,6 @@ final class tutor_usage_dataset {
                 $entry['incoursescope'] = !empty($record->incoursescope);
                 unset($entry);
             }
-            $records->close();
         }
 
         foreach ($this->live()['entities'] as $courseid => $users) {
@@ -350,7 +351,25 @@ final class tutor_usage_dataset {
     }
 
     /**
+     * Run a query and return every row.
+     *
+     * The first selected column must be unique. A recordset opens a cursor on PostgreSQL, and each
+     * cursor adds further queries, so aggregated totals that are kept in full are loaded in one round trip.
+     *
+     * @param string $sql SQL.
+     * @param array $params Parameters.
+     * @return \stdClass[]
+     */
+    private function records(string $sql, array $params): array {
+        global $DB;
+
+        return $DB->get_records_sql($sql, $params);
+    }
+
+    /**
      * Run a query as a recordset.
+     *
+     * Used for the live day rows, which are folded into partials and not kept as returned.
      *
      * @param string $sql SQL.
      * @param array $params Parameters.

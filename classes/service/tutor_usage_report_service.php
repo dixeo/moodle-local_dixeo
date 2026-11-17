@@ -1378,7 +1378,9 @@ class tutor_usage_report_service {
 
         if ($issite) {
             [$pairsql, $pairparams] = $scope->pair_in_scope('g');
-            $sql = "SELECT g.courseid, g.userid, g.sessions, g.duration, g.lastend,
+            // The course id alone is repeated once per user, so the row key is the pair.
+            $rowkey = $DB->sql_concat('g.courseid', "'-'", 'g.userid');
+            $sql = "SELECT {$rowkey} AS rowkey, g.courseid, g.userid, g.sessions, g.duration, g.lastend,
                            CASE WHEN {$pairsql} THEN 1 ELSE 0 END AS incoursescope
                       FROM (SELECT s.courseid, s.userid, COUNT(1) AS sessions, SUM(s.duration) AS duration,
                                    MAX(s.timeend) AS lastend
@@ -1394,7 +1396,7 @@ class tutor_usage_report_service {
         }
 
         $result = [];
-        $records = $DB->get_recordset_sql($sql, $params);
+        $records = $DB->get_records_sql($sql, $params);
         foreach ($records as $record) {
             $totals = [
                 'sessions' => (int) $record->sessions,
@@ -1408,7 +1410,6 @@ class tutor_usage_report_service {
                 $result[(int) $record->userid] = $totals;
             }
         }
-        $records->close();
 
         $this->closedsessions[$key] = $result;
         return $result;
@@ -1553,7 +1554,7 @@ class tutor_usage_report_service {
         $field = $level === self::LEVEL_SITE ? 'courseid' : 'userid';
         [$wheresql, $params] = $this->get_scope($level, $courseid, $userid, $roleids)->where('s');
         [$insql, $inparams] = $DB->get_in_or_equal(array_map('intval', $keys), SQL_PARAMS_NAMED, 'tuskey');
-        $records = $DB->get_recordset_sql(
+        $records = $DB->get_records_sql(
             "SELECT s.id, s.{$field} AS entityid, s.duration
                FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
               WHERE s.timestart >= :tusstart AND s.timestart <= :tusend
@@ -1565,7 +1566,6 @@ class tutor_usage_report_service {
         foreach ($records as $record) {
             $durations[(int) $record->entityid][] = (int) $record->duration;
         }
-        $records->close();
 
         $wanted = array_flip(array_map('intval', $keys));
         foreach ($this->get_open_sessions($level, $courseid, $userid, $roleids) as $open) {
@@ -1802,7 +1802,7 @@ class tutor_usage_report_service {
             'tusstart' => $timestart,
             'tusend' => $timeend,
         ];
-        $records = $DB->get_recordset_sql(
+        $records = $DB->get_records_sql(
             "SELECT ev.cmid,
                     SUM(CASE WHEN ev.eventtype = :tusmsg THEN 1 ELSE 0 END) AS messages,
                     " . implode(",\n                    ", $modesql) . ",
@@ -1822,7 +1822,6 @@ class tutor_usage_report_service {
             }
             $metrics[$cmid]['lastactive'] = max($metrics[$cmid]['lastactive'], (int) $record->lastactive);
         }
-        $records->close();
 
         // Sessions are course-scoped, so they are credited to the course page row.
         $sessions = $this->get_session_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids);
