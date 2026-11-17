@@ -152,44 +152,56 @@ class course_ai_repository {
     /**
      * Set the enabled state for a course.
      *
+     * Each write is a single conditional statement, so a concurrent
+     * {@see mark_pending_deletion()} always wins: an enable never turns sync back on while
+     * remote deletion is pending, and a disable never replaces pending_deletion with paused.
+     *
      * @param int $courseid The course ID.
      * @param bool $enabled Whether to enable or disable.
      * @param int $userid The user ID making the change.
-     * @return void
+     * @return bool True when the row is enabled after the call (enable), or always true (disable).
      */
-    public function set_enabled(int $courseid, bool $enabled, int $userid): void {
+    public function set_enabled(int $courseid, bool $enabled, int $userid): bool {
         global $DB;
 
         $record = $this->get_or_create($courseid, $userid);
-
-        // Remote deletion must finish before sync can be turned on again, and a
-        // disable must not replace that state with paused.
-        if ($enabled && $record->syncstatus === 'pending_deletion') {
-            return;
-        }
-
-        $update = new \stdClass();
-        $update->id = $record->id;
-        $update->enabled = $enabled ? 1 : 0;
-        $update->timemodified = time();
+        $now = time();
 
         if ($enabled) {
-            $update->enabledby = $userid;
-            $update->enabledat = time();
-            // Reset error state when re-enabling.
-            $update->errorcount = 0;
-            $update->errormessage = null;
-            $update->lasterrorat = null;
-        } else {
-            $update->disabledby = $userid;
-            $update->disabledat = time();
-            // Set status to paused when disabled but keeping files.
-            if ($record->syncstatus !== 'none' && $record->syncstatus !== 'pending_deletion') {
-                $update->syncstatus = 'paused';
-            }
+            $DB->execute(
+                "UPDATE {" . self::TABLE . "}
+                    SET enabled = 1, enabledby = :uid, enabledat = :now1, errorcount = 0,
+                        errormessage = NULL, lasterrorat = NULL, timemodified = :now2
+                  WHERE id = :id AND syncstatus <> :pending",
+                [
+                    'uid' => $userid,
+                    'now1' => $now,
+                    'now2' => $now,
+                    'id' => $record->id,
+                    'pending' => 'pending_deletion',
+                ]
+            );
+            $state = $DB->get_record(self::TABLE, ['id' => $record->id], 'id, enabled, syncstatus');
+            return $state !== false && (int) $state->enabled === 1 && $state->syncstatus !== 'pending_deletion';
         }
 
-        $DB->update_record(self::TABLE, $update);
+        $DB->execute(
+            "UPDATE {" . self::TABLE . "}
+                SET enabled = 0, disabledby = :uid, disabledat = :now1, timemodified = :now2
+              WHERE id = :id",
+            ['uid' => $userid, 'now1' => $now, 'now2' => $now, 'id' => $record->id]
+        );
+
+        // Disabled while keeping files is paused; no sync yet and pending deletion keep their state.
+        [$insql, $inparams] = $DB->get_in_or_equal(['none', 'pending_deletion'], SQL_PARAMS_NAMED, 'st', false);
+        $DB->execute(
+            "UPDATE {" . self::TABLE . "}
+                SET syncstatus = :paused
+              WHERE id = :id AND syncstatus {$insql}",
+            ['paused' => 'paused', 'id' => $record->id] + $inparams
+        );
+
+        return true;
     }
 
     /**
@@ -386,7 +398,7 @@ class course_ai_repository {
     }
 
     /**
-     * Reset the sync state for a course (used when deleting files).
+     * Reset the sync state for a course after its remote files are deleted, and turn sync off.
      *
      * @param int $courseid The course ID.
      * @return void
@@ -401,6 +413,8 @@ class course_ai_repository {
 
         $update = new \stdClass();
         $update->id = $record->id;
+        // A completed remote deletion always leaves sync off; turning it back on is an explicit user action.
+        $update->enabled = 0;
         $update->syncstatus = 'none';
         $update->filestotal = null;
         $update->filescompleted = null;

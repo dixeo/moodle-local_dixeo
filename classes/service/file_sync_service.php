@@ -2042,6 +2042,9 @@ class file_sync_service {
     /**
      * Write the enabled row and emit the enabled event when it newly turns on.
      *
+     * The pending-deletion check here is a cheap pre-check; the repository write is the guarantee,
+     * and no event is emitted when a concurrent deletion keeps the row off.
+     *
      * @param int $courseid The course ID.
      * @param int $userid The user recorded as enabling sync.
      * @return void
@@ -2057,9 +2060,9 @@ class file_sync_service {
             $this->repository->create($courseid, $userid);
         }
 
-        $this->repository->set_enabled($courseid, true, $userid);
+        $nowenabled = $this->repository->set_enabled($courseid, true, $userid);
 
-        if (!$wasenabled) {
+        if (!$wasenabled && $nowenabled) {
             $record = $this->repository->get_by_courseid($courseid);
             if ($record !== null) {
                 file_sync_enabled::create_for_course($courseid, $userid, (int) $record->id)->trigger();

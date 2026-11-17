@@ -82,6 +82,7 @@ final class file_sync_pending_deletion_test extends \advanced_testcase {
         $this->assertFalse($status->enabled);
         $this->assertSame('none', $status->status);
         $this->assertNull($status->errormessage);
+        $this->assertSame(0, (int) $repo->get_by_courseid((int) $course->id)->enabled);
         $this->assertSame(
             '0',
             service_factory::get_settings_config()->get(
@@ -132,9 +133,13 @@ final class file_sync_pending_deletion_test extends \advanced_testcase {
             ->with((string) $course->id)
             ->willReturn([]);
 
+        global $DB;
+
         $repo = new course_ai_repository();
         $repo->mark_pending_deletion((int) $course->id);
         $repo->record_pending_deletion_error((int) $course->id, 'previous failure');
+        // A row left enabled during pending deletion must still end with sync off.
+        $DB->set_field('local_dixeo_course_ai', 'enabled', 1, ['courseid' => $course->id]);
 
         $service = new file_sync_service($repo, $client);
         $this->assertTrue($service->retry_pending_deletion((int) $course->id));
@@ -142,6 +147,81 @@ final class file_sync_pending_deletion_test extends \advanced_testcase {
         $status = $service->get_status((int) $course->id);
         $this->assertSame('none', $status->status);
         $this->assertNull($status->errormessage);
+        $this->assertFalse($status->enabled);
+        $this->assertSame(0, (int) $repo->get_by_courseid((int) $course->id)->enabled);
+    }
+
+    /**
+     * An enable that read the row before a concurrent deletion was marked never turns sync back on.
+     */
+    public function test_enable_after_concurrent_pending_deletion_stays_off(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $userid = (int) $this->getDataGenerator()->create_user()->id;
+        $repo = new course_ai_repository();
+        $repo->get_or_create((int) $course->id, $userid);
+        $repo->update_sync_status((int) $course->id, 'synchronized');
+
+        $repo->mark_pending_deletion((int) $course->id);
+        $this->assertFalse($repo->set_enabled((int) $course->id, true, $userid));
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+    }
+
+    /**
+     * An enable on a row without pending deletion reports the row as enabled.
+     */
+    public function test_enable_reports_enabled_row(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $userid = (int) $this->getDataGenerator()->create_user()->id;
+        $repo = new course_ai_repository();
+
+        $this->assertTrue($repo->set_enabled((int) $course->id, true, $userid));
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame(1, (int) $record->enabled);
+        $this->assertSame($userid, (int) $record->enabledby);
+    }
+
+    /**
+     * A disable that read the row before a concurrent deletion was marked keeps pending deletion.
+     */
+    public function test_disable_after_concurrent_pending_deletion_keeps_it(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $userid = (int) $this->getDataGenerator()->create_user()->id;
+        $repo = new course_ai_repository();
+        $repo->get_or_create((int) $course->id, $userid);
+        $repo->update_sync_status((int) $course->id, 'synchronized');
+
+        $repo->mark_pending_deletion((int) $course->id);
+        $this->assertTrue($repo->set_enabled((int) $course->id, false, $userid));
+
+        $record = $repo->get_by_courseid((int) $course->id);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertSame('pending_deletion', $record->syncstatus);
+    }
+
+    /**
+     * Disabling a synchronized course pauses it; a course that never synced stays at none.
+     */
+    public function test_disable_pauses_synchronized_and_keeps_none(): void {
+        $userid = (int) $this->getDataGenerator()->create_user()->id;
+        $repo = new course_ai_repository();
+
+        $synced = $this->getDataGenerator()->create_course();
+        $repo->set_enabled((int) $synced->id, true, $userid);
+        $repo->update_sync_status((int) $synced->id, 'synchronized');
+        $repo->set_enabled((int) $synced->id, false, $userid);
+        $record = $repo->get_by_courseid((int) $synced->id);
+        $this->assertSame('paused', $record->syncstatus);
+        $this->assertSame(0, (int) $record->enabled);
+        $this->assertSame($userid, (int) $record->disabledby);
+
+        $fresh = $this->getDataGenerator()->create_course();
+        $repo->get_or_create((int) $fresh->id, $userid);
+        $repo->set_enabled((int) $fresh->id, false, $userid);
+        $this->assertSame('none', $repo->get_by_courseid((int) $fresh->id)->syncstatus);
     }
 
     public function test_retry_pending_deletion_failure_increments_and_requeues(): void {
