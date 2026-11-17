@@ -39,6 +39,8 @@
       and the active/ascending/descending state of the sorted column.
     * rows - array - Paginated summary rows.
     * hasrows - bool - Whether table rows are available.
+    * emptymessage - string - Message shown when there are no rows.
+    * timezonenote - string - Note naming the site timezone used for dates and times.
     * paginationbar - string - Rendered Moodle paging bar HTML.
     * haspagination - bool - Whether pagination should be shown.
     * issite - bool - Site-level report.
@@ -248,6 +250,8 @@
             }
         ],
         "hasrows": true,
+        "emptymessage": "No course has tutor activity in this period.",
+        "timezonenote": "Dates and times use the site timezone (Europe/London).",
         "paginationbar": "",
         "haspagination": false
     }
@@ -314,6 +318,7 @@
                     <input type="date" class="form-control" id="dateto" name="dateto" value="{{filters.datetoformatted}}">
                 </form>
             {{/period.iscustom}}
+            <small class="w-100 text-center text-muted dixeo-tutor-usage-report-timezone">{{timezonenote}}</small>
         </div>
 
         <div class="btn-group" role="group" aria-label="{{#str}}tutor_usage_report_period, local_dixeo{{/str}}">
@@ -753,7 +758,7 @@
                 {{/haspagination}}
             {{/hasrows}}
             {{^hasrows}}
-                <div class="alert alert-info mb-0">{{#str}}tutor_usage_report_no_rows, local_dixeo{{/str}}</div>
+                <div class="alert alert-info mb-0">{{emptymessage}}</div>
             {{/hasrows}}
         </div>
     </div>

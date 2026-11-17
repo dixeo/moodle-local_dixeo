@@ -19,9 +19,11 @@ namespace local_dixeo;
 use local_dixeo\dto\tutor_message;
 use local_dixeo\output\tutor_usage_report_page;
 use local_dixeo\output\tutor_usage_report_request;
+use local_dixeo\repository\tutor_usage_rollup_repository;
 use local_dixeo\service\tutor_usage_aggregator;
 use local_dixeo\service\tutor_usage_recorder;
 use local_dixeo\service\tutor_usage_report_service;
+use local_dixeo\util\site_calendar;
 
 /**
  * Tests for tutor usage recorder, aggregator, and report access.
@@ -43,6 +45,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         tutor_usage_recorder::allow_without_consent_for_fixtures(true);
+        tutor_usage_report_service::reset_caches();
     }
 
     /**
@@ -50,6 +53,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
      */
     public function tearDown(): void {
         tutor_usage_recorder::allow_without_consent_for_fixtures(false);
+        tutor_usage_report_service::reset_caches();
         parent::tearDown();
     }
 
@@ -727,7 +731,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
     }
 
     /**
-     * Summary tables include zero-usage courses, participants, and activities with navigation.
+     * Site rows list only courses with usage; course and user tables include zero-usage entries.
      */
     public function test_summary_rows_include_zero_usage_entities(): void {
         $this->resetAfterTest();
@@ -743,7 +747,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $service = new tutor_usage_report_service();
         $now = time();
 
-        // Site: both courses appear with zeros and course drill-down URLs.
+        // Site: courses without usage in the period are not listed.
         $siterows = $service->get_rows(
             tutor_usage_report_service::LEVEL_SITE,
             0,
@@ -754,17 +758,8 @@ final class tutor_usage_report_test extends \advanced_testcase {
             0,
             100
         );
-        $sitecourseids = array_column($siterows['rows'], 'key');
-        $this->assertContains((int) $course->id, $sitecourseids);
-        $this->assertContains((int) $othercourse->id, $sitecourseids);
-        foreach ($siterows['rows'] as $row) {
-            if ((int) $row['key'] === (int) $othercourse->id) {
-                $this->assertSame(0, (int) $row['messages']);
-                $this->assertSame('0.0%', $row['adoptionformatted']);
-                $this->assertNotEmpty($row['url']);
-                $this->assertStringContainsString('level=course', $row['url']);
-            }
-        }
+        $this->assertSame([], $siterows['rows']);
+        $this->assertSame(0, $siterows['total']);
 
         // Course: inactive participant listed with zeros and user drill-down URL.
         $courserows = $service->get_rows(
@@ -817,6 +812,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
             (int) $quiz->cmid,
             $now - 60
         );
+        $service = new tutor_usage_report_service();
         $userrowswithquiz = $service->get_rows(
             tutor_usage_report_service::LEVEL_USER,
             (int) $course->id,
@@ -830,6 +826,7 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertContains((int) $quiz->cmid, array_column($userrowswithquiz['rows'], 'key'));
 
         $recorder->record_message((int) $student->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, $now - 30);
+        $service = new tutor_usage_report_service();
         $siterows = $service->get_rows(
             tutor_usage_report_service::LEVEL_SITE,
             0,
@@ -840,13 +837,11 @@ final class tutor_usage_report_test extends \advanced_testcase {
             0,
             100
         );
-        foreach ($siterows['rows'] as $row) {
-            if ((int) $row['key'] === (int) $course->id) {
-                // One active of two enrolled students => 50%.
-                $this->assertSame('50.0%', $row['adoptionformatted']);
-                break;
-            }
-        }
+        $this->assertSame([(int) $course->id], array_column($siterows['rows'], 'key'));
+        $row = $siterows['rows'][0];
+        // One active of two enrolled students => 50%.
+        $this->assertSame('50.0%', $row['adoptionformatted']);
+        $this->assertStringContainsString('level=course', $row['url']);
     }
 
     /**
@@ -992,5 +987,681 @@ final class tutor_usage_report_test extends \advanced_testcase {
         } catch (\moodle_exception $exception) {
             $this->assertSame('invaliduser', $exception->errorcode);
         }
+    }
+
+    /**
+     * Put the daily totals of the given days in one of the fixture states.
+     *
+     * @param string $state built (every day built), live (no day built) or mixed (every other day built).
+     * @param int[] $days Site day starts.
+     */
+    private function apply_rollup_state(string $state, array $days): void {
+        $repository = new tutor_usage_rollup_repository();
+        (new tutor_usage_aggregator($repository))->ensure_rollup_timezone();
+        $repository->reset();
+        foreach (array_values($days) as $index => $daystart) {
+            if ($state === 'built' || ($state === 'mixed' && $index % 2 === 0)) {
+                $repository->build_day($daystart);
+            }
+        }
+    }
+
+    /**
+     * Report outputs of several report requests, each read with a fresh service.
+     *
+     * @param array $requests Name to [level, courseid, userid, roleids].
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int|null $prevstart Previous period start.
+     * @param int|null $prevend Previous period end.
+     * @return array
+     */
+    private function report_snapshot(array $requests, int $timestart, int $timeend, ?int $prevstart, ?int $prevend): array {
+        $snapshot = [];
+        foreach ($requests as $name => [$level, $courseid, $userid, $roleids]) {
+            $service = new tutor_usage_report_service();
+            $snapshot[$name] = [
+                'kpis' => $service->get_kpis($level, $courseid, $userid, $timestart, $timeend, $roleids, $prevstart, $prevend),
+                'bar' => $service->get_stacked_bar_data($level, $courseid, $userid, $timestart, $timeend, $roleids),
+                'heatmap' => $service->get_heatmap_data($level, $courseid, $userid, $timestart, $timeend, $roleids),
+                'rows' => $service->get_rows($level, $courseid, $userid, $timestart, $timeend, $roleids, 0, 100),
+                'export' => $service->get_export_rows($level, $courseid, $userid, $timestart, $timeend, $roleids),
+            ];
+        }
+        return $snapshot;
+    }
+
+    /**
+     * Record a message at a wall-clock time of a site day.
+     *
+     * @param int $userid User id.
+     * @param int $courseid Course id.
+     * @param string $mode Tutor mode.
+     * @param int $daystart Site day start.
+     * @param int $hour Hour.
+     * @param int $minute Minute.
+     * @param string $eventtype Event type.
+     */
+    private function record_at(
+        int $userid,
+        int $courseid,
+        string $mode,
+        int $daystart,
+        int $hour,
+        int $minute = 0,
+        string $eventtype = tutor_usage_recorder::EVENT_MESSAGE
+    ): void {
+        $date = usergetdate($daystart, site_calendar::timezone());
+        $time = site_calendar::make((int) $date['year'], (int) $date['mon'], (int) $date['mday'], $hour, $minute);
+        (new tutor_usage_recorder())->record($userid, $courseid, $eventtype, $mode, 0, $time);
+    }
+
+    /**
+     * Built, live and mixed states give the same report, equal to hand-computed values, also after a late event.
+     */
+    public function test_report_is_equal_in_built_live_and_mixed_states(): void {
+        $this->resetAfterTest();
+        $this->setTimezone('Europe/London');
+        $this->setAdminUser();
+
+        $coursea = $this->getDataGenerator()->create_course();
+        $courseb = $this->getDataGenerator()->create_course();
+        $s1 = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $s2 = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $s3 = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $this->getDataGenerator()->enrol_user($s3->id, $courseb->id, 'student');
+        $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $t1 = $this->getDataGenerator()->create_and_enrol($coursea, 'editingteacher');
+        $deleted = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $a = (int) $coursea->id;
+        $b = (int) $courseb->id;
+
+        // Ten closed site days, including the end of daylight saving time (Sunday 26 October 2025).
+        $timestart = site_calendar::make(2025, 10, 20);
+        $timeend = site_calendar::make(2025, 10, 29, 23, 59, 59);
+        $days = site_calendar::days($timestart, $timeend);
+        $this->assertCount(10, $days);
+        [$oct20, $oct21, $oct22, , , $oct25, $oct26, , $oct28, $oct29] = $days;
+
+        $this->record_at((int) $s1->id, $a, tutor_message::MODE_NORMAL, $oct20, 9);
+        $this->record_at((int) $s1->id, $a, tutor_message::MODE_GUIDE, $oct20, 9, 5);
+        $this->record_at((int) $s2->id, $a, tutor_message::MODE_QUIZ, $oct20, 14);
+        $this->record_at((int) $s2->id, $a, tutor_message::MODE_QUIZ, $oct20, 14, 1, tutor_usage_recorder::EVENT_QUIZ_CREATED);
+        $this->record_at((int) $s3->id, $b, tutor_message::MODE_TEACH, $oct22, 22, 30);
+        $this->record_at((int) $s3->id, $a, tutor_message::MODE_NORMAL, $oct22, 1);
+        $this->record_at((int) $s1->id, $a, tutor_message::MODE_NORMAL, $oct25, 10);
+        $this->record_at((int) $t1->id, $a, tutor_message::MODE_NORMAL, $oct25, 10, 30);
+        $this->record_at((int) $s1->id, $a, tutor_message::MODE_NORMAL, $oct26, 1, 30);
+        $this->record_at((int) $s3->id, $a, tutor_message::MODE_GUIDE, $oct26, 23, 30);
+        $this->record_at((int) $s2->id, $a, tutor_message::MODE_TEACH, $oct26, 12, 0, tutor_usage_recorder::EVENT_LESSON_CREATED);
+        $this->record_at((int) $deleted->id, $a, tutor_message::MODE_NORMAL, $oct28, 8);
+        $this->record_at((int) $s2->id, $a, tutor_message::MODE_NORMAL, $oct29, 18);
+        delete_user($deleted);
+
+        $requests = [
+            'site' => [tutor_usage_report_service::LEVEL_SITE, 0, 0, []],
+            'sitestudents' => [
+                tutor_usage_report_service::LEVEL_SITE, 0, 0, tutor_usage_report_service::get_default_student_roleids(),
+            ],
+            'course' => [tutor_usage_report_service::LEVEL_COURSE, $a, 0, []],
+            'user' => [tutor_usage_report_service::LEVEL_USER, $a, (int) $s3->id, []],
+        ];
+        $prevstart = site_calendar::make(2025, 10, 10);
+        $prevend = $timestart - 1;
+
+        $snapshots = [];
+        foreach (['built', 'live', 'mixed'] as $state) {
+            $this->apply_rollup_state($state, $days);
+            $snapshots[$state] = $this->report_snapshot($requests, $timestart, $timeend, $prevstart, $prevend);
+        }
+        $this->assertEquals($snapshots['live'], $snapshots['built']);
+        $this->assertEquals($snapshots['live'], $snapshots['mixed']);
+
+        // Hand-computed values: the deleted user is no longer enrolled, so no longer in scope.
+        $site = $snapshots['built']['site'];
+        $this->assertSame(10, (int) $site['kpis']['messages']['raw']);
+        $this->assertSame(5, (int) $site['kpis']['total']['raw']);
+        $this->assertSame(4, (int) $site['kpis']['active']['raw']);
+        $this->assertSame('80.0%', $site['kpis']['adoption']['value']);
+        $this->assertSame(1, $site['heatmap']['rows'][7]['cells'][6]['value']);
+        $this->assertSame(1, $site['heatmap']['rows'][7]['cells'][2]['value']);
+        $this->assertSame(1, $site['heatmap']['rows'][0]['cells'][6]['value']);
+        $this->assertSame([$a, $b], array_map('intval', array_column($site['rows']['rows'], 'key')));
+        $course = $snapshots['built']['course'];
+        $this->assertSame(5, $course['rows']['total']);
+        $user = $snapshots['built']['user'];
+        $this->assertSame('2', explode(' ', $user['kpis']['engagement']['value'])[0]);
+
+        // A late event marks its built day dirty; the report then equals a pure live read.
+        $this->apply_rollup_state('built', $days);
+        $this->record_at((int) $s1->id, $a, tutor_message::MODE_GUIDE, $oct21, 11);
+        $afterlate = $this->report_snapshot($requests, $timestart, $timeend, $prevstart, $prevend);
+        $this->apply_rollup_state('live', $days);
+        $this->assertEquals($this->report_snapshot($requests, $timestart, $timeend, $prevstart, $prevend), $afterlate);
+        $this->assertSame(11, (int) $afterlate['site']['kpis']['messages']['raw']);
+    }
+
+    /**
+     * Site rows list a course with usage and not a course without; the empty state names courses.
+     */
+    public function test_site_rows_list_only_courses_with_usage(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $PAGE->set_url('/local/dixeo/tutor_usage_report.php');
+
+        $coursea = $this->getDataGenerator()->create_course();
+        $courseb = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+
+        $page = new tutor_usage_report_page(['level' => tutor_usage_report_service::LEVEL_SITE]);
+        $data = $page->export_for_template($PAGE->get_renderer('core'));
+        $this->assertFalse($data['hasrows']);
+        $this->assertSame(get_string('tutor_usage_report_no_courses', 'local_dixeo'), $data['emptymessage']);
+
+        (new tutor_usage_recorder())->record_message((int) $student->id, (int) $coursea->id);
+        $data = (new tutor_usage_report_page(['level' => tutor_usage_report_service::LEVEL_SITE]))
+            ->export_for_template($PAGE->get_renderer('core'));
+        $this->assertSame([(int) $coursea->id], array_column($data['rows'], 'key'));
+
+        $coursepage = new tutor_usage_report_page([
+            'level' => tutor_usage_report_service::LEVEL_COURSE,
+            'courseid' => (int) $courseb->id,
+            'rolescope' => tutor_usage_report_service::ROLE_SCOPE_TEACHERS,
+        ]);
+        $coursedata = $coursepage->export_for_template($PAGE->get_renderer('core'));
+        $this->assertFalse($coursedata['hasrows']);
+        $this->assertSame(get_string('tutor_usage_report_no_rows', 'local_dixeo'), $coursedata['emptymessage']);
+    }
+
+    /**
+     * With every past day built, a message recorded now counts at every level.
+     */
+    public function test_message_recorded_now_is_counted_with_past_days_built(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $service = new tutor_usage_report_service();
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK);
+        $today = site_calendar::day_start(time());
+        $this->apply_rollup_state('built', array_filter(
+            site_calendar::days($period['timestart'], $period['timeend']),
+            static fn(int $day): bool => $day < $today
+        ));
+
+        (new tutor_usage_recorder())->record_message((int) $student->id, (int) $course->id);
+
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        foreach (
+            [
+                [tutor_usage_report_service::LEVEL_SITE, 0, 0],
+                [tutor_usage_report_service::LEVEL_COURSE, (int) $course->id, 0],
+                [tutor_usage_report_service::LEVEL_USER, (int) $course->id, (int) $student->id],
+            ] as [$level, $courseid, $userid]
+        ) {
+            $kpis = (new tutor_usage_report_service())->get_kpis(
+                $level,
+                $courseid,
+                $userid,
+                $period['timestart'],
+                $period['timeend'],
+                $roleids
+            );
+            $this->assertSame(1, (int) $kpis['messages']['raw'], $level);
+        }
+    }
+
+    /**
+     * Course rows list every user in scope, paginated, with zeros for inactive users.
+     */
+    public function test_course_rows_paginate_all_users_in_scope(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $recorder = new tutor_usage_recorder();
+        for ($i = 0; $i < 120; $i++) {
+            $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+            if ($i < 5) {
+                $recorder->record_message((int) $user->id, (int) $course->id, tutor_message::MODE_NORMAL, 0, time() - 60);
+            }
+        }
+
+        $service = new tutor_usage_report_service();
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK);
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        $pages = [];
+        foreach ([0, 1, 2] as $page) {
+            $pages[$page] = $service->get_rows(
+                tutor_usage_report_service::LEVEL_COURSE,
+                (int) $course->id,
+                0,
+                $period['timestart'],
+                $period['timeend'],
+                $roleids,
+                $page,
+                50
+            );
+            $this->assertSame(120, $pages[$page]['total']);
+        }
+        $this->assertCount(50, $pages[0]['rows']);
+        $this->assertCount(20, $pages[2]['rows']);
+        $this->assertSame(5, count(array_filter(array_column($pages[0]['rows'], 'messages'))));
+        foreach ($pages[2]['rows'] as $row) {
+            $this->assertSame(0, $row['messages']);
+            $this->assertSame(get_string('never', 'moodle'), $row['lastactiveformatted']);
+        }
+    }
+
+    /**
+     * The site adoption denominator counts users in scope in every course, listed or not.
+     */
+    public function test_site_adoption_denominator_counts_unlisted_courses(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $coursea = $this->getDataGenerator()->create_course();
+        $courseb = $this->getDataGenerator()->create_course();
+        $active = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        (new tutor_usage_recorder())->record_message((int) $active->id, (int) $coursea->id);
+
+        $service = new tutor_usage_report_service();
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK);
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        $rows = $service->get_rows(
+            tutor_usage_report_service::LEVEL_SITE,
+            0,
+            0,
+            $period['timestart'],
+            $period['timeend'],
+            $roleids
+        );
+        $this->assertSame([(int) $coursea->id], array_column($rows['rows'], 'key'));
+
+        $kpis = $service->get_kpis(
+            tutor_usage_report_service::LEVEL_SITE,
+            0,
+            0,
+            $period['timestart'],
+            $period['timeend'],
+            $roleids
+        );
+        $this->assertSame(4, (int) $kpis['total']['raw']);
+        $this->assertSame('25.0%', $kpis['adoption']['value']);
+    }
+
+    /**
+     * Days and slots follow the site timezone, not the viewer's, and the page names the site zone.
+     */
+    public function test_report_uses_site_timezone(): void {
+        global $PAGE, $USER;
+
+        $this->resetAfterTest();
+        $this->setTimezone('Europe/London');
+        $this->setAdminUser();
+        $USER->timezone = 'Pacific/Auckland';
+        $PAGE->set_url('/local/dixeo/tutor_usage_report.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $daystart = site_calendar::make(2025, 11, 5);
+        $this->record_at((int) $student->id, (int) $course->id, tutor_message::MODE_NORMAL, $daystart, 23, 30);
+
+        $service = new tutor_usage_report_service();
+        $timeend = site_calendar::day_end(site_calendar::make(2025, 11, 9));
+        $heatmap = $service->get_heatmap_data(tutor_usage_report_service::LEVEL_SITE, 0, 0, $daystart, $timeend, []);
+        // Wednesday 5 November, 23:30 in London (already Thursday in Auckland).
+        $this->assertSame(1, $heatmap['rows'][7]['cells'][2]['value']);
+        $this->assertSame(1, $heatmap['max']);
+        $bar = $service->get_stacked_bar_data(tutor_usage_report_service::LEVEL_SITE, 0, 0, $daystart, $timeend, []);
+        $this->assertSame(1, $bar['datasets'][0]['data'][0]);
+        $this->assertSame(0, $bar['datasets'][0]['data'][1]);
+
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK, '2025-11-05');
+        $this->assertSame(site_calendar::make(2025, 11, 3), $period['timestart']);
+        $this->assertSame('2025-11-05', tutor_usage_report_service::format_date_param($daystart + 23 * HOURSECS));
+        $this->assertSame($daystart, tutor_usage_report_service::parse_date_from_param('2025-11-05'));
+
+        $data = (new tutor_usage_report_page(['level' => tutor_usage_report_service::LEVEL_SITE]))
+            ->export_for_template($PAGE->get_renderer('core'));
+        $this->assertStringContainsString(\core_date::get_localised_timezone('Europe/London'), $data['timezonenote']);
+    }
+
+    /**
+     * A teacher's site view lists only the courses where they may view tutor usage.
+     */
+    public function test_teacher_site_view_lists_accessible_courses_only(): void {
+        $this->resetAfterTest();
+        $courses = [];
+        $teacher = $this->getDataGenerator()->create_user();
+        $recorder = new tutor_usage_recorder();
+        foreach (['a', 'b', 'c'] as $name) {
+            $courses[$name] = $this->getDataGenerator()->create_course();
+            $student = $this->getDataGenerator()->create_and_enrol($courses[$name], 'student');
+            $recorder->record_message((int) $student->id, (int) $courses[$name]->id);
+        }
+        $this->getDataGenerator()->enrol_user($teacher->id, $courses['a']->id, 'editingteacher');
+        $this->getDataGenerator()->enrol_user($teacher->id, $courses['b']->id, 'editingteacher');
+        $this->setUser($teacher);
+
+        $service = new tutor_usage_report_service();
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK);
+        $rows = $service->get_rows(
+            tutor_usage_report_service::LEVEL_SITE,
+            0,
+            0,
+            $period['timestart'],
+            $period['timeend'],
+            tutor_usage_report_service::get_default_student_roleids()
+        );
+        $keys = array_map('intval', array_column($rows['rows'], 'key'));
+        sort($keys);
+        $this->assertSame([(int) $courses['a']->id, (int) $courses['b']->id], $keys);
+    }
+
+    /**
+     * Export rows equal the screen rows of every page, for each level and sort column.
+     */
+    public function test_export_rows_equal_all_screen_pages(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $coursea = $this->getDataGenerator()->create_course();
+        $courseb = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('page', ['course' => $coursea->id]);
+        $recorder = new tutor_usage_recorder();
+        $users = [];
+        for ($i = 0; $i < 5; $i++) {
+            $users[$i] = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+            for ($j = 0; $j <= $i % 3; $j++) {
+                $recorder->record_message((int) $users[$i]->id, (int) $coursea->id, tutor_message::MODE_GUIDE, 0, time() - 60);
+            }
+        }
+        $other = $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        $recorder->record_message((int) $other->id, (int) $courseb->id);
+
+        $service = new tutor_usage_report_service();
+        $period = $service->resolve_period(tutor_usage_report_service::VIEW_WEEK);
+        $roleids = tutor_usage_report_service::get_default_student_roleids();
+        $levels = [
+            tutor_usage_report_service::LEVEL_SITE => [0, 0],
+            tutor_usage_report_service::LEVEL_COURSE => [(int) $coursea->id, 0],
+            tutor_usage_report_service::LEVEL_USER => [(int) $coursea->id, (int) $users[2]->id],
+        ];
+        foreach ($levels as $level => [$courseid, $userid]) {
+            $columns = array_keys($service->get_columns($level));
+            foreach (tutor_usage_report_service::table_column_keys($level) as $sort) {
+                foreach ([tutor_usage_report_service::SORT_ASC, tutor_usage_report_service::SORT_DESC] as $dir) {
+                    $screen = [];
+                    for ($page = 0; $page < 4; $page++) {
+                        $result = $service->get_rows(
+                            $level,
+                            $courseid,
+                            $userid,
+                            $period['timestart'],
+                            $period['timeend'],
+                            $roleids,
+                            $page,
+                            2,
+                            [],
+                            $sort,
+                            $dir
+                        );
+                        foreach ($result['rows'] as $row) {
+                            $item = [];
+                            foreach ($columns as $column) {
+                                $item[$column] = match ($column) {
+                                    'name' => $row['namelabel'],
+                                    'moduletype' => $row['moduletypelabel'],
+                                    default => $row[$column . 'formatted'],
+                                };
+                            }
+                            $screen[] = $item;
+                        }
+                    }
+                    $export = $service->get_export_rows(
+                        $level,
+                        $courseid,
+                        $userid,
+                        $period['timestart'],
+                        $period['timeend'],
+                        $roleids,
+                        $sort,
+                        $dir
+                    );
+                    $this->assertSame($screen, $export, "{$level} sorted by {$sort} {$dir}");
+                }
+            }
+        }
+    }
+
+    /**
+     * Users and activity outside the viewer's scope never appear, in built, live and mixed states.
+     */
+    public function test_scope_isolation_in_every_rollup_state(): void {
+        $this->resetAfterTest();
+        $coursea = $this->getDataGenerator()->create_course();
+        $courseb = $this->getDataGenerator()->create_course();
+        $coursec = $this->getDataGenerator()->create_course();
+        $a = (int) $coursea->id;
+        $b = (int) $courseb->id;
+        $c = (int) $coursec->id;
+        $s1 = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
+        $u2 = $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        $u3 = $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        $this->getDataGenerator()->enrol_user($u3->id, $a, 'editingteacher');
+        $x = $this->getDataGenerator()->create_and_enrol($coursec, 'student');
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $a, 'editingteacher');
+        $this->getDataGenerator()->enrol_user($teacher->id, $b, 'editingteacher');
+
+        $days = [];
+        for ($i = 4; $i >= 1; $i--) {
+            $day = site_calendar::day_start(time());
+            for ($j = 0; $j < $i; $j++) {
+                $day = site_calendar::day_start($day - 1);
+            }
+            $days[] = $day;
+        }
+        foreach ($days as $index => $day) {
+            $this->record_at((int) $s1->id, $a, tutor_message::MODE_NORMAL, $day, 9);
+            $this->record_at((int) $u2->id, $b, tutor_message::MODE_NORMAL, $day, 10);
+            $this->record_at((int) $u3->id, $b, tutor_message::MODE_GUIDE, $day, 11);
+            $this->record_at((int) $u3->id, $a, tutor_message::MODE_GUIDE, $day, 11, 30);
+            // Course C activity lands in a slot and on days the teacher's courses never use.
+            $this->record_at((int) $x->id, $c, tutor_message::MODE_TEACH, $day, 4 + $index);
+        }
+        $timestart = $days[0];
+        $timeend = site_calendar::day_end(end($days));
+        $roles = [
+            tutor_usage_report_service::ROLE_SCOPE_STUDENTS,
+            tutor_usage_report_service::ROLE_SCOPE_TEACHERS,
+            tutor_usage_report_service::ROLE_SCOPE_ALL,
+        ];
+
+        foreach (['built', 'live', 'mixed'] as $state) {
+            $this->apply_rollup_state($state, $days);
+            $this->setAdminUser();
+
+            foreach ($roles as $rolescope) {
+                $roleids = tutor_usage_report_service::get_roleids_for_scope($rolescope);
+                $service = new tutor_usage_report_service();
+                $rows = $service->get_rows(tutor_usage_report_service::LEVEL_COURSE, $a, 0, $timestart, $timeend, $roleids);
+                $keys = array_map('intval', array_column($rows['rows'], 'key'));
+                $kpis = $service->get_kpis(tutor_usage_report_service::LEVEL_COURSE, $a, 0, $timestart, $timeend, $roleids);
+                $export = $service->get_export_rows(
+                    tutor_usage_report_service::LEVEL_COURSE,
+                    $a,
+                    0,
+                    $timestart,
+                    $timeend,
+                    $roleids
+                );
+                $exportnames = array_column($export, 'name');
+                $label = "{$state} {$rolescope}";
+
+                // U2 is only enrolled in course B.
+                $this->assertNotContains((int) $u2->id, $keys, $label);
+                $this->assertNotContains(fullname($u2), $exportnames, $label);
+                $this->assertSame(count($keys), $rows['total'], $label);
+                $this->assertNotContains((int) $u2->id, $service->get_in_scope_userids(
+                    tutor_usage_report_service::LEVEL_COURSE,
+                    $a,
+                    0,
+                    $roleids
+                ), $label);
+
+                // U3 is a teacher in A and a student in B: pair semantics at course level.
+                $u3listed = in_array((int) $u3->id, $keys, true);
+                $this->assertSame($rolescope !== tutor_usage_report_service::ROLE_SCOPE_STUDENTS, $u3listed, $label);
+                $this->assertSame($u3listed, in_array(fullname($u3), $exportnames, true), $label);
+
+                $expectedtotal = match ($rolescope) {
+                    tutor_usage_report_service::ROLE_SCOPE_STUDENTS => 1,
+                    tutor_usage_report_service::ROLE_SCOPE_TEACHERS => 2,
+                    default => 3,
+                };
+                $this->assertSame($expectedtotal, $rows['total'], $label);
+                $this->assertSame($expectedtotal, (int) $kpis['total']['raw'], $label);
+                $expectedmessages = $rolescope === tutor_usage_report_service::ROLE_SCOPE_STUDENTS ? 4
+                    : ($rolescope === tutor_usage_report_service::ROLE_SCOPE_TEACHERS ? 4 : 8);
+                $this->assertSame($expectedmessages, (int) $kpis['messages']['raw'], $label);
+            }
+
+            // Teacher site view: course C activity appears nowhere; a site viewer sees it.
+            $all = [];
+            foreach ([$teacher, get_admin()] as $viewer) {
+                $this->setUser($viewer);
+                $service = new tutor_usage_report_service();
+                $all[(int) $viewer->id] = [
+                    'rows' => array_map('intval', array_column(
+                        $service->get_rows(tutor_usage_report_service::LEVEL_SITE, 0, 0, $timestart, $timeend, [])['rows'],
+                        'key'
+                    )),
+                    'kpis' => $service->get_kpis(tutor_usage_report_service::LEVEL_SITE, 0, 0, $timestart, $timeend, []),
+                    'bar' => $service->get_stacked_bar_data(tutor_usage_report_service::LEVEL_SITE, 0, 0, $timestart, $timeend, []),
+                    'heatmap' => $service->get_heatmap_data(tutor_usage_report_service::LEVEL_SITE, 0, 0, $timestart, $timeend, []),
+                ];
+            }
+            $teacherview = $all[(int) $teacher->id];
+            $adminview = $all[(int) get_admin()->id];
+            $this->assertNotContains($c, $teacherview['rows'], $state);
+            $this->assertContains($c, $adminview['rows'], $state);
+            // Teacher scope: s1, u2, u3 and the teacher; messages from s1, u2 and u3 (twice) each day.
+            $this->assertSame(4, (int) $teacherview['kpis']['total']['raw'], $state);
+            $this->assertSame(3, (int) $teacherview['kpis']['active']['raw'], $state);
+            $this->assertSame(16, (int) $teacherview['kpis']['messages']['raw'], $state);
+            $this->assertSame(5, (int) $adminview['kpis']['total']['raw'], $state);
+            $this->assertSame(20, (int) $adminview['kpis']['messages']['raw'], $state);
+            $teachmode = 3;
+            $this->assertSame(0, array_sum($teacherview['bar']['datasets'][$teachmode]['data']), $state);
+            $this->assertSame(4, array_sum($adminview['bar']['datasets'][$teachmode]['data']), $state);
+            // Slots 1 and 2 (03:00 to 09:00) hold only course C messages.
+            foreach ([1, 2] as $slot) {
+                $this->assertSame(0, array_sum(array_column($teacherview['heatmap']['rows'][$slot]['cells'], 'value')), $state);
+            }
+            $this->assertSame(4, array_sum(array_column($adminview['heatmap']['rows'][1]['cells'], 'value'))
+                + array_sum(array_column($adminview['heatmap']['rows'][2]['cells'], 'value')), $state);
+        }
+
+        // User level: a user outside the course or the role scope is refused.
+        $this->setAdminUser();
+        foreach (
+            [
+                [(int) $u2->id, tutor_usage_report_service::ROLE_SCOPE_ALL],
+                [(int) $u3->id, tutor_usage_report_service::ROLE_SCOPE_STUDENTS],
+            ] as [$userid, $rolescope]
+        ) {
+            $request = tutor_usage_report_request::from_renderable_params([
+                'level' => tutor_usage_report_service::LEVEL_USER,
+                'courseid' => $a,
+                'userid' => $userid,
+                'rolescope' => $rolescope,
+            ]);
+            try {
+                $request->require_access();
+                $this->fail('User-level access must refuse a user outside the course scope.');
+            } catch (\moodle_exception $exception) {
+                $this->assertSame('invaliduser', $exception->errorcode);
+            }
+        }
+    }
+
+    /**
+     * The page size is clamped to the maximum in both request builders.
+     */
+    public function test_page_size_is_clamped(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $PAGE->set_url('/local/dixeo/tutor_usage_report.php');
+        $course = $this->getDataGenerator()->create_course();
+        for ($i = 0; $i < tutor_usage_report_request::MAX_PERPAGE + 5; $i++) {
+            $this->getDataGenerator()->create_and_enrol($course, 'student');
+        }
+
+        $_GET['perpage'] = 100000;
+        $fromglobals = tutor_usage_report_request::from_globals();
+        unset($_GET['perpage']);
+        $this->assertSame(tutor_usage_report_request::MAX_PERPAGE, $fromglobals->perpage);
+
+        $params = [
+            'level' => tutor_usage_report_service::LEVEL_COURSE,
+            'courseid' => (int) $course->id,
+            'perpage' => 100000,
+        ];
+        $this->assertSame(
+            tutor_usage_report_request::MAX_PERPAGE,
+            tutor_usage_report_request::from_renderable_params($params)->perpage
+        );
+        $this->assertSame(1, tutor_usage_report_request::from_renderable_params(['perpage' => -3])->perpage);
+
+        $data = (new tutor_usage_report_page($params))->export_for_template($PAGE->get_renderer('core'));
+        $this->assertCount(tutor_usage_report_request::MAX_PERPAGE, $data['rows']);
+        $this->assertTrue($data['haspagination']);
+    }
+
+    /**
+     * The tutor usage statistics strings exist and are translated in every language pack.
+     */
+    public function test_tutor_usage_strings_exist_in_every_language(): void {
+        $keys = [
+            'privacy:metadata:tutor_usage_daily',
+            'privacy:metadata:tutor_usage_daily:msgguide',
+            'privacy:metadata:tutor_usage_daily:msgnormal',
+            'privacy:metadata:tutor_usage_daily:msgquiz',
+            'privacy:metadata:tutor_usage_daily:msgteach',
+            'privacy:metadata:tutor_usage_daily:slot',
+            'task_aggregate_tutor_usage',
+            'tutor_usage_report_no_courses',
+            'tutor_usage_report_timezone_note',
+        ];
+        $english = $this->plugin_strings('en');
+        foreach (['de', 'es', 'fr', 'it', 'pt'] as $lang) {
+            $strings = $this->plugin_strings($lang);
+            foreach ($keys as $key) {
+                $this->assertArrayHasKey($key, $strings, "{$lang}: {$key}");
+                $this->assertNotSame($english[$key], $strings[$key], "{$lang}: {$key} is not translated");
+            }
+            $this->assertArrayNotHasKey('privacy:metadata:tutor_usage_daily:cmid', $strings);
+            $this->assertStringContainsString('{$a}', $strings['tutor_usage_report_timezone_note']);
+        }
+    }
+
+    /**
+     * Load one language file without the English fallback.
+     *
+     * @param string $lang Language code.
+     * @return array
+     */
+    private function plugin_strings(string $lang): array {
+        $string = [];
+        include(__DIR__ . "/../lang/{$lang}/local_dixeo.php");
+        return $string;
     }
 }

@@ -17,9 +17,14 @@
 namespace local_dixeo\service;
 
 use local_dixeo\dto\tutor_message;
+use local_dixeo\repository\tutor_usage_rollup_repository;
+use local_dixeo\util\site_calendar;
 
 /**
- * Builds tutor usage report data from usage events and sessions.
+ * Builds tutor usage report data from the daily totals, usage events and sessions.
+ *
+ * Dates, days and hour slots follow the site timezone. One service instance shares the
+ * scope, usage totals and session reads of a request between the KPIs, charts and rows.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -84,6 +89,33 @@ class tutor_usage_report_service {
         'name' => 'namelabel',
         'moduletype' => 'moduletypelabel',
     ];
+
+    /** @var array<int, int[]> Accessible course ids memoised per user id for the request. */
+    private static array $accessiblecourseids = [];
+
+    /** @var tutor_usage_rollup_repository Daily totals repository. */
+    private tutor_usage_rollup_repository $rollup;
+
+    /** @var tutor_usage_scope[] Scopes memoised by request values. */
+    private array $scopes = [];
+
+    /** @var tutor_usage_dataset[] Usage totals memoised by scope and period. */
+    private array $datasets = [];
+
+    /** @var array Closed session totals memoised by scope and period. */
+    private array $closedsessions = [];
+
+    /** @var array Open sessions memoised by scope. */
+    private array $opensessions = [];
+
+    /**
+     * Constructor.
+     *
+     * @param tutor_usage_rollup_repository|null $rollup Daily totals repository.
+     */
+    public function __construct(?tutor_usage_rollup_repository $rollup = null) {
+        $this->rollup = $rollup ?? new tutor_usage_rollup_repository();
+    }
 
     /**
      * Summary table columns for a level, in display order.
@@ -190,7 +222,7 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Parse a report date-from request value to a user-timezone midnight timestamp.
+     * Parse a report date-from request value to a site-timezone midnight timestamp.
      *
      * @param string $raw Raw request value (Y-m-d or legacy unix timestamp).
      * @return int Timestamp or 0 when empty/invalid.
@@ -200,16 +232,16 @@ class tutor_usage_report_service {
             return 0;
         }
         if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $matches)) {
-            return make_timestamp((int) $matches[1], (int) $matches[2], (int) $matches[3], 0, 0, 0);
+            return site_calendar::make((int) $matches[1], (int) $matches[2], (int) $matches[3]);
         }
         if (ctype_digit($raw)) {
-            return usergetmidnight((int) $raw);
+            return site_calendar::day_start((int) $raw);
         }
         return 0;
     }
 
     /**
-     * Parse a report date-to request value to a user-timezone end-of-day timestamp.
+     * Parse a report date-to request value to a site-timezone end-of-day timestamp.
      *
      * @param string $raw Raw request value (Y-m-d or legacy unix timestamp).
      * @return int Timestamp or 0 when empty/invalid.
@@ -219,25 +251,25 @@ class tutor_usage_report_service {
             return 0;
         }
         if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $matches)) {
-            return make_timestamp((int) $matches[1], (int) $matches[2], (int) $matches[3], 23, 59, 59);
+            return site_calendar::make((int) $matches[1], (int) $matches[2], (int) $matches[3], 23, 59, 59);
         }
         if (ctype_digit($raw)) {
-            $date = usergetdate((int) $raw);
-            return make_timestamp($date['year'], $date['mon'], $date['mday'], 23, 59, 59);
+            return site_calendar::day_end(site_calendar::day_start((int) $raw));
         }
         return 0;
     }
 
     /**
-     * Format a timestamp for report date form fields and URLs.
+     * Format a timestamp for report date form fields and URLs, in the site timezone.
      *
      * @param int $timestamp Unix timestamp.
      * @return string Date in Y-m-d format.
      */
     public static function format_date_param(int $timestamp): string {
-        $date = usergetdate($timestamp);
+        $date = usergetdate($timestamp, site_calendar::timezone());
         return sprintf('%04d-%02d-%02d', $date['year'], $date['mon'], $date['mday']);
     }
+
 
     /**
      * Build a tutor usage report URL, supporting multi-value filter parameters.
@@ -337,6 +369,8 @@ class tutor_usage_report_service {
     /**
      * Course ids the user may open in the tutor usage report.
      *
+     * The result is memoised per user id for the request.
+     *
      * @param int|null $userid User id (defaults to current user).
      * @return int[]
      */
@@ -344,10 +378,15 @@ class tutor_usage_report_service {
         global $DB, $USER;
 
         $userid = $userid ?? (int) $USER->id;
+        if (isset(self::$accessiblecourseids[$userid])) {
+            return self::$accessiblecourseids[$userid];
+        }
+
         if (self::can_view_site($userid)) {
             $ids = $DB->get_fieldset_select('course', 'id', 'id > 1', []);
             $ids = array_map('intval', $ids ?: []);
             sort($ids);
+            self::$accessiblecourseids[$userid] = $ids;
             return $ids;
         }
 
@@ -359,16 +398,21 @@ class tutor_usage_report_service {
             'sortorder ASC',
             0
         );
-        if (empty($courses)) {
-            return [];
-        }
-
         $courseids = [];
-        foreach ($courses as $course) {
+        foreach ($courses ?: [] as $course) {
             $courseids[] = (int) $course->id;
         }
+        self::$accessiblecourseids[$userid] = $courseids;
         return $courseids;
     }
+
+    /**
+     * Forget the per-request memo of accessible courses.
+     */
+    public static function reset_caches(): void {
+        self::$accessiblecourseids = [];
+    }
+
 
     /**
      * Default student role ids for the students role scope.
@@ -432,7 +476,7 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Resolve period boundaries from view parameters.
+     * Resolve period boundaries from view parameters, in the site timezone.
      *
      * @param string $view View mode.
      * @param string|null $anchor Anchor date Y-m-d.
@@ -447,7 +491,8 @@ class tutor_usage_report_service {
         ?int $datefrom = null,
         ?int $dateto = null
     ): array {
-        $anchordate = new \DateTime($anchor ?: 'today');
+        $timezone = \core_date::get_server_timezone_object();
+        $anchordate = new \DateTime($anchor ?: 'today', $timezone);
 
         if ($view === self::VIEW_MONTH) {
             $start = (clone $anchordate)->modify('first day of this month')->setTime(0, 0, 0);
@@ -456,22 +501,17 @@ class tutor_usage_report_service {
             $prevend = (clone $prevstart)->modify('last day of this month')->setTime(23, 59, 59);
             $prev = (clone $anchordate)->modify('-1 month')->format('Y-m-d');
             $next = (clone $anchordate)->modify('+1 month')->format('Y-m-d');
-            $label = userdate($start->getTimestamp(), get_string('strftimemonthyear', 'langconfig'));
+            $label = site_calendar::format($start->getTimestamp(), get_string('strftimemonthyear', 'langconfig'));
         } else if ($view === self::VIEW_CUSTOM) {
             if (empty($datefrom) && empty($dateto)) {
                 $dayofweek = (int) $anchordate->format('N');
                 $start = (clone $anchordate)->modify('-' . ($dayofweek - 1) . ' days')->setTime(0, 0, 0);
                 $end = (clone $start)->modify('+6 days')->setTime(23, 59, 59);
             } else {
-                $startts = (int) ($datefrom ?: usergetmidnight(time()));
-                if ($dateto) {
-                    $endts = (int) $dateto;
-                } else {
-                    $dateparts = usergetdate($startts);
-                    $endts = make_timestamp($dateparts['year'], $dateparts['mon'], $dateparts['mday'], 23, 59, 59);
-                }
-                $start = (new \DateTime())->setTimestamp($startts);
-                $end = (new \DateTime())->setTimestamp($endts);
+                $startts = (int) ($datefrom ?: site_calendar::day_start(time()));
+                $endts = $dateto ? (int) $dateto : site_calendar::day_end(site_calendar::day_start($startts));
+                $start = (new \DateTime('now', $timezone))->setTimestamp($startts);
+                $end = (new \DateTime('now', $timezone))->setTimestamp($endts);
             }
 
             if (($end->getTimestamp() - $start->getTimestamp()) > self::MAX_CUSTOM_RANGE_SECONDS) {
@@ -482,7 +522,8 @@ class tutor_usage_report_service {
             $next = null;
             $prevstart = null;
             $prevend = null;
-            $label = userdate($start->getTimestamp(), '%d %b %Y') . ' - ' . userdate($end->getTimestamp(), '%d %b %Y');
+            $label = site_calendar::format($start->getTimestamp(), '%d %b %Y') . ' - '
+                . site_calendar::format($end->getTimestamp(), '%d %b %Y');
         } else {
             $dayofweek = (int) $anchordate->format('N');
             $start = (clone $anchordate)->modify('-' . ($dayofweek - 1) . ' days')->setTime(0, 0, 0);
@@ -491,7 +532,8 @@ class tutor_usage_report_service {
             $prevend = (clone $prevstart)->modify('+6 days')->setTime(23, 59, 59);
             $prev = $prevstart->format('Y-m-d');
             $next = (clone $start)->modify('+7 days')->format('Y-m-d');
-            $label = userdate($start->getTimestamp(), '%d %b') . ' - ' . userdate($end->getTimestamp(), '%d %b %Y');
+            $label = site_calendar::format($start->getTimestamp(), '%d %b') . ' - '
+                . site_calendar::format($end->getTimestamp(), '%d %b %Y');
         }
 
         $result = [
@@ -529,66 +571,13 @@ class tutor_usage_report_service {
             return [$userid];
         }
 
-        if ($level === self::LEVEL_COURSE && $courseid > 0) {
-            if ($roleids === []) {
-                $sql = "SELECT DISTINCT ue.userid
-                          FROM {user_enrolments} ue
-                          JOIN {enrol} e ON e.id = ue.enrolid
-                         WHERE e.courseid = :courseid
-                           AND ue.status = 0";
-                return array_map('intval', $DB->get_fieldset_sql($sql, ['courseid' => $courseid]));
-            }
-
-            [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'role');
-            $sql = "SELECT DISTINCT ue.userid
-                      FROM {user_enrolments} ue
-                      JOIN {enrol} e ON e.id = ue.enrolid
-                      JOIN {role_assignments} ra ON ra.userid = ue.userid
-                      JOIN {context} ctx ON ctx.id = ra.contextid
-                     WHERE e.courseid = :courseid
-                       AND ue.status = 0
-                       AND ctx.contextlevel = :contextlevel
-                       AND ctx.instanceid = :courseid2
-                       AND ra.roleid {$rolesql}";
-
-            return array_map('intval', $DB->get_fieldset_sql($sql, array_merge([
-                'courseid' => $courseid,
-                'courseid2' => $courseid,
-                'contextlevel' => CONTEXT_COURSE,
-            ], $roleparams)));
+        if ($level !== self::LEVEL_COURSE || $courseid < 1) {
+            $level = self::LEVEL_SITE;
         }
-
-        $courseids = self::get_accessible_courseids();
-        if ($courseids === []) {
-            return [];
-        }
-        [$courseinsql, $courseparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'scopecourse');
-
-        if ($roleids === []) {
-            $sql = "SELECT DISTINCT ue.userid
-                      FROM {user_enrolments} ue
-                      JOIN {enrol} e ON e.id = ue.enrolid
-                     WHERE ue.status = 0
-                       AND e.courseid {$courseinsql}";
-            return array_map('intval', $DB->get_fieldset_sql($sql, $courseparams));
-        }
-
-        [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'role');
-        $sql = "SELECT DISTINCT ue.userid
-                  FROM {user_enrolments} ue
-                  JOIN {enrol} e ON e.id = ue.enrolid
-                  JOIN {role_assignments} ra ON ra.userid = ue.userid
-                  JOIN {context} ctx ON ctx.id = ra.contextid
-                 WHERE ue.status = 0
-                   AND ctx.contextlevel = :contextlevel
-                   AND ctx.instanceid = e.courseid
-                   AND ra.roleid {$rolesql}
-                   AND e.courseid {$courseinsql}";
-
-        return array_map('intval', $DB->get_fieldset_sql($sql, array_merge([
-            'contextlevel' => CONTEXT_COURSE,
-        ], $roleparams, $courseparams)));
+        [$usersql, $params] = $this->get_scope($level, $courseid, 0, $roleids)->users_sql();
+        return array_map('intval', $DB->get_fieldset_sql("SELECT DISTINCT s.userid FROM ({$usersql}) s", $params));
     }
+
 
     /**
      * Whether a user is an active course participant, honoring the report role filter.
@@ -677,7 +666,7 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Stacked bar chart data: messages by mode per day.
+     * Stacked bar chart data: messages by mode per site day.
      *
      * @param string $level Report level.
      * @param int $courseid Course id.
@@ -695,47 +684,15 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids
     ): array {
-        global $DB;
-
-        $scope = $this->build_event_scope_sql($level, $courseid, $userid, $roleids);
-        $sql = "SELECT e.id, e.timecreated, e.mode
-                  FROM {" . tutor_usage_recorder::TABLE_EVENT . "} e
-                 WHERE e.eventtype = :eventtype
-                   AND e.timecreated >= :timestart
-                   AND e.timecreated <= :timeend
-                   AND {$scope['sql']}";
-        $params = array_merge([
-            'eventtype' => tutor_usage_recorder::EVENT_MESSAGE,
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $scope['params']);
-
-        $records = $DB->get_recordset_sql($sql, $params);
-        $buckets = [];
-
-        foreach ($records as $record) {
-            $day = userdate((int) $record->timecreated, '%Y-%m-%d');
-            $mode = tutor_message::normalize_mode((string) $record->mode);
-            if (!isset($buckets[$day])) {
-                $buckets[$day] = array_fill_keys(self::MESSAGE_MODES, 0);
-            }
-            $buckets[$day][$mode] = ($buckets[$day][$mode] ?? 0) + 1;
-        }
-        $records->close();
+        $perday = $this->get_dataset($level, $courseid, $userid, $roleids, $timestart, $timeend)->per_day();
+        $columns = self::mode_columns();
 
         $labels = [];
-        $datasets = [];
-        foreach (self::MESSAGE_MODES as $mode) {
-            $datasets[$mode] = [];
-        }
-
-        $daystart = usergetmidnight($timestart);
-        $dayend = usergetmidnight($timeend);
-        for ($ts = $daystart; $ts <= $dayend; $ts += DAYSECS) {
-            $daykey = userdate($ts, '%Y-%m-%d');
-            $labels[] = userdate($ts, '%d %b');
+        $datasets = array_fill_keys(self::MESSAGE_MODES, []);
+        foreach (site_calendar::days($timestart, $timeend) as $daystart) {
+            $labels[] = site_calendar::format($daystart, '%d %b');
             foreach (self::MESSAGE_MODES as $mode) {
-                $datasets[$mode][] = $buckets[$daykey][$mode] ?? 0;
+                $datasets[$mode][] = (int) ($perday[$daystart][$columns[$mode]] ?? 0);
             }
         }
 
@@ -755,7 +712,7 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Heatmap data from message events (Mon–Sun columns, eight 3-hour rows).
+     * Heatmap data from message counts (Mon–Sun columns, eight 3-hour rows of the site day).
      *
      * @param string $level Report level.
      * @param int $courseid Course id.
@@ -773,33 +730,19 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids
     ): array {
-        global $DB;
+        $perday = $this->get_dataset($level, $courseid, $userid, $roleids, $timestart, $timeend)->per_day();
 
-        $scope = $this->build_event_scope_sql($level, $courseid, $userid, $roleids);
-        $sql = "SELECT e.id, e.timecreated
-                  FROM {" . tutor_usage_recorder::TABLE_EVENT . "} e
-                 WHERE e.eventtype = :eventtype
-                   AND e.timecreated >= :timestart
-                   AND e.timecreated <= :timeend
-                   AND {$scope['sql']}";
-        $params = array_merge([
-            'eventtype' => tutor_usage_recorder::EVENT_MESSAGE,
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $scope['params']);
-
-        $records = $DB->get_recordset_sql($sql, $params);
         $grid = [];
-        $max = 0;
-
-        foreach ($records as $record) {
-            $date = usergetdate((int) $record->timecreated);
-            $dow = ((int) $date['wday'] + 6) % 7;
-            $slot = min(self::HEATMAP_SLOT_COUNT - 1, (int) floor(((int) $date['hours']) / 3));
-            $grid[$slot][$dow] = ($grid[$slot][$dow] ?? 0) + 1;
-            $max = max($max, $grid[$slot][$dow]);
+        foreach ($perday as $daystart => $day) {
+            $dow = site_calendar::weekday((int) $daystart);
+            foreach ($day['slots'] as $slot => $count) {
+                $grid[$slot][$dow] = ($grid[$slot][$dow] ?? 0) + (int) $count;
+            }
         }
-        $records->close();
+        $max = 0;
+        foreach ($grid as $cells) {
+            $max = max($max, ...array_values($cells));
+        }
 
         $rows = [];
         for ($slot = 0; $slot < self::HEATMAP_SLOT_COUNT; $slot++) {
@@ -827,6 +770,9 @@ class tutor_usage_report_service {
     /**
      * Paginated summary table rows for the active level.
      *
+     * Row metrics are computed for every listed entity, then sorted and paginated; links,
+     * formatted values and the session duration tooltip are built for the displayed page only.
+     *
      * @param string $level Report level.
      * @param int $courseid Course id.
      * @param int $userid User id.
@@ -853,28 +799,37 @@ class tutor_usage_report_service {
         string $sort = self::SORT_DEFAULT,
         string $sortdir = ''
     ): array {
-        $aggregates = $this->aggregate_row_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids);
-        $rows = [];
-
-        foreach ($aggregates as $key => $metrics) {
-            $row = $this->format_summary_row($level, $key, $metrics, $courseid, $roleids, $linkparams);
-            if ($level === self::LEVEL_USER && $this->should_hide_zero_usage_excluded_activity($row, $courseid)) {
-                continue;
-            }
-            $rows[] = $row;
-        }
-
-        $rows = $this->sort_rows($rows, $level, $sort, $sortdir);
+        $rows = $this->sort_rows(
+            $this->build_row_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids),
+            $level,
+            $sort,
+            $sortdir
+        );
 
         $total = count($rows);
-        $offset = max(0, $page) * max(1, $perpage);
-        $rows = array_slice($rows, $offset, max(1, $perpage));
+        $perpage = max(1, $perpage);
+        $rows = array_slice($rows, max(0, $page) * $perpage, $perpage);
+
+        $durations = $this->get_session_durations(
+            $level,
+            $courseid,
+            $userid,
+            $roleids,
+            $timestart,
+            $timeend,
+            array_column($rows, 'key')
+        );
+        $formatted = [];
+        foreach ($rows as $row) {
+            $formatted[] = $this->format_summary_row($level, $row, $courseid, $linkparams, $durations[$row['key']] ?? []);
+        }
 
         return [
-            'rows' => $rows,
+            'rows' => $formatted,
             'total' => $total,
         ];
     }
+
 
     /**
      * Sort summary rows by one column, falling back to name for equal values.
@@ -942,6 +897,9 @@ class tutor_usage_report_service {
     /**
      * Export rows in report order.
      *
+     * Builds the same rows as the screen, in the same order, with no page limit and no
+     * tooltip queries.
+     *
      * @param string $level Report level.
      * @param int $courseid Course id.
      * @param int $userid User id.
@@ -962,22 +920,16 @@ class tutor_usage_report_service {
         string $sort = self::SORT_DEFAULT,
         string $sortdir = ''
     ): array {
-        $result = $this->get_rows(
+        $rows = $this->sort_rows(
+            $this->build_row_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids),
             $level,
-            $courseid,
-            $userid,
-            $timestart,
-            $timeend,
-            $roleids,
-            0,
-            PHP_INT_MAX,
-            [],
             $sort,
             $sortdir
         );
         $export = [];
 
-        foreach ($result['rows'] as $row) {
+        foreach ($rows as $metrics) {
+            $row = $this->format_summary_row($level, $metrics, $courseid, [], null);
             $item = [
                 'name' => $row['namelabel'],
             ];
@@ -1024,67 +976,44 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids
     ): array {
-        global $DB;
-
-        $scopeusers = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        $totalusers = count($scopeusers);
-
-        $eventscope = $this->build_event_scope_sql($level, $courseid, $userid, $roleids);
-        $eventsql = "SELECT e.userid, e.mode, e.eventtype, e.timecreated
-                       FROM {" . tutor_usage_recorder::TABLE_EVENT . "} e
-                      WHERE e.timecreated >= :timestart
-                        AND e.timecreated <= :timeend
-                        AND {$eventscope['sql']}";
-        $eventparams = array_merge([
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $eventscope['params']);
-
-        $events = $DB->get_recordset_sql($eventsql, $eventparams);
+        $dataset = $this->get_dataset($level, $courseid, $userid, $roleids, $timestart, $timeend);
+        $peruser = $dataset->per_user();
+        $totalusers = $this->get_scope($level, $courseid, $userid, $roleids)->count_users();
 
         $messages = 0;
-        $modecounts = array_fill_keys(self::MESSAGE_MODES, 0);
-        $messagesbymodebyuser = array_fill_keys(self::MESSAGE_MODES, []);
         $quizcreated = 0;
         $lessoncreated = 0;
-        $activeusers = [];
-        $activedays = [];
-        $activedaysbyuser = [];
         $lastactive = 0;
-        $messagesbyuser = array_fill_keys($scopeusers, 0);
+        $modecounts = array_fill_keys(self::MESSAGE_MODES, 0);
+        $messagesbymodebyuser = array_fill_keys(self::MESSAGE_MODES, []);
+        $messagesbyuser = [];
+        $activedaysbyuser = [];
+        $activeusers = [];
+        $columns = self::mode_columns();
 
-        foreach ($events as $event) {
-            $uid = (int) $event->userid;
-            $eventtime = (int) $event->timecreated;
-            $isactivity = false;
-            if ($event->eventtype === tutor_usage_recorder::EVENT_MESSAGE) {
-                $messages++;
-                $mode = tutor_message::normalize_mode((string) $event->mode);
-                $modecounts[$mode] = ($modecounts[$mode] ?? 0) + 1;
-                $isactivity = true;
-                if (array_key_exists($uid, $messagesbyuser)) {
-                    $messagesbyuser[$uid]++;
+        foreach ($peruser as $uid => $partial) {
+            $messages += $partial['messages'];
+            $quizcreated += $partial['quizcreated'];
+            $lessoncreated += $partial['lessoncreated'];
+            $lastactive = max($lastactive, $partial['lastactive']);
+            foreach (self::MESSAGE_MODES as $mode) {
+                $count = $partial[$columns[$mode]];
+                $modecounts[$mode] += $count;
+                if ($count > 0) {
+                    $messagesbymodebyuser[$mode][$uid] = $count;
                 }
-                if (isset($messagesbymodebyuser[$mode])) {
-                    $messagesbymodebyuser[$mode][$uid] = ($messagesbymodebyuser[$mode][$uid] ?? 0) + 1;
-                }
-            } else if ($event->eventtype === tutor_usage_recorder::EVENT_QUIZ_CREATED) {
-                $quizcreated++;
-                $isactivity = true;
-            } else if ($event->eventtype === tutor_usage_recorder::EVENT_LESSON_CREATED) {
-                $lessoncreated++;
-                $isactivity = true;
             }
+            $messagesbyuser[$uid] = $partial['messages'];
+            $activedaysbyuser[$uid] = $partial['activedays'];
+            $activeusers[$uid] = true;
+        }
 
-            if ($isactivity) {
-                $day = userdate($eventtime, '%Y-%m-%d');
-                $activeusers[$uid] = true;
-                $activedays[$day] = true;
-                $activedaysbyuser[$uid][$day] = true;
-                $lastactive = max($lastactive, $eventtime);
+        $activedays = 0;
+        foreach ($dataset->per_day() as $day) {
+            if (array_sum($day['slots']) + $day['quizcreated'] + $day['lessoncreated'] > 0) {
+                $activedays++;
             }
         }
-        $events->close();
 
         $sessionmetrics = $this->get_session_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids);
         foreach ($sessionmetrics['sessionsbyuser'] as $uid => $count) {
@@ -1102,7 +1031,7 @@ class tutor_usage_report_service {
         $sessionsperuser = $this->build_per_user_values($activeuserids, $sessionsbyuser);
         $durationperuser = $this->build_per_user_values($activeuserids, $durationbyuser);
         $messagesperuser = $this->build_per_user_values($activeuserids, $messagesbyuser);
-        $activedaysperuser = $this->build_per_user_values($activeuserids, array_map('count', $activedaysbyuser));
+        $activedaysperuser = $this->build_per_user_values($activeuserids, $activedaysbyuser);
 
         // Mode avg/median among users who sent that mode (standard / guide).
         $modeavg = array_fill_keys(self::MESSAGE_MODES, 0.0);
@@ -1115,7 +1044,7 @@ class tutor_usage_report_service {
 
         return [
             'adoption' => $adoption,
-            'activedays' => count($activedays),
+            'activedays' => $activedays,
             'avgactivedays' => $this->average($activedaysperuser),
             'medianactivedays' => $this->median($activedaysperuser),
             'lastactive' => $lastactive,
@@ -1137,6 +1066,7 @@ class tutor_usage_report_service {
             'medianduration' => $this->median($durationperuser),
         ];
     }
+
 
     /**
      * Format KPI metrics for template output, including optional % change.
@@ -1234,7 +1164,7 @@ class tutor_usage_report_service {
         if ($isuserlevel) {
             $lastactive = (int) ($current['lastactive'] ?? 0);
             $lastactiveformatted = $lastactive > 0
-                ? userdate($lastactive, get_string('strftimedatetime', 'langconfig'))
+                ? site_calendar::format($lastactive, get_string('strftimedatetime', 'langconfig'))
                 : get_string('tutor_usage_report_performance_na', 'local_dixeo');
             $engagement['tooltip'] = get_string(
                 'tutor_usage_report_kpi_engagement_secondary',
@@ -1342,7 +1272,211 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Aggregate session counts and duration for a period.
+     * Scope of a report request for the current user, memoised for this service instance.
+     *
+     * @param string $level Report level.
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Role filter.
+     * @return tutor_usage_scope
+     */
+    protected function get_scope(string $level, int $courseid, int $userid, array $roleids): tutor_usage_scope {
+        global $USER;
+
+        $key = $this->memo_key([$level, $courseid, $userid, $roleids, (int) $USER->id]);
+        if (!isset($this->scopes[$key])) {
+            $this->scopes[$key] = tutor_usage_scope::for_viewer($level, $courseid, $userid, $roleids);
+        }
+        return $this->scopes[$key];
+    }
+
+    /**
+     * Usage totals of a scope and period, memoised so KPIs, charts and rows share one load.
+     *
+     * @param string $level Report level.
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Role filter.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @return tutor_usage_dataset
+     */
+    protected function get_dataset(
+        string $level,
+        int $courseid,
+        int $userid,
+        array $roleids,
+        int $timestart,
+        int $timeend
+    ): tutor_usage_dataset {
+        global $USER;
+
+        $key = $this->memo_key([$level, $courseid, $userid, $roleids, $timestart, $timeend, (int) $USER->id]);
+        if (!isset($this->datasets[$key])) {
+            $this->datasets[$key] = new tutor_usage_dataset(
+                $this->get_scope($level, $courseid, $userid, $roleids),
+                $timestart,
+                $timeend,
+                $this->rollup
+            );
+        }
+        return $this->datasets[$key];
+    }
+
+    /**
+     * Memo key of request values.
+     *
+     * @param array $values Scalars and role id arrays.
+     * @return string
+     */
+    private function memo_key(array $values): string {
+        $parts = [];
+        foreach ($values as $value) {
+            if (is_array($value)) {
+                $value = array_map('intval', $value);
+                sort($value);
+                $value = implode(',', $value);
+            }
+            $parts[] = (string) $value;
+        }
+        return implode('|', $parts);
+    }
+
+    /**
+     * Closed session totals of a period, at the row grain of the level.
+     *
+     * Site: course id to user id to totals plus incoursescope. Course and user: user id to totals.
+     *
+     * @param string $level Report level.
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Role filter.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @return array
+     */
+    protected function get_closed_sessions(
+        string $level,
+        int $courseid,
+        int $userid,
+        array $roleids,
+        int $timestart,
+        int $timeend
+    ): array {
+        global $DB, $USER;
+
+        $key = $this->memo_key([$level, $courseid, $userid, $roleids, $timestart, $timeend, (int) $USER->id]);
+        if (isset($this->closedsessions[$key])) {
+            return $this->closedsessions[$key];
+        }
+
+        $scope = $this->get_scope($level, $courseid, $userid, $roleids);
+        [$wheresql, $params] = $scope->where('s');
+        $params += ['tusstart' => $timestart, 'tusend' => $timeend];
+        $periodsql = "s.timestart >= :tusstart AND s.timestart <= :tusend AND {$wheresql}";
+        $issite = $level === self::LEVEL_SITE;
+
+        if ($issite) {
+            [$pairsql, $pairparams] = $scope->pair_in_scope('g');
+            $sql = "SELECT g.courseid, g.userid, g.sessions, g.duration, g.lastend,
+                           CASE WHEN {$pairsql} THEN 1 ELSE 0 END AS incoursescope
+                      FROM (SELECT s.courseid, s.userid, COUNT(1) AS sessions, SUM(s.duration) AS duration,
+                                   MAX(s.timeend) AS lastend
+                              FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
+                             WHERE {$periodsql}
+                          GROUP BY s.courseid, s.userid) g";
+            $params += $pairparams;
+        } else {
+            $sql = "SELECT s.userid, COUNT(1) AS sessions, SUM(s.duration) AS duration, MAX(s.timeend) AS lastend
+                      FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
+                     WHERE {$periodsql}
+                  GROUP BY s.userid";
+        }
+
+        $result = [];
+        $records = $DB->get_recordset_sql($sql, $params);
+        foreach ($records as $record) {
+            $totals = [
+                'sessions' => (int) $record->sessions,
+                'duration' => (int) $record->duration,
+                'lastend' => (int) $record->lastend,
+                'incoursescope' => !$issite || !empty($record->incoursescope),
+            ];
+            if ($issite) {
+                $result[(int) $record->courseid][(int) $record->userid] = $totals;
+            } else {
+                $result[(int) $record->userid] = $totals;
+            }
+        }
+        $records->close();
+
+        $this->closedsessions[$key] = $result;
+        return $result;
+    }
+
+    /**
+     * Open sessions of a scope, memoised for this service instance.
+     *
+     * @param string $level Report level.
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Role filter.
+     * @return \stdClass[] Rows with userid, courseid, timestart, lastmessage and incoursescope.
+     */
+    protected function get_open_sessions(string $level, int $courseid, int $userid, array $roleids): array {
+        global $DB, $USER;
+
+        $key = $this->memo_key([$level, $courseid, $userid, $roleids, (int) $USER->id]);
+        if (isset($this->opensessions[$key])) {
+            return $this->opensessions[$key];
+        }
+
+        $scope = $this->get_scope($level, $courseid, $userid, $roleids);
+        [$wheresql, $params] = $scope->where('o');
+        $select = 'o.id, o.userid, o.courseid, o.timestart, o.lastmessage';
+        if ($level === self::LEVEL_SITE) {
+            [$pairsql, $pairparams] = $scope->pair_in_scope('o');
+            $select .= ", CASE WHEN {$pairsql} THEN 1 ELSE 0 END AS incoursescope";
+            $params += $pairparams;
+        }
+        $opens = array_values($DB->get_records_sql(
+            "SELECT {$select} FROM {" . tutor_usage_aggregator::TABLE_OPEN . "} o WHERE {$wheresql}",
+            $params
+        ));
+        foreach ($opens as $open) {
+            $open->incoursescope = $level !== self::LEVEL_SITE || !empty($open->incoursescope);
+        }
+
+        $this->opensessions[$key] = $opens;
+        return $opens;
+    }
+
+    /**
+     * Provisional duration of an open session within a period.
+     *
+     * @param \stdClass $open Open session.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @return int|null Duration in seconds, or null when the session is outside the period.
+     */
+    protected function open_session_duration(\stdClass $open, int $timestart, int $timeend): ?int {
+        $lastmessage = (int) $open->lastmessage;
+        $start = (int) $open->timestart;
+        if ($lastmessage < $timestart || $start > $timeend) {
+            return null;
+        }
+
+        $timedout = ($timeend - $lastmessage) > tutor_usage_aggregator::SESSION_TIMEOUT;
+        $effectiveend = $timedout ? $lastmessage : min($timeend, $lastmessage);
+        if ($effectiveend < $timestart) {
+            return null;
+        }
+
+        return tutor_usage_aggregator::calculate_duration(max($start, $timestart), $effectiveend);
+    }
+
+    /**
+     * Aggregate session counts and duration per user for a period.
      *
      * @param string $level Report level.
      * @param int $courseid Course id.
@@ -1360,79 +1494,96 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids
     ): array {
-        global $DB;
-
-        $sessionscope = $this->build_session_scope_sql($level, $courseid, $userid, $roleids);
-        $sql = "SELECT s.id, s.userid, s.duration
-                  FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
-                 WHERE s.timestart >= :timestart
-                   AND s.timestart <= :timeend
-                   AND {$sessionscope['sql']}";
-        $params = array_merge([
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $sessionscope['params']);
-
-        $records = $DB->get_recordset_sql($sql, $params);
-        $sessions = 0;
-        $duration = 0;
         $sessionsbyuser = [];
         $durationbyuser = [];
 
-        foreach ($records as $record) {
-            $uid = (int) $record->userid;
-            $sessions++;
-            $duration += (int) $record->duration;
-            $sessionsbyuser[$uid] = ($sessionsbyuser[$uid] ?? 0) + 1;
-            $durationbyuser[$uid] = ($durationbyuser[$uid] ?? 0) + (int) $record->duration;
+        $closed = $this->get_closed_sessions($level, $courseid, $userid, $roleids, $timestart, $timeend);
+        $rows = $level === self::LEVEL_SITE ? $closed : [$closed];
+        foreach ($rows as $users) {
+            foreach ($users as $uid => $totals) {
+                $sessionsbyuser[$uid] = ($sessionsbyuser[$uid] ?? 0) + $totals['sessions'];
+                $durationbyuser[$uid] = ($durationbyuser[$uid] ?? 0) + $totals['duration'];
+            }
         }
-        $records->close();
 
-        $openscope = $this->build_open_session_scope_sql($level, $courseid, $userid, $roleids);
-        $opensql = "SELECT o.id, o.userid, o.timestart, o.lastmessage
-                    FROM {" . tutor_usage_aggregator::TABLE_OPEN . "} o
-                   WHERE {$openscope['sql']}";
-        $openrecords = $DB->get_recordset_sql($opensql, $openscope['params']);
-
-        foreach ($openrecords as $open) {
-            $lastmessage = (int) $open->lastmessage;
-            $start = (int) $open->timestart;
-            if ($lastmessage < $timestart) {
-                continue;
+        foreach ($this->get_open_sessions($level, $courseid, $userid, $roleids) as $open) {
+            $seconds = $this->open_session_duration($open, $timestart, $timeend);
+            if ($seconds !== null) {
+                $uid = (int) $open->userid;
+                $sessionsbyuser[$uid] = ($sessionsbyuser[$uid] ?? 0) + 1;
+                $durationbyuser[$uid] = ($durationbyuser[$uid] ?? 0) + $seconds;
             }
-            if ($start > $timeend) {
-                continue;
-            }
-
-            $uid = (int) $open->userid;
-            $timedout = ($timeend - $lastmessage) > tutor_usage_aggregator::SESSION_TIMEOUT;
-            $effectiveend = $timedout ? $lastmessage : min($timeend, $lastmessage);
-            if ($effectiveend < $timestart) {
-                continue;
-            }
-
-            $sessionduration = tutor_usage_aggregator::calculate_duration(
-                max($start, $timestart),
-                $effectiveend
-            );
-
-            $sessions++;
-            $duration += $sessionduration;
-            $sessionsbyuser[$uid] = ($sessionsbyuser[$uid] ?? 0) + 1;
-            $durationbyuser[$uid] = ($durationbyuser[$uid] ?? 0) + $sessionduration;
         }
-        $openrecords->close();
 
         return [
-            'sessions' => $sessions,
-            'duration' => $duration,
+            'sessions' => array_sum($sessionsbyuser),
+            'duration' => array_sum($durationbyuser),
             'sessionsbyuser' => $sessionsbyuser,
             'durationbyuser' => $durationbyuser,
         ];
     }
 
     /**
-     * Aggregate summary-table metrics keyed by entity id.
+     * Session durations of the given row entities, for the median and average tooltip.
+     *
+     * @param string $level Report level.
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int[] $roleids Role filter.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int[] $keys Row keys (course ids at site level, user ids at course level).
+     * @return array<int, int[]> Row key to session durations.
+     */
+    protected function get_session_durations(
+        string $level,
+        int $courseid,
+        int $userid,
+        array $roleids,
+        int $timestart,
+        int $timeend,
+        array $keys
+    ): array {
+        global $DB;
+
+        if ($level === self::LEVEL_USER || $keys === []) {
+            return [];
+        }
+
+        $field = $level === self::LEVEL_SITE ? 'courseid' : 'userid';
+        [$wheresql, $params] = $this->get_scope($level, $courseid, $userid, $roleids)->where('s');
+        [$insql, $inparams] = $DB->get_in_or_equal(array_map('intval', $keys), SQL_PARAMS_NAMED, 'tuskey');
+        $records = $DB->get_recordset_sql(
+            "SELECT s.id, s.{$field} AS entityid, s.duration
+               FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
+              WHERE s.timestart >= :tusstart AND s.timestart <= :tusend
+                AND s.{$field} {$insql}
+                AND {$wheresql}",
+            $params + $inparams + ['tusstart' => $timestart, 'tusend' => $timeend]
+        );
+        $durations = [];
+        foreach ($records as $record) {
+            $durations[(int) $record->entityid][] = (int) $record->duration;
+        }
+        $records->close();
+
+        $wanted = array_flip(array_map('intval', $keys));
+        foreach ($this->get_open_sessions($level, $courseid, $userid, $roleids) as $open) {
+            $key = (int) $open->{$field};
+            if (!isset($wanted[$key])) {
+                continue;
+            }
+            $seconds = $this->open_session_duration($open, $timestart, $timeend);
+            if ($seconds !== null) {
+                $durations[$key][] = $seconds;
+            }
+        }
+
+        return $durations;
+    }
+
+    /**
+     * Numeric summary rows of every listed entity, unsorted and unformatted.
      *
      * @param string $level Report level.
      * @param int $courseid Course id.
@@ -1440,9 +1591,9 @@ class tutor_usage_report_service {
      * @param int $timestart Period start.
      * @param int $timeend Period end.
      * @param int[] $roleids Role filter.
-     * @return array<int|string, array>
+     * @return array[]
      */
-    protected function aggregate_row_metrics(
+    protected function build_row_metrics(
         string $level,
         int $courseid,
         int $userid,
@@ -1450,207 +1601,422 @@ class tutor_usage_report_service {
         int $timeend,
         array $roleids
     ): array {
+        if ($level === self::LEVEL_SITE) {
+            return $this->build_site_rows($timestart, $timeend, $roleids);
+        }
+        if ($level === self::LEVEL_COURSE) {
+            return $this->build_course_rows($courseid, $timestart, $timeend, $roleids);
+        }
+        return $this->build_user_rows($courseid, $userid, $timestart, $timeend, $roleids);
+    }
+
+    /**
+     * Site rows: the courses with in-scope activity (events or sessions) in the period.
+     *
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int[] $roleids Role filter.
+     * @return array[]
+     */
+    protected function build_site_rows(int $timestart, int $timeend, array $roleids): array {
         global $DB;
 
-        $keyfield = match ($level) {
-            self::LEVEL_COURSE => 'userid',
-            self::LEVEL_USER => 'cmid',
-            default => 'courseid',
-        };
-
-        // Always list in-scope entities, even with zero usage, so navigation stays available.
-        $aggregates = $this->seed_empty_row_metrics($level, $courseid, $userid, $roleids);
-        $eventscope = $this->build_event_scope_sql($level, $courseid, $userid, $roleids);
-        $eventsql = "SELECT e.id, e.{$keyfield} AS entityid, e.userid, e.mode, e.eventtype, e.timecreated
-                       FROM {" . tutor_usage_recorder::TABLE_EVENT . "} e
-                      WHERE e.timecreated >= :timestart
-                        AND e.timecreated <= :timeend
-                        AND {$eventscope['sql']}";
-        $eventparams = array_merge([
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $eventscope['params']);
-
-        $events = $DB->get_recordset_sql($eventsql, $eventparams);
-        foreach ($events as $event) {
-            $key = (int) $event->entityid;
-            if (!isset($aggregates[$key])) {
-                // Keep unexpected ids (e.g. deleted cm) so historical usage is not dropped.
-                $aggregates[$key] = $this->empty_row_metrics();
-            }
-            $eventuserid = (int) $event->userid;
-            if ($event->eventtype === tutor_usage_recorder::EVENT_MESSAGE) {
-                $aggregates[$key]['messages']++;
-                $mode = tutor_message::normalize_mode((string) $event->mode);
-                if ($mode === tutor_message::MODE_NORMAL) {
-                    $aggregates[$key]['normal']++;
-                } else if ($mode === tutor_message::MODE_GUIDE) {
-                    $aggregates[$key]['guide']++;
-                } else if ($mode === tutor_message::MODE_QUIZ) {
-                    $aggregates[$key]['quiz']++;
-                } else if ($mode === tutor_message::MODE_TEACH) {
-                    $aggregates[$key]['teach']++;
+        $level = self::LEVEL_SITE;
+        $metrics = [];
+        $columns = self::mode_columns();
+        $perentity = $this->get_dataset($level, 0, 0, $roleids, $timestart, $timeend)->per_entity();
+        foreach ($perentity as $cid => $users) {
+            $metrics[$cid] = $metrics[$cid] ?? $this->empty_row_metrics();
+            foreach ($users as $uid => $partial) {
+                $metrics[$cid]['messages'] += $partial['messages'];
+                foreach (self::MESSAGE_MODES as $mode) {
+                    $metrics[$cid][$mode] += $partial[$columns[$mode]];
                 }
-                $this->mark_row_active_user($aggregates, $key, $eventuserid, (int) $event->timecreated);
-            } else if (
-                $event->eventtype === tutor_usage_recorder::EVENT_QUIZ_CREATED
-                || $event->eventtype === tutor_usage_recorder::EVENT_LESSON_CREATED
-            ) {
-                $this->mark_row_active_user($aggregates, $key, $eventuserid, (int) $event->timecreated);
+                $metrics[$cid]['lastactive'] = max($metrics[$cid]['lastactive'], $partial['lastactive']);
+                $this->mark_active($metrics[$cid], (int) $uid, $partial['incoursescope'], $partial['activedays']);
             }
-            $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], (int) $event->timecreated);
-        }
-        $events->close();
-
-        $sessionfield = match ($level) {
-            self::LEVEL_COURSE => 'userid',
-            self::LEVEL_USER => 'cmid',
-            default => 'courseid',
-        };
-
-        if ($level === self::LEVEL_USER) {
-            $this->add_user_module_sessions($aggregates, $courseid, $userid, $timestart, $timeend, $roleids);
-            return $aggregates;
         }
 
-        $sessionscope = $this->build_session_scope_sql($level, $courseid, $userid, $roleids);
-        $sessionsql = "SELECT s.id, s.{$sessionfield} AS entityid, s.userid, s.duration, s.timeend
-                         FROM {" . tutor_usage_aggregator::TABLE_SESSION . "} s
-                        WHERE s.timestart >= :timestart
-                          AND s.timestart <= :timeend
-                          AND {$sessionscope['sql']}";
-        $sessionparams = array_merge([
-            'timestart' => $timestart,
-            'timeend' => $timeend,
-        ], $sessionscope['params']);
-
-        $sessions = $DB->get_recordset_sql($sessionsql, $sessionparams);
-        foreach ($sessions as $session) {
-            $key = (int) $session->entityid;
-            if (!isset($aggregates[$key])) {
-                $aggregates[$key] = $this->empty_row_metrics();
+        foreach ($this->get_closed_sessions($level, 0, 0, $roleids, $timestart, $timeend) as $cid => $users) {
+            $metrics[$cid] = $metrics[$cid] ?? $this->empty_row_metrics();
+            foreach ($users as $uid => $totals) {
+                $metrics[$cid]['sessions'] += $totals['sessions'];
+                $metrics[$cid]['duration'] += $totals['duration'];
+                $metrics[$cid]['lastactive'] = max($metrics[$cid]['lastactive'], $totals['lastend']);
+                $this->mark_active($metrics[$cid], (int) $uid, $totals['incoursescope'], 0);
             }
-            $aggregates[$key]['sessions']++;
-            $sessionduration = (int) $session->duration;
-            $aggregates[$key]['duration'] = ($aggregates[$key]['duration'] ?? 0) + $sessionduration;
-            $aggregates[$key]['sessiondurations'][] = $sessionduration;
-            $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], (int) $session->timeend);
-            $this->mark_row_active_user($aggregates, $key, (int) $session->userid);
-        }
-        $sessions->close();
-
-        $this->add_open_sessions_to_row_aggregates(
-            $aggregates,
-            $level,
-            $courseid,
-            $userid,
-            $timestart,
-            $timeend,
-            $roleids,
-            $sessionfield
-        );
-
-        return $aggregates;
-    }
-
-    /**
-     * Seed zeroed summary rows for every in-scope entity at the current level.
-     *
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int[] $roleids Role filter.
-     * @return array<int, array>
-     */
-    protected function seed_empty_row_metrics(
-        string $level,
-        int $courseid,
-        int $userid,
-        array $roleids
-    ): array {
-        $aggregates = [];
-        foreach ($this->get_summary_entity_ids($level, $courseid, $userid, $roleids) as $entityid) {
-            $aggregates[(int) $entityid] = $this->empty_row_metrics();
-        }
-        return $aggregates;
-    }
-
-    /**
-     * Entity ids that must appear in the summary table for the active level.
-     *
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int[] $roleids Role filter.
-     * @return int[]
-     */
-    public function get_summary_entity_ids(
-        string $level,
-        int $courseid,
-        int $userid,
-        array $roleids
-    ): array {
-        if ($level === self::LEVEL_SITE) {
-            return self::get_accessible_courseids();
         }
 
-        if ($level === self::LEVEL_COURSE) {
-            return $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        }
-
-        // User level: course page + all course activities.
-        return $this->get_course_activity_entity_ids($courseid);
-    }
-
-    /**
-     * Course page (cmid 0) plus visible course module ids for the user-level table.
-     *
-     * @param int $courseid Course id.
-     * @return int[]
-     */
-    protected function get_course_activity_entity_ids(int $courseid): array {
-        $ids = [0];
-        if ($courseid < 1) {
-            return $ids;
-        }
-
-        try {
-            $modinfo = get_fast_modinfo($courseid);
-        } catch (\Throwable $e) {
-            return $ids;
-        }
-
-        foreach ($modinfo->get_cms() as $cm) {
-            if (!empty($cm->deletioninprogress)) {
+        foreach ($this->get_open_sessions($level, 0, 0, $roleids) as $open) {
+            $seconds = $this->open_session_duration($open, $timestart, $timeend);
+            if ($seconds === null) {
                 continue;
             }
-            $ids[] = (int) $cm->id;
+            $cid = (int) $open->courseid;
+            $metrics[$cid] = $metrics[$cid] ?? $this->empty_row_metrics();
+            $metrics[$cid]['sessions']++;
+            $metrics[$cid]['duration'] += $seconds;
+            $metrics[$cid]['lastactive'] = max($metrics[$cid]['lastactive'], (int) $open->lastmessage);
+            $this->mark_active($metrics[$cid], (int) $open->userid, (bool) $open->incoursescope, 0);
         }
 
-        return array_values(array_unique($ids));
+        if ($metrics === []) {
+            return [];
+        }
+
+        $courseids = array_keys($metrics);
+        $totals = $this->get_scope($level, 0, 0, $roleids)->count_users_per_course($courseids);
+        $courses = $DB->get_records_list('course', 'id', $courseids, '', 'id, fullname');
+
+        $rows = [];
+        foreach ($metrics as $cid => $rowmetrics) {
+            $course = $courses[$cid] ?? null;
+            $total = $totals[$cid] ?? 0;
+            $active = count(array_filter($rowmetrics['activeuserids']));
+            $row = $this->numeric_row((int) $cid, $course ? format_string($course->fullname) : (string) $cid, $rowmetrics);
+            $row['course'] = $course;
+            $row['activeinscope'] = $total > 0 ? $active : 0;
+            $row['totalinscope'] = $total;
+            $row['adoption'] = $total > 0 ? ($active / $total) * 100 : 0.0;
+            $rows[] = $row;
+        }
+        return $rows;
     }
 
     /**
-     * Hide user-level activity rows with no messages when the module type is tutor-excluded.
+     * Course rows: every user in scope, with zeros when inactive.
      *
-     * Uses the tutor excludedmodules setting, including a course override when the report
-     * is for one course. The settings reader does not load the block class.
-     *
-     * @param array $row Formatted summary row.
-     * @param int $courseid Course id, or 0 for the Dixeo value.
-     * @return bool
+     * @param int $courseid Course id.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int[] $roleids Role filter.
+     * @return array[]
      */
-    protected function should_hide_zero_usage_excluded_activity(array $row, int $courseid): bool {
-        if ((int) ($row['messages'] ?? 0) > 0) {
-            return false;
+    protected function build_course_rows(int $courseid, int $timestart, int $timeend, array $roleids): array {
+        global $DB;
+
+        $level = self::LEVEL_COURSE;
+        $scope = $this->get_scope($level, $courseid, 0, $roleids);
+        [$usersql, $params] = $scope->users_sql();
+        $namefields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
+        $users = $DB->get_records_sql("SELECT u.id, {$namefields} FROM {user} u WHERE u.id IN ({$usersql})", $params);
+
+        $metrics = [];
+        foreach ($users as $uid => $user) {
+            $metrics[(int) $uid] = $this->empty_row_metrics();
         }
 
-        $moduletype = (string) ($row['moduletype'] ?? '');
-        if ($moduletype === '' || $moduletype === 'course') {
-            return false;
+        $columns = self::mode_columns();
+        foreach ($this->get_dataset($level, $courseid, 0, $roleids, $timestart, $timeend)->per_entity() as $uid => $partial) {
+            $metrics[$uid] = $metrics[$uid] ?? $this->empty_row_metrics();
+            $metrics[$uid]['messages'] += $partial['messages'];
+            foreach (self::MESSAGE_MODES as $mode) {
+                $metrics[$uid][$mode] += $partial[$columns[$mode]];
+            }
+            $metrics[$uid]['lastactive'] = max($metrics[$uid]['lastactive'], $partial['lastactive']);
+            $this->mark_active($metrics[$uid], (int) $uid, true, $partial['activedays']);
         }
 
-        return in_array($moduletype, $this->get_tutor_excluded_modules($courseid), true);
+        foreach ($this->get_closed_sessions($level, $courseid, 0, $roleids, $timestart, $timeend) as $uid => $totals) {
+            $metrics[$uid] = $metrics[$uid] ?? $this->empty_row_metrics();
+            $metrics[$uid]['sessions'] += $totals['sessions'];
+            $metrics[$uid]['duration'] += $totals['duration'];
+            $metrics[$uid]['lastactive'] = max($metrics[$uid]['lastactive'], $totals['lastend']);
+            $this->mark_active($metrics[$uid], (int) $uid, true, 0);
+        }
+
+        foreach ($this->get_open_sessions($level, $courseid, 0, $roleids) as $open) {
+            $seconds = $this->open_session_duration($open, $timestart, $timeend);
+            if ($seconds === null) {
+                continue;
+            }
+            $uid = (int) $open->userid;
+            $metrics[$uid] = $metrics[$uid] ?? $this->empty_row_metrics();
+            $metrics[$uid]['sessions']++;
+            $metrics[$uid]['duration'] += $seconds;
+            $metrics[$uid]['lastactive'] = max($metrics[$uid]['lastactive'], (int) $open->lastmessage);
+            $this->mark_active($metrics[$uid], $uid, true, 0);
+        }
+
+        $rows = [];
+        foreach ($metrics as $uid => $rowmetrics) {
+            $user = $users[$uid] ?? null;
+            $row = $this->numeric_row((int) $uid, $user ? fullname($user) : (string) $uid, $rowmetrics);
+            $row['user'] = $user;
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    /**
+     * User rows: the course page, every course activity and any other module with usage.
+     *
+     * Activities of a tutor-excluded module type are hidden while they have no messages.
+     *
+     * @param int $courseid Course id.
+     * @param int $userid User id.
+     * @param int $timestart Period start.
+     * @param int $timeend Period end.
+     * @param int[] $roleids Role filter.
+     * @return array[]
+     */
+    protected function build_user_rows(int $courseid, int $userid, int $timestart, int $timeend, array $roleids): array {
+        global $DB;
+
+        $level = self::LEVEL_USER;
+        $cms = [];
+        $metrics = [0 => $this->empty_row_metrics()];
+        try {
+            $modinfo = $courseid > 0 ? get_fast_modinfo($courseid) : null;
+        } catch (\Throwable $e) {
+            $modinfo = null;
+        }
+        if ($modinfo) {
+            foreach ($modinfo->get_cms() as $cm) {
+                if (!empty($cm->deletioninprogress)) {
+                    continue;
+                }
+                $cms[(int) $cm->id] = $cm;
+                $metrics[(int) $cm->id] = $this->empty_row_metrics();
+            }
+        }
+
+        $scope = $this->get_scope($level, $courseid, $userid, $roleids);
+        [$wheresql, $params] = $scope->where('ev');
+        $modesql = [];
+        foreach (self::MESSAGE_MODES as $mode) {
+            if ($mode === tutor_message::MODE_NORMAL) {
+                $condition = 'ev.mode NOT IN (:tusguide, :tusquiz, :tusteach)';
+            } else {
+                $condition = "ev.mode = :tusmode{$mode}";
+                $params['tusmode' . $mode] = $mode;
+            }
+            $params['tusmsg' . $mode] = tutor_usage_recorder::EVENT_MESSAGE;
+            $modesql[] = "SUM(CASE WHEN ev.eventtype = :tusmsg{$mode} AND {$condition} THEN 1 ELSE 0 END) AS {$mode}";
+        }
+        $params += [
+            'tusguide' => tutor_message::MODE_GUIDE,
+            'tusquiz' => tutor_message::MODE_QUIZ,
+            'tusteach' => tutor_message::MODE_TEACH,
+            'tusmsg' => tutor_usage_recorder::EVENT_MESSAGE,
+            'tusstart' => $timestart,
+            'tusend' => $timeend,
+        ];
+        $records = $DB->get_recordset_sql(
+            "SELECT ev.cmid,
+                    SUM(CASE WHEN ev.eventtype = :tusmsg THEN 1 ELSE 0 END) AS messages,
+                    " . implode(",\n                    ", $modesql) . ",
+                    MAX(ev.timecreated) AS lastactive
+               FROM {" . tutor_usage_recorder::TABLE_EVENT . "} ev
+              WHERE ev.timecreated >= :tusstart AND ev.timecreated <= :tusend AND {$wheresql}
+           GROUP BY ev.cmid",
+            $params
+        );
+        foreach ($records as $record) {
+            $cmid = (int) $record->cmid;
+            // Unknown modules (for example a deleted activity) keep their historical usage.
+            $metrics[$cmid] = $metrics[$cmid] ?? $this->empty_row_metrics();
+            $metrics[$cmid]['messages'] += (int) $record->messages;
+            foreach (self::MESSAGE_MODES as $mode) {
+                $metrics[$cmid][$mode] += (int) $record->{$mode};
+            }
+            $metrics[$cmid]['lastactive'] = max($metrics[$cmid]['lastactive'], (int) $record->lastactive);
+        }
+        $records->close();
+
+        // Sessions are course-scoped, so they are credited to the course page row.
+        $sessions = $this->get_session_metrics($level, $courseid, $userid, $timestart, $timeend, $roleids);
+        $metrics[0]['sessions'] += (int) $sessions['sessions'];
+        $metrics[0]['duration'] += (int) $sessions['duration'];
+
+        $excluded = $this->get_tutor_excluded_modules($courseid);
+        $rows = [];
+        foreach ($metrics as $cmid => $rowmetrics) {
+            $cm = $cms[$cmid] ?? null;
+            if ($cmid === 0) {
+                $namelabel = get_string('tutor_usage_report_course_page', 'local_dixeo');
+                $moduletype = 'course';
+                $moduletypelabel = get_string('course');
+            } else if ($cm) {
+                $namelabel = format_string($cm->name);
+                $moduletype = (string) $cm->modname;
+                $moduletypelabel = get_string('modulename', $cm->modname);
+            } else {
+                $namelabel = (string) $cmid;
+                $moduletype = '';
+                $moduletypelabel = '';
+            }
+            if (
+                $rowmetrics['messages'] < 1
+                && $moduletype !== ''
+                && $moduletype !== 'course'
+                && in_array($moduletype, $excluded, true)
+            ) {
+                continue;
+            }
+
+            $row = $this->numeric_row((int) $cmid, $namelabel, $rowmetrics);
+            $row['moduletype'] = $moduletype;
+            $row['moduletypelabel'] = $moduletypelabel;
+            $row['cm'] = $cm;
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    /**
+     * Mark a user as active on a row.
+     *
+     * @param array $metrics Row metrics (by reference).
+     * @param int $userid User id.
+     * @param bool $incoursescope Whether the user is in scope in the row's course.
+     * @param int $activedays Active days of the user in this row (0 for sessions).
+     */
+    protected function mark_active(array &$metrics, int $userid, bool $incoursescope, int $activedays): void {
+        if ($userid < 1) {
+            return;
+        }
+        $metrics['activeuserids'][$userid] = !empty($metrics['activeuserids'][$userid]) || $incoursescope;
+        if ($activedays > 0) {
+            $metrics['activedaysbyuser'][$userid] = ($metrics['activedaysbyuser'][$userid] ?? 0) + $activedays;
+        }
+    }
+
+    /**
+     * Numeric row fields used for sorting.
+     *
+     * @param int $key Entity key.
+     * @param string $namelabel Display name.
+     * @param array $metrics Row metrics.
+     * @return array
+     */
+    protected function numeric_row(int $key, string $namelabel, array $metrics): array {
+        // Active days averaged over the users active in this row; a user row holds a single user.
+        $activedays = array_values($metrics['activedaysbyuser']);
+        return [
+            'key' => $key,
+            'namelabel' => $namelabel,
+            'moduletype' => '',
+            'moduletypelabel' => '',
+            'engagement' => $activedays !== [] ? array_sum($activedays) / count($activedays) : 0.0,
+            'adoption' => 0.0,
+            'activeinscope' => 0,
+            'totalinscope' => 0,
+            'messages' => (int) $metrics['messages'],
+            'normal' => (int) $metrics[tutor_message::MODE_NORMAL],
+            'guide' => (int) $metrics[tutor_message::MODE_GUIDE],
+            'quiz' => (int) $metrics[tutor_message::MODE_QUIZ],
+            'teach' => (int) $metrics[tutor_message::MODE_TEACH],
+            'sessions' => (int) $metrics['sessions'],
+            'duration' => (int) $metrics['duration'],
+            'lastactive' => (int) $metrics['lastactive'],
+        ];
+    }
+
+    /**
+     * Format one summary-table row for display or export.
+     *
+     * @param string $level Report level.
+     * @param array $row Numeric row from build_row_metrics().
+     * @param int $courseid Course id for user level links.
+     * @param array $linkparams Extra URL parameters to carry into the drill-down link.
+     * @param int[]|null $sessiondurations Session durations for the tooltip, or null to skip tooltips.
+     * @return array
+     */
+    protected function format_summary_row(
+        string $level,
+        array $row,
+        int $courseid,
+        array $linkparams,
+        ?array $sessiondurations
+    ): array {
+        $url = null;
+        $adoptionformatted = '';
+        $adoptiontooltip = '';
+        $withtooltips = $sessiondurations !== null;
+
+        if ($level === self::LEVEL_SITE) {
+            if (!empty($row['course'])) {
+                $url = self::build_report_url(array_merge($linkparams, [
+                    'level' => self::LEVEL_COURSE,
+                    'courseid' => (int) $row['course']->id,
+                ]));
+            }
+            $adoptionformatted = number_format($row['adoption'], 1) . '%';
+            if ($withtooltips) {
+                $adoptiontooltip = get_string('tutor_usage_report_cell_tooltip_adoption', 'local_dixeo', (object) [
+                    'active' => number_format($row['activeinscope']),
+                    'total' => number_format($row['totalinscope']),
+                ]);
+            }
+        } else if ($level === self::LEVEL_COURSE) {
+            if (!empty($row['user'])) {
+                $url = self::build_report_url(array_merge($linkparams, [
+                    'level' => self::LEVEL_USER,
+                    'courseid' => $courseid,
+                    'userid' => (int) $row['user']->id,
+                ]));
+            }
+        } else if ((int) $row['key'] === 0) {
+            $url = (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false);
+        } else if (!empty($row['cm'])) {
+            $url = (new \moodle_url('/mod/' . $row['cm']->modname . '/view.php', ['id' => $row['cm']->id]))->out(false);
+        }
+
+        $messages = $row['messages'];
+        $engagement = (float) $row['engagement'];
+        $formatted = [
+            'key' => (int) $row['key'],
+            'namelabel' => $row['namelabel'],
+            'url' => $url,
+            'isuserlevel' => $level === self::LEVEL_USER,
+            'issitelevel' => $level === self::LEVEL_SITE,
+            'engagement' => $engagement,
+            'engagementformatted' => get_string(
+                'tutor_usage_report_kpi_engagement_value',
+                'local_dixeo',
+                $level === self::LEVEL_COURSE
+                    ? number_format((int) round($engagement))
+                    : number_format($engagement, 1)
+            ),
+            'moduletype' => $row['moduletype'],
+            'moduletypelabel' => $row['moduletypelabel'],
+            'adoption' => $row['adoption'],
+            'adoptionformatted' => $adoptionformatted,
+            'adoptiontooltip' => $adoptiontooltip,
+            'messages' => $messages,
+            'messagesformatted' => number_format($messages),
+            'sessions' => $row['sessions'],
+            'duration' => $row['duration'],
+            'durationformatted' => self::format_duration($row['duration']),
+            'lastactive' => $row['lastactive'],
+            'lastactiveformatted' => $row['lastactive'] > 0
+                ? site_calendar::format($row['lastactive'], get_string('strftimedatetime', 'langconfig'))
+                : get_string('never', 'moodle'),
+        ];
+        foreach (self::MESSAGE_MODES as $mode) {
+            $formatted[$mode] = $row[$mode];
+            $formatted[$mode . 'formatted'] = number_format($row[$mode]);
+            $formatted[$mode . 'tooltip'] = $this->format_mode_pct($row[$mode], $messages);
+        }
+
+        if ($withtooltips) {
+            $durations = array_map('intval', $sessiondurations);
+            $formatted['durationtooltip'] = get_string(
+                'tutor_usage_report_kpi_duration_secondary',
+                'local_dixeo',
+                (object) [
+                    'median' => self::format_duration((int) round($this->median($durations))),
+                    'average' => self::format_duration(
+                        $durations !== [] ? (int) round(array_sum($durations) / count($durations)) : 0
+                    ),
+                ]
+            );
+        } else {
+            $formatted['durationtooltip'] = '';
+        }
+
+        return $formatted;
     }
 
     /**
@@ -1677,454 +2043,16 @@ class tutor_usage_report_service {
     }
 
     /**
-     * Add provisional open-session counts to summary row aggregates.
+     * Partial field holding the message count of each tutor mode.
      *
-     * @param array $aggregates Aggregates keyed by entity id (by reference).
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int $timestart Period start.
-     * @param int $timeend Period end.
-     * @param int[] $roleids Role filter.
-     * @param string $sessionfield Entity field name.
+     * @return array<string, string> Mode to field name.
      */
-    protected function add_open_sessions_to_row_aggregates(
-        array &$aggregates,
-        string $level,
-        int $courseid,
-        int $userid,
-        int $timestart,
-        int $timeend,
-        array $roleids,
-        string $sessionfield
-    ): void {
-        global $DB;
-
-        $openscope = $this->build_open_session_scope_sql($level, $courseid, $userid, $roleids);
-        $opensql = "SELECT o.id, o.userid, o.courseid, o.timestart, o.lastmessage
-                      FROM {" . tutor_usage_aggregator::TABLE_OPEN . "} o
-                     WHERE {$openscope['sql']}";
-        $openrecords = $DB->get_recordset_sql($opensql, $openscope['params']);
-
-        foreach ($openrecords as $open) {
-            $lastmessage = (int) $open->lastmessage;
-            $start = (int) $open->timestart;
-            if ($lastmessage < $timestart || $start > $timeend) {
-                continue;
-            }
-
-            $key = match ($sessionfield) {
-                'userid' => (int) $open->userid,
-                'courseid' => (int) $open->courseid,
-                default => 0,
-            };
-
-            if (!isset($aggregates[$key])) {
-                $aggregates[$key] = $this->empty_row_metrics();
-            }
-
-            $timedout = ($timeend - $lastmessage) > tutor_usage_aggregator::SESSION_TIMEOUT;
-            $effectiveend = $timedout ? $lastmessage : min($timeend, $lastmessage);
-            $sessionduration = tutor_usage_aggregator::calculate_duration(
-                max($start, $timestart),
-                $effectiveend
-            );
-
-            $aggregates[$key]['sessions']++;
-            $aggregates[$key]['duration'] = ($aggregates[$key]['duration'] ?? 0) + $sessionduration;
-            $aggregates[$key]['sessiondurations'][] = $sessionduration;
-            $aggregates[$key]['lastactive'] = max($aggregates[$key]['lastactive'], $lastmessage);
-            $this->mark_row_active_user($aggregates, $key, (int) $open->userid);
-        }
-        $openrecords->close();
-    }
-
-    /**
-     * Add session counts to user-level module rows (sessions are course-scoped only).
-     *
-     * @param array $aggregates Existing aggregates keyed by cmid.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int $timestart Period start.
-     * @param int $timeend Period end.
-     * @param int[] $roleids Role filter.
-     */
-    protected function add_user_module_sessions(
-        array &$aggregates,
-        int $courseid,
-        int $userid,
-        int $timestart,
-        int $timeend,
-        array $roleids
-    ): void {
-        global $DB;
-
-        $metrics = $this->get_session_metrics(self::LEVEL_USER, $courseid, $userid, $timestart, $timeend, $roleids);
-        if (($metrics['sessions'] ?? 0) < 1) {
-            return;
-        }
-
-        $cmid = 0;
-        if (!isset($aggregates[$cmid])) {
-            $aggregates[$cmid] = $this->empty_row_metrics();
-        }
-        $aggregates[$cmid]['sessions'] += (int) $metrics['sessions'];
-        $aggregates[$cmid]['duration'] = ($aggregates[$cmid]['duration'] ?? 0) + (int) ($metrics['duration'] ?? 0);
-    }
-
-    /**
-     * Format one summary-table row.
-     *
-     * @param string $level Report level.
-     * @param int|string $key Entity key.
-     * @param array $metrics Row metrics.
-     * @param int $courseid Course id for user level labels.
-     * @param int[] $roleids Role filter (used for site-level adoption).
-     * @param array $linkparams Extra URL parameters to carry into the drill-down link.
-     * @return array
-     */
-    protected function format_summary_row(
-        string $level,
-        int|string $key,
-        array $metrics,
-        int $courseid,
-        array $roleids = [],
-        array $linkparams = []
-    ): array {
-        global $DB;
-
-        $namelabel = (string) $key;
-        $url = null;
-        $moduletype = '';
-        $moduletypelabel = '';
-        $isuserlevel = $level === self::LEVEL_USER;
-        $issitelevel = $level === self::LEVEL_SITE;
-        $adoption = 0.0;
-        $adoptionformatted = '';
-        $adoptiontooltip = '';
-        $activeusers = 0;
-        $totalusers = 0;
-
-        if ($level === self::LEVEL_SITE) {
-            $course = $DB->get_record('course', ['id' => (int) $key], '*', IGNORE_MISSING);
-            if ($course) {
-                $namelabel = format_string($course->fullname);
-                $url = self::build_report_url(array_merge($linkparams, [
-                    'level' => self::LEVEL_COURSE,
-                    'courseid' => (int) $course->id,
-                ]));
-            }
-            $adoptionstats = $this->get_course_adoption_stats((int) $key, $metrics, $roleids);
-            $adoption = $adoptionstats['adoption'];
-            $activeusers = $adoptionstats['active'];
-            $totalusers = $adoptionstats['total'];
-            $adoptionformatted = number_format($adoption, 1) . '%';
-            $adoptiontooltip = get_string('tutor_usage_report_cell_tooltip_adoption', 'local_dixeo', (object) [
-                'active' => number_format($activeusers),
-                'total' => number_format($totalusers),
-            ]);
-        } else if ($level === self::LEVEL_COURSE) {
-            $user = \core_user::get_user((int) $key, '*', IGNORE_MISSING);
-            if ($user) {
-                $namelabel = fullname($user);
-                $url = self::build_report_url(array_merge($linkparams, [
-                    'level' => self::LEVEL_USER,
-                    'courseid' => $courseid,
-                    'userid' => (int) $user->id,
-                ]));
-            }
-        } else {
-            $cmid = (int) $key;
-            if ($cmid > 0) {
-                $cm = get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING);
-                if ($cm) {
-                    $namelabel = format_string($cm->name);
-                    $moduletype = (string) $cm->modname;
-                    $moduletypelabel = get_string('modulename', $cm->modname);
-                    $url = (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->id]))->out(false);
-                }
-            } else {
-                $namelabel = get_string('tutor_usage_report_course_page', 'local_dixeo');
-                $moduletype = 'course';
-                $moduletypelabel = get_string('course');
-                $url = (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false);
-            }
-        }
-
-        $messages = (int) $metrics['messages'];
-        $normal = (int) ($metrics['normal'] ?? 0);
-        $guide = (int) $metrics['guide'];
-        $quiz = (int) $metrics['quiz'];
-        $teach = (int) $metrics['teach'];
-        $sessions = (int) $metrics['sessions'];
-        $duration = (int) ($metrics['duration'] ?? 0);
-        $sessiondurations = array_map('intval', $metrics['sessiondurations'] ?? []);
-        $mediansessionduration = (int) round($this->median($sessiondurations));
-        $averagesessionduration = $sessiondurations !== []
-            ? (int) round(array_sum($sessiondurations) / count($sessiondurations))
-            : 0;
-
-        // Active days averaged over the users active in this row; a user row holds a single user.
-        $activedays = array_map('count', $metrics['activedaysbyuser'] ?? []);
-        $engagement = $activedays !== [] ? array_sum($activedays) / count($activedays) : 0.0;
-
+    protected static function mode_columns(): array {
         return [
-            'key' => (int) $key,
-            'namelabel' => $namelabel,
-            'url' => $url,
-            'isuserlevel' => $isuserlevel,
-            'issitelevel' => $issitelevel,
-            'engagement' => $engagement,
-            'engagementformatted' => get_string(
-                'tutor_usage_report_kpi_engagement_value',
-                'local_dixeo',
-                $level === self::LEVEL_COURSE
-                    ? number_format((int) round($engagement))
-                    : number_format($engagement, 1)
-            ),
-            'moduletype' => $moduletype,
-            'moduletypelabel' => $moduletypelabel,
-            'adoption' => $adoption,
-            'adoptionformatted' => $adoptionformatted,
-            'adoptiontooltip' => $adoptiontooltip,
-            'messages' => $messages,
-            'messagesformatted' => number_format($messages),
-            'normal' => $normal,
-            'normalformatted' => number_format($normal),
-            'normaltooltip' => $this->format_mode_pct($normal, $messages),
-            'guide' => $guide,
-            'guideformatted' => number_format($guide),
-            'guidetooltip' => $this->format_mode_pct($guide, $messages),
-            'quiz' => $quiz,
-            'quizformatted' => number_format($quiz),
-            'quiztooltip' => $this->format_mode_pct($quiz, $messages),
-            'teach' => $teach,
-            'teachformatted' => number_format($teach),
-            'teachtooltip' => $this->format_mode_pct($teach, $messages),
-            'sessions' => $sessions,
-            'duration' => $duration,
-            'durationformatted' => self::format_duration($duration),
-            'durationtooltip' => get_string(
-                'tutor_usage_report_kpi_duration_secondary',
-                'local_dixeo',
-                (object) [
-                    'median' => self::format_duration($mediansessionduration),
-                    'average' => self::format_duration($averagesessionduration),
-                ]
-            ),
-            'lastactive' => (int) $metrics['lastactive'],
-            'lastactiveformatted' => !empty($metrics['lastactive'])
-                ? userdate((int) $metrics['lastactive'], get_string('strftimedatetime', 'langconfig'))
-                : get_string('never', 'moodle'),
-        ];
-    }
-
-    /**
-     * Compute course adoption stats for a site-level summary row.
-     *
-     * @param int $courseid Course id.
-     * @param array $metrics Row metrics including activeuserids.
-     * @param int[] $roleids Role filter.
-     * @return array{adoption: float, active: int, total: int}
-     */
-    protected function get_course_adoption_stats(int $courseid, array $metrics, array $roleids): array {
-        $scopeusers = $this->get_in_scope_userids(self::LEVEL_COURSE, $courseid, 0, $roleids);
-        $total = count($scopeusers);
-        if ($total < 1) {
-            return [
-                'adoption' => 0.0,
-                'active' => 0,
-                'total' => 0,
-            ];
-        }
-
-        $scopeflip = array_flip($scopeusers);
-        $active = 0;
-        foreach (array_keys($metrics['activeuserids'] ?? []) as $uid) {
-            if (isset($scopeflip[(int) $uid])) {
-                $active++;
-            }
-        }
-
-        return [
-            'adoption' => ($active / $total) * 100,
-            'active' => $active,
-            'total' => $total,
-        ];
-    }
-
-    /**
-     * Mark a user as active on a summary-row aggregate.
-     *
-     * @param array $aggregates Aggregates keyed by entity id (by reference).
-     * @param int $key Entity key.
-     * @param int $userid User id.
-     * @param int|null $activetime Activity timestamp to count as an active day, or null to skip.
-     */
-    protected function mark_row_active_user(
-        array &$aggregates,
-        int $key,
-        int $userid,
-        ?int $activetime = null
-    ): void {
-        if ($userid < 1) {
-            return;
-        }
-        if (!isset($aggregates[$key])) {
-            $aggregates[$key] = $this->empty_row_metrics();
-        }
-        $aggregates[$key]['activeuserids'][$userid] = true;
-        // Only activity events count towards active days, matching the Engagement KPI.
-        if ($activetime !== null) {
-            $day = userdate($activetime, '%Y-%m-%d');
-            $aggregates[$key]['activedaysbyuser'][$userid][$day] = true;
-        }
-    }
-
-    /**
-     * Build SQL scope for event queries.
-     *
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int[] $roleids Role filter.
-     * @return array{sql: string, params: array}
-     */
-    protected function build_event_scope_sql(string $level, int $courseid, int $userid, array $roleids): array {
-        global $DB;
-
-        $conditions = ['1 = 1'];
-        $params = [];
-
-        if ($level === self::LEVEL_COURSE && $courseid > 0) {
-            $conditions[] = 'e.courseid = :courseid';
-            $params['courseid'] = $courseid;
-        } else if ($level === self::LEVEL_USER) {
-            $conditions[] = 'e.courseid = :courseid';
-            $conditions[] = 'e.userid = :userid';
-            $params['courseid'] = $courseid;
-            $params['userid'] = $userid;
-        } else if ($level === self::LEVEL_SITE) {
-            $courseids = self::get_accessible_courseids();
-            if ($courseids === []) {
-                $conditions[] = '1 = 0';
-            } else {
-                [$insql, $inparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'sitecourse');
-                $conditions[] = "e.courseid {$insql}";
-                $params = array_merge($params, $inparams);
-            }
-        }
-
-        $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($userids === []) {
-            $conditions[] = '1 = 0';
-        } else if ($level !== self::LEVEL_USER) {
-            [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'scopeuser');
-            $conditions[] = "e.userid {$insql}";
-            $params = array_merge($params, $inparams);
-        }
-
-        return [
-            'sql' => implode(' AND ', $conditions),
-            'params' => $params,
-        ];
-    }
-
-    /**
-     * Build SQL scope for closed session queries.
-     *
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int[] $roleids Role filter.
-     * @return array{sql: string, params: array}
-     */
-    protected function build_session_scope_sql(string $level, int $courseid, int $userid, array $roleids): array {
-        global $DB;
-
-        $conditions = ['1 = 1'];
-        $params = [];
-
-        if ($level === self::LEVEL_COURSE && $courseid > 0) {
-            $conditions[] = 's.courseid = :courseid';
-            $params['courseid'] = $courseid;
-        } else if ($level === self::LEVEL_USER) {
-            $conditions[] = 's.courseid = :courseid';
-            $conditions[] = 's.userid = :userid';
-            $params['courseid'] = $courseid;
-            $params['userid'] = $userid;
-        } else if ($level === self::LEVEL_SITE) {
-            $courseids = self::get_accessible_courseids();
-            if ($courseids === []) {
-                $conditions[] = '1 = 0';
-            } else {
-                [$insql, $inparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'sitesessioncourse');
-                $conditions[] = "s.courseid {$insql}";
-                $params = array_merge($params, $inparams);
-            }
-        }
-
-        $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($userids === []) {
-            $conditions[] = '1 = 0';
-        } else if ($level !== self::LEVEL_USER) {
-            [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'scopeuser');
-            $conditions[] = "s.userid {$insql}";
-            $params = array_merge($params, $inparams);
-        }
-
-        return [
-            'sql' => implode(' AND ', $conditions),
-            'params' => $params,
-        ];
-    }
-
-    /**
-     * Build SQL scope for open session queries.
-     *
-     * @param string $level Report level.
-     * @param int $courseid Course id.
-     * @param int $userid User id.
-     * @param int[] $roleids Role filter.
-     * @return array{sql: string, params: array}
-     */
-    protected function build_open_session_scope_sql(string $level, int $courseid, int $userid, array $roleids): array {
-        global $DB;
-
-        $conditions = ['1 = 1'];
-        $params = [];
-
-        if ($level === self::LEVEL_COURSE && $courseid > 0) {
-            $conditions[] = 'o.courseid = :opencourseid';
-            $params['opencourseid'] = $courseid;
-        } else if ($level === self::LEVEL_USER) {
-            $conditions[] = 'o.courseid = :opencourseid';
-            $conditions[] = 'o.userid = :openuserid';
-            $params['opencourseid'] = $courseid;
-            $params['openuserid'] = $userid;
-        } else if ($level === self::LEVEL_SITE) {
-            $courseids = self::get_accessible_courseids();
-            if ($courseids === []) {
-                $conditions[] = '1 = 0';
-            } else {
-                [$insql, $inparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'siteopencourse');
-                $conditions[] = "o.courseid {$insql}";
-                $params = array_merge($params, $inparams);
-            }
-        }
-
-        $userids = $this->get_in_scope_userids($level, $courseid, $userid, $roleids);
-        if ($userids === []) {
-            $conditions[] = '1 = 0';
-        } else if ($level !== self::LEVEL_USER) {
-            [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'openscopeuser');
-            $conditions[] = "o.userid {$insql}";
-            $params = array_merge($params, $inparams);
-        }
-
-        return [
-            'sql' => implode(' AND ', $conditions),
-            'params' => $params,
+            tutor_message::MODE_NORMAL => 'msgnormal',
+            tutor_message::MODE_GUIDE => 'msgguide',
+            tutor_message::MODE_QUIZ => 'msgquiz',
+            tutor_message::MODE_TEACH => 'msgteach',
         ];
     }
 
@@ -2136,18 +2064,18 @@ class tutor_usage_report_service {
     protected function empty_row_metrics(): array {
         return [
             'messages' => 0,
-            'normal' => 0,
-            'guide' => 0,
-            'quiz' => 0,
-            'teach' => 0,
+            tutor_message::MODE_NORMAL => 0,
+            tutor_message::MODE_GUIDE => 0,
+            tutor_message::MODE_QUIZ => 0,
+            tutor_message::MODE_TEACH => 0,
             'sessions' => 0,
             'duration' => 0,
-            'sessiondurations' => [],
             'lastactive' => 0,
             'activeuserids' => [],
             'activedaysbyuser' => [],
         ];
     }
+
 
     /**
      * Format a mode count as a percentage of total messages.

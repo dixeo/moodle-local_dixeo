@@ -25,6 +25,7 @@ use local_dixeo\event\tutor_usage_report_viewed;
 use local_dixeo\service\tutor_synthesis_service;
 use local_dixeo\service\tutor_usage_performance_service;
 use local_dixeo\service\tutor_usage_report_service;
+use local_dixeo\util\site_calendar;
 
 /**
  * Renderable for the tutor usage report page.
@@ -116,7 +117,7 @@ class tutor_usage_report_page implements renderable, templatable {
         );
 
         $page = max(0, $request->page);
-        $perpage = max(1, $request->perpage);
+        $perpage = $request->perpage;
         $baseparams = $this->base_url_params($view, $period);
         $rowsresult = $reportservice->get_rows(
             $request->level,
@@ -246,6 +247,17 @@ class tutor_usage_report_page implements renderable, templatable {
             'columns' => $this->build_column_items($reportservice, $baseparams),
             'rows' => $rowsresult['rows'],
             'hasrows' => !empty($rowsresult['rows']),
+            'emptymessage' => get_string(
+                $request->level === tutor_usage_report_service::LEVEL_SITE
+                    ? 'tutor_usage_report_no_courses'
+                    : 'tutor_usage_report_no_rows',
+                'local_dixeo'
+            ),
+            'timezonenote' => get_string(
+                'tutor_usage_report_timezone_note',
+                'local_dixeo',
+                \core_date::get_localised_timezone(site_calendar::timezone())
+            ),
             'paginationbar' => $paginationbar,
             'haspagination' => $haspagination,
             'exportselector' => $exportselector,
@@ -480,7 +492,8 @@ class tutor_usage_report_page implements renderable, templatable {
         }
 
         if ($request->level === tutor_usage_report_service::LEVEL_USER && $request->userid > 0) {
-            $user = \core_user::get_user($request->userid, 'id, firstname, lastname', IGNORE_MISSING);
+            $namefields = \core_user\fields::for_name()->get_sql('', false, '', '', false)->selects;
+            $user = \core_user::get_user($request->userid, 'id, ' . $namefields, IGNORE_MISSING);
             $items[] = [
                 'label' => $user ? fullname($user) : get_string('user'),
                 'url' => null,

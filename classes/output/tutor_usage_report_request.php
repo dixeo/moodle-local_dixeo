@@ -26,6 +26,9 @@ use local_dixeo\service\tutor_usage_report_service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class tutor_usage_report_request {
+    /** @var int Largest number of summary rows on one page. */
+    public const MAX_PERPAGE = 100;
+
     /** @var string Report level (site|course|user). */
     public string $level;
 
@@ -134,7 +137,7 @@ final class tutor_usage_report_request {
             optional_param('rolescope', tutor_usage_report_service::ROLE_SCOPE_DEFAULT, PARAM_ALPHA)
         );
         $request->page = optional_param('page', 0, PARAM_INT);
-        $request->perpage = optional_param('perpage', 50, PARAM_INT);
+        $request->perpage = min(self::MAX_PERPAGE, max(1, optional_param('perpage', 50, PARAM_INT)));
 
         if (
             !in_array(
@@ -208,7 +211,7 @@ final class tutor_usage_report_request {
             (string) ($params['rolescope'] ?? tutor_usage_report_service::ROLE_SCOPE_DEFAULT)
         );
         $request->page = (int) ($params['page'] ?? 0);
-        $request->perpage = (int) ($params['perpage'] ?? 50);
+        $request->perpage = min(self::MAX_PERPAGE, max(1, (int) ($params['perpage'] ?? 50)));
         $request->set_sort(
             (string) ($params['sort'] ?? tutor_usage_report_service::SORT_DEFAULT),
             (string) ($params['sortdir'] ?? '')
