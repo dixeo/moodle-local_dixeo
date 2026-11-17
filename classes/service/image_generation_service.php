@@ -429,9 +429,11 @@ class image_generation_service {
             if ($block) {
                 $blocktitle = '';
                 if (!empty($block->configdata)) {
-                    $config = @unserialize($block->configdata);
-                    if (is_object($config) && !empty($config->title)) {
-                        $blocktitle = (string) $config->title;
+                    // Core stores block configdata as base64 of a serialised stdClass.
+                    $raw = base64_decode((string) $block->configdata, true);
+                    $config = $raw === false ? null : unserialize_object($raw);
+                    if ($config !== null && !empty($config->title) && is_string($config->title)) {
+                        $blocktitle = $config->title;
                     }
                 }
                 if ($blocktitle !== '') {
