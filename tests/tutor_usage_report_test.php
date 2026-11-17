@@ -143,7 +143,16 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $recorder->record_message((int) $user->id, (int) $course->id, tutor_message::MODE_QUIZ, 0, $t3);
 
         $first = $aggregator->aggregate_day($daystart, $t3 + tutor_usage_aggregator::SESSION_TIMEOUT + 5);
-        $this->assertGreaterThan(0, $first['dailyrows']);
+        $this->assertSame(1, $first['dailyrows']);
+        $daily = $DB->get_record(tutor_usage_aggregator::TABLE_DAILY, [
+            'daystart' => $daystart,
+            'courseid' => $course->id,
+            'userid' => $user->id,
+        ], '*', MUST_EXIST);
+        $this->assertSame(3, (int) $daily->messages);
+        $this->assertSame(2, (int) $daily->msgnormal);
+        $this->assertSame(1, (int) $daily->msgquiz);
+        $this->assertSame($t3, (int) $daily->lastactive);
         $sessionsafterfirst = $DB->count_records(tutor_usage_aggregator::TABLE_SESSION);
 
         $second = $aggregator->aggregate_day($daystart, $t3 + tutor_usage_aggregator::SESSION_TIMEOUT + 5);
@@ -220,6 +229,10 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $this->assertSame(1, $DB->count_records(tutor_usage_aggregator::TABLE_DAILY, [
             'daystart' => $yesterday,
         ]));
+        $daily = $DB->get_record(tutor_usage_aggregator::TABLE_DAILY, ['daystart' => $yesterday], '*', MUST_EXIST);
+        $this->assertSame(1, (int) $daily->messages);
+        $this->assertSame(1, (int) $daily->msgnormal);
+        $this->assertSame(1, (int) $daily->slot0);
 
         // Second run finds nothing pending.
         $again = $aggregator->aggregate_pending_days($now);

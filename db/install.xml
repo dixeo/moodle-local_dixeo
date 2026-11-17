@@ -147,26 +147,50 @@
         <INDEX NAME="idx_course_cm_time" UNIQUE="false" FIELDS="courseid, cmid, timecreated" COMMENT="Module breakdown"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="local_dixeo_tutor_usage_daily" COMMENT="Daily tutor usage rollups by course, user, module, and mode">
+    <TABLE NAME="local_dixeo_tutor_usage_daily" COMMENT="Daily tutor usage totals per site day, course and user">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="daystart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Site-timezone midnight for the day"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
-        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="mode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="normal" SEQUENCE="false"/>
-        <FIELD NAME="messages" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="messages" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages sent, the sum of the four mode columns"/>
+        <FIELD NAME="msgnormal" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages sent in normal mode"/>
+        <FIELD NAME="msgguide" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages sent in guide mode"/>
+        <FIELD NAME="msgquiz" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages sent in quiz mode"/>
+        <FIELD NAME="msgteach" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages sent in teach mode"/>
         <FIELD NAME="quizcreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="lessoncreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="lastactive" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="slot0" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 00:00 to 03:00 site time"/>
+        <FIELD NAME="slot1" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 03:00 to 06:00 site time"/>
+        <FIELD NAME="slot2" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 06:00 to 09:00 site time"/>
+        <FIELD NAME="slot3" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 09:00 to 12:00 site time"/>
+        <FIELD NAME="slot4" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 12:00 to 15:00 site time"/>
+        <FIELD NAME="slot5" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 15:00 to 18:00 site time"/>
+        <FIELD NAME="slot6" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 18:00 to 21:00 site time"/>
+        <FIELD NAME="slot7" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Messages from 21:00 to 24:00 site time"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_daily_grain" UNIQUE="true" FIELDS="daystart, courseid, userid, cmid, mode" COMMENT="Unique daily grain"/>
+        <INDEX NAME="uix_daily_day_course_user" UNIQUE="true" FIELDS="daystart, courseid, userid" COMMENT="One row per site day, course and user"/>
         <INDEX NAME="idx_daily_course_day" UNIQUE="false" FIELDS="courseid, daystart" COMMENT="Course period lookup"/>
         <INDEX NAME="idx_daily_user_day" UNIQUE="false" FIELDS="userid, daystart" COMMENT="User period lookup"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_dixeo_tutor_usage_cover" COMMENT="Site days whose tutor usage totals are built">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="daystart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Site-timezone midnight for the day"/>
+        <FIELD NAME="dirty" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when an event was recorded into the day after it was built"/>
+        <FIELD NAME="timebuilt" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Time the day was last built"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uix_cover_daystart" UNIQUE="true" FIELDS="daystart" COMMENT="One row per site day"/>
       </INDEXES>
     </TABLE>
     <TABLE NAME="local_dixeo_tutor_usage_session" COMMENT="Closed tutor usage sessions">

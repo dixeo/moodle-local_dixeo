@@ -33,6 +33,7 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\external\service_factory;
+use local_dixeo\repository\tutor_usage_rollup_repository;
 use local_dixeo\service\generation_language_helper;
 use local_dixeo\task\erase_tutor_conversations;
 
@@ -190,12 +191,22 @@ class provider implements
                 'daystart' => 'privacy:metadata:tutor_usage_daily:daystart',
                 'courseid' => 'privacy:metadata:tutor_usage_daily:courseid',
                 'userid' => 'privacy:metadata:tutor_usage_daily:userid',
-                'cmid' => 'privacy:metadata:tutor_usage_daily:cmid',
-                'mode' => 'privacy:metadata:tutor_usage_daily:mode',
                 'messages' => 'privacy:metadata:tutor_usage_daily:messages',
+                'msgnormal' => 'privacy:metadata:tutor_usage_daily:msgnormal',
+                'msgguide' => 'privacy:metadata:tutor_usage_daily:msgguide',
+                'msgquiz' => 'privacy:metadata:tutor_usage_daily:msgquiz',
+                'msgteach' => 'privacy:metadata:tutor_usage_daily:msgteach',
                 'quizcreated' => 'privacy:metadata:tutor_usage_daily:quizcreated',
                 'lessoncreated' => 'privacy:metadata:tutor_usage_daily:lessoncreated',
                 'lastactive' => 'privacy:metadata:tutor_usage_daily:lastactive',
+                'slot0' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot1' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot2' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot3' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot4' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot5' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot6' => 'privacy:metadata:tutor_usage_daily:slot',
+                'slot7' => 'privacy:metadata:tutor_usage_daily:slot',
             ],
             'privacy:metadata:tutor_usage_daily'
         );
@@ -300,7 +311,10 @@ class provider implements
             );
         }
 
-        if ($DB->record_exists(self::TABLE_TUTOR_USAGE_EVENT, ['userid' => $userid])) {
+        if (
+            $DB->record_exists(self::TABLE_TUTOR_USAGE_EVENT, ['userid' => $userid])
+            || $DB->record_exists(self::TABLE_TUTOR_USAGE_DAILY, ['userid' => $userid, 'courseid' => 0])
+        ) {
             \context_system::instance(0, MUST_EXIST, false);
             $contextlist->add_from_sql(
                 'SELECT id FROM {context} WHERE contextlevel = :contextlevel AND instanceid = 0',
@@ -361,6 +375,16 @@ class provider implements
                   FROM {" . self::TABLE_TUTOR_USAGE_EVENT . "} tu
                   JOIN {context} ctx ON ctx.instanceid = tu.courseid AND ctx.contextlevel = :contextlevel
                  WHERE tu.userid = :userid AND tu.courseid > 0";
+
+        $contextlist->add_from_sql($sql, [
+            'contextlevel' => CONTEXT_COURSE,
+            'userid' => $userid,
+        ]);
+
+        $sql = "SELECT ctx.id
+                  FROM {" . self::TABLE_TUTOR_USAGE_DAILY . "} tud
+                  JOIN {context} ctx ON ctx.instanceid = tud.courseid AND ctx.contextlevel = :contextlevel
+                 WHERE tud.userid = :userid AND tud.courseid > 0";
 
         $contextlist->add_from_sql($sql, [
             'contextlevel' => CONTEXT_COURSE,
@@ -563,10 +587,32 @@ class provider implements
             ];
         }
 
+        $exportdaily = [];
+        foreach ($daily as $record) {
+            $slots = [];
+            for ($k = 0; $k < 8; $k++) {
+                $slots[] = (int) $record->{'slot' . $k};
+            }
+            $exportdaily[] = (object) [
+                'daystart' => transform::datetime((int) $record->daystart),
+                'courseid' => (int) $record->courseid,
+                'msgnormal' => (int) $record->msgnormal,
+                'msgguide' => (int) $record->msgguide,
+                'msgquiz' => (int) $record->msgquiz,
+                'msgteach' => (int) $record->msgteach,
+                'messages' => (int) $record->messages,
+                'quizcreated' => (int) $record->quizcreated,
+                'lessoncreated' => (int) $record->lessoncreated,
+                'lastactive' => transform::datetime((int) $record->lastactive),
+                'slots' => $slots,
+            ];
+        }
+
         writer::with_context($context)->export_data(
             [get_string('privacy:path:tutor_usage', 'local_dixeo')],
             (object) [
                 'events' => $exportevents,
+                'daily' => $exportdaily,
                 'sessions' => $exportsessions,
             ]
         );
@@ -821,10 +867,7 @@ class provider implements
             $DB->delete_records(self::TABLE_CONSENT);
             $DB->delete_records(self::TABLE_JOBS, ['courseid' => 0]);
             $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => 0]);
-            $DB->delete_records(self::TABLE_TUTOR_USAGE_EVENT, ['courseid' => 0]);
-            $DB->delete_records(self::TABLE_TUTOR_USAGE_DAILY, ['courseid' => 0]);
-            $DB->delete_records(self::TABLE_TUTOR_USAGE_SESSION, ['courseid' => 0]);
-            $DB->delete_records(self::TABLE_TUTOR_USAGE_OPEN, ['courseid' => 0]);
+            self::delete_course_tutor_usage(0);
             return;
         }
 
@@ -847,10 +890,7 @@ class provider implements
         $DB->delete_records(self::TABLE_JOBS, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_CREDIT_USAGE, ['courseid' => $courseid]);
         $DB->delete_records(self::TABLE_IMAGE_JOB, ['courseid' => $courseid]);
-        $DB->delete_records(self::TABLE_TUTOR_USAGE_EVENT, ['courseid' => $courseid]);
-        $DB->delete_records(self::TABLE_TUTOR_USAGE_DAILY, ['courseid' => $courseid]);
-        $DB->delete_records(self::TABLE_TUTOR_USAGE_SESSION, ['courseid' => $courseid]);
-        $DB->delete_records(self::TABLE_TUTOR_USAGE_OPEN, ['courseid' => $courseid]);
+        self::delete_course_tutor_usage($courseid);
         $DB->delete_records(self::TABLE_TUTOR_SYNTHESIS, ['courseid' => $courseid]);
 
         if ($remotedeleted) {
@@ -987,10 +1027,42 @@ class provider implements
             $params['courseid'] = $courseid;
         }
 
-        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_EVENT, 'userid = :userid' . $coursesql, $params);
-        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_DAILY, 'userid = :userid' . $coursesql, $params);
-        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_SESSION, 'userid = :userid' . $coursesql, $params);
-        $DB->delete_records_select(self::TABLE_TUTOR_USAGE_OPEN, 'userid = :userid' . $coursesql, $params);
+        tutor_usage_rollup_repository::with_lock(static function () use ($DB, $coursesql, $params): void {
+            foreach (self::tutor_usage_tables() as $table) {
+                $DB->delete_records_select($table, 'userid = :userid' . $coursesql, $params);
+            }
+        });
+    }
+
+    /**
+     * Delete all tutor usage analytics of one course, or the site-wide rows for course id 0.
+     *
+     * Runs under the rollup lock so a day build cannot write rows from events read before the deletion.
+     *
+     * @param int $courseid Course id, or 0 for site-wide rows.
+     */
+    private static function delete_course_tutor_usage(int $courseid): void {
+        global $DB;
+
+        tutor_usage_rollup_repository::with_lock(static function () use ($DB, $courseid): void {
+            foreach (self::tutor_usage_tables() as $table) {
+                $DB->delete_records($table, ['courseid' => $courseid]);
+            }
+        });
+    }
+
+    /**
+     * Tutor usage analytics tables that hold personal data.
+     *
+     * @return string[]
+     */
+    private static function tutor_usage_tables(): array {
+        return [
+            self::TABLE_TUTOR_USAGE_EVENT,
+            self::TABLE_TUTOR_USAGE_DAILY,
+            self::TABLE_TUTOR_USAGE_SESSION,
+            self::TABLE_TUTOR_USAGE_OPEN,
+        ];
     }
 
     /**
@@ -1014,6 +1086,13 @@ class provider implements
                 "SELECT c.userid AS userid
                    FROM {" . self::TABLE_CONSENT . "} c
                   WHERE c.userid > 0",
+                []
+            );
+            $userlist->add_from_sql(
+                'userid',
+                "SELECT tud.userid AS userid
+                   FROM {" . self::TABLE_TUTOR_USAGE_DAILY . "} tud
+                  WHERE tud.courseid = 0 AND tud.userid > 0",
                 []
             );
             return;
@@ -1075,6 +1154,14 @@ class provider implements
 
         $userlist->add_from_sql(
             'userid',
+            "SELECT tud.userid AS userid
+               FROM {" . self::TABLE_TUTOR_USAGE_DAILY . "} tud
+              WHERE tud.courseid = :courseid AND tud.userid > 0",
+            $params
+        );
+
+        $userlist->add_from_sql(
+            'userid',
             "SELECT ts.userid AS userid
                FROM {" . self::TABLE_TUTOR_SYNTHESIS . "} ts
               WHERE ts.courseid = :courseid AND ts.userid > 0",
@@ -1115,26 +1202,11 @@ class provider implements
                 "courseid = 0 AND userid {$insql}",
                 $params
             );
-            $DB->delete_records_select(
-                self::TABLE_TUTOR_USAGE_EVENT,
-                "userid {$insql}",
-                $params
-            );
-            $DB->delete_records_select(
-                self::TABLE_TUTOR_USAGE_DAILY,
-                "userid {$insql}",
-                $params
-            );
-            $DB->delete_records_select(
-                self::TABLE_TUTOR_USAGE_SESSION,
-                "userid {$insql}",
-                $params
-            );
-            $DB->delete_records_select(
-                self::TABLE_TUTOR_USAGE_OPEN,
-                "userid {$insql}",
-                $params
-            );
+            tutor_usage_rollup_repository::with_lock(static function () use ($DB, $insql, $params): void {
+                foreach (self::tutor_usage_tables() as $table) {
+                    $DB->delete_records_select($table, "userid {$insql}", $params);
+                }
+            });
             return;
         }
 

@@ -17,6 +17,8 @@
 namespace local_dixeo\service;
 
 use local_dixeo\dto\tutor_message;
+use local_dixeo\repository\tutor_usage_rollup_repository;
+use local_dixeo\util\site_calendar;
 
 /**
  * Records tutor usage analytics events (no message content).
@@ -168,6 +170,10 @@ class tutor_usage_recorder {
 
         if ($id > 0 && $eventtype === self::EVENT_MESSAGE) {
             (new tutor_usage_aggregator())->touch_open_session($userid, $courseid, $timecreated);
+        }
+        if ($id > 0 && $timecreated < site_calendar::day_start(time())) {
+            // A late event changes a past day that may already be built.
+            (new tutor_usage_rollup_repository())->mark_dirty($timecreated);
         }
 
         return $id;

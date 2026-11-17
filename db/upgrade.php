@@ -685,6 +685,25 @@ function xmldb_local_dixeo_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026111200, 'local', 'dixeo');
     }
 
+    if ($oldversion < 2026111700) {
+        // Daily totals are derived from the events, so the table is recreated empty and rebuilt by the task.
+        $dailytable = new xmldb_table('local_dixeo_tutor_usage_daily');
+        if ($dbman->table_exists($dailytable)) {
+            $dbman->drop_table($dailytable);
+        }
+        $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'local_dixeo_tutor_usage_daily');
+
+        $covertable = new xmldb_table('local_dixeo_tutor_usage_cover');
+        if (!$dbman->table_exists($covertable)) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'local_dixeo_tutor_usage_cover');
+        }
+
+        unset_config('tutor_usage_rollup_timezone', 'local_dixeo');
+        unset_config('tutor_usage_backfill_next', 'local_dixeo');
+
+        upgrade_plugin_savepoint(true, 2026111700, 'local', 'dixeo');
+    }
+
     return true;
 }
 

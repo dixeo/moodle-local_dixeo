@@ -37,6 +37,7 @@ use local_dixeo\external\service_factory;
 use local_dixeo\privacy\provider;
 use local_dixeo\privacy\remote_state;
 use local_dixeo\repository\job_repository;
+use local_dixeo\repository\tutor_usage_rollup_repository;
 use local_dixeo\service\tutor_service;
 use local_dixeo\task\erase_tutor_conversations;
 
@@ -605,5 +606,124 @@ final class privacy_provider_test extends \core_privacy\tests\provider_testcase 
         delete_user($user);
 
         $this->assertSame([], $this->queued_erasure_scopes());
+    }
+
+    /**
+     * Insert a daily tutor usage row.
+     *
+     * @param int $userid User id.
+     * @param int $courseid Course id (0 for site-wide rows).
+     * @param int $daystart Day start.
+     */
+    private function insert_daily_row(int $userid, int $courseid, int $daystart): void {
+        global $DB;
+
+        $record = (object) [
+            'daystart' => $daystart,
+            'courseid' => $courseid,
+            'userid' => $userid,
+            'messages' => 3,
+            'msgnormal' => 2,
+            'msgguide' => 1,
+            'msgquiz' => 0,
+            'msgteach' => 0,
+            'quizcreated' => 1,
+            'lessoncreated' => 0,
+            'lastactive' => $daystart + HOURSECS,
+        ];
+        for ($k = 0; $k < 8; $k++) {
+            $record->{'slot' . $k} = $k === 0 ? 3 : 0;
+        }
+        $DB->insert_record(tutor_usage_rollup_repository::TABLE_DAILY, $record);
+    }
+
+    /**
+     * Daily tutor usage totals are exported and deleted with the user's course data.
+     */
+    public function test_export_and_delete_tutor_usage_daily(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $daystart = usergetmidnight(time() - DAYSECS);
+        $this->insert_daily_row((int) $user->id, (int) $course->id, $daystart);
+
+        $coursecontext = \context_course::instance((int) $course->id);
+        writer::reset();
+        $approved = new approved_contextlist($user, 'local_dixeo', [$coursecontext->id]);
+        provider::export_user_data($approved);
+
+        $data = writer::with_context($coursecontext)->get_data([get_string('privacy:path:tutor_usage', 'local_dixeo')]);
+        $this->assertCount(1, $data->daily);
+        $daily = $data->daily[0];
+        $this->assertSame((int) $course->id, $daily->courseid);
+        $this->assertSame(3, $daily->messages);
+        $this->assertSame(2, $daily->msgnormal);
+        $this->assertSame(1, $daily->quizcreated);
+        $this->assertSame([3, 0, 0, 0, 0, 0, 0, 0], $daily->slots);
+        $this->assertSame(\core_privacy\local\request\transform::datetime($daystart), $daily->daystart);
+
+        provider::delete_data_for_user($approved);
+        $this->assertFalse($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['userid' => $user->id]));
+    }
+
+    /**
+     * Deleting a course context removes its daily tutor usage totals.
+     */
+    public function test_course_context_deletion_removes_tutor_usage_daily(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $othercourse = $this->getDataGenerator()->create_course();
+        $daystart = usergetmidnight(time() - DAYSECS);
+        $this->insert_daily_row((int) $user->id, (int) $course->id, $daystart);
+        $this->insert_daily_row((int) $user->id, (int) $othercourse->id, $daystart);
+
+        $client = $this->createMock(client::class);
+        $client->method('delete_files')->willReturn([]);
+        service_factory::set_test_client($client);
+
+        provider::delete_data_for_all_users_in_context(\context_course::instance((int) $course->id));
+
+        $this->assertFalse($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['courseid' => $course->id]));
+        $this->assertTrue($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['courseid' => $othercourse->id]));
+    }
+
+    /**
+     * A daily row with no matching event is discovered and erased.
+     */
+    public function test_daily_rows_without_events_are_discovered_and_deleted(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        $course = $this->getDataGenerator()->create_course();
+        $daystart = usergetmidnight(time() - DAYSECS);
+        $this->insert_daily_row((int) $user->id, (int) $course->id, $daystart);
+        $this->insert_daily_row((int) $user->id, 0, $daystart);
+        $this->insert_daily_row((int) $other->id, (int) $course->id, $daystart);
+
+        $coursecontext = \context_course::instance((int) $course->id);
+        $systemcontext = \context_system::instance();
+        $contextids = provider::get_contexts_for_userid((int) $user->id)->get_contextids();
+        $this->assertContains((int) $coursecontext->id, array_map('intval', $contextids));
+        $this->assertContains((int) $systemcontext->id, array_map('intval', $contextids));
+
+        $userlist = new userlist($coursecontext, 'local_dixeo');
+        provider::get_users_in_context($userlist);
+        $this->assertContains((int) $user->id, $userlist->get_userids());
+        $this->assertContains((int) $other->id, $userlist->get_userids());
+
+        $userlist = new userlist($systemcontext, 'local_dixeo');
+        provider::get_users_in_context($userlist);
+        $this->assertContains((int) $user->id, $userlist->get_userids());
+
+        provider::delete_data_for_user(new approved_contextlist($user, 'local_dixeo', [$systemcontext->id]));
+        $this->assertFalse($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['userid' => $user->id]));
+        $this->assertTrue($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['userid' => $other->id]));
+
+        provider::delete_data_for_users(new approved_userlist($coursecontext, 'local_dixeo', [(int) $other->id]));
+        $this->assertFalse($DB->record_exists(tutor_usage_rollup_repository::TABLE_DAILY, ['userid' => $other->id]));
     }
 }

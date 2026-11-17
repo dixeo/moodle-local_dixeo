@@ -16,13 +16,15 @@
 
 namespace local_dixeo\task;
 
-use local_dixeo\external\service_factory;
 use local_dixeo\service\tutor_usage_aggregator;
 
 /**
- * Daily aggregation of tutor usage events into rollups and sessions.
+ * Hourly build of tutor usage statistics.
  *
- * Catches up from the last successfully aggregated day through yesterday.
+ * Each run resets the daily totals when the site timezone changed, closes the past days
+ * (daily totals and sessions) from the last watermark through yesterday, then rebuilds
+ * days that received late events and back-fills older days within a bounded budget.
+ * The task is local only and sends nothing to Dixeo, so it also runs while Dixeo is off.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
@@ -39,38 +41,45 @@ class aggregate_tutor_usage extends \core\task\scheduled_task {
     }
 
     /**
-     * Execute aggregation for all pending calendar days through yesterday.
+     * Build the pending tutor usage statistics.
      */
     public function execute(): void {
-        if (!service_factory::get_settings_config()->enabled_for(\context_system::instance())) {
-            return;
+        $aggregator = new tutor_usage_aggregator();
+
+        if ($aggregator->ensure_rollup_timezone()) {
+            mtrace('Tutor usage daily totals reset for the site timezone');
         }
 
-        $aggregator = new tutor_usage_aggregator();
         $result = $aggregator->aggregate_pending_days();
         $daycount = count($result['days']);
-
         if ($daycount === 0) {
             mtrace(sprintf(
                 'Tutor usage aggregation up to date (last daystart=%d)',
                 $aggregator->get_last_aggregated_day()
             ));
-            return;
+        } else {
+            mtrace(sprintf(
+                'Tutor usage aggregated %d day(s) from daystart=%d to daystart=%d',
+                $daycount,
+                $result['from'],
+                $result['to']
+            ));
+            foreach ($result['days'] as $day) {
+                mtrace(sprintf(
+                    '  daystart=%d dailyrows=%d sessionsclosed=%d',
+                    $day['daystart'],
+                    $day['dailyrows'],
+                    $day['sessionsclosed']
+                ));
+            }
         }
 
+        $backfill = $aggregator->backfill();
         mtrace(sprintf(
-            'Tutor usage aggregated %d day(s) from daystart=%d to daystart=%d',
-            $daycount,
-            $result['from'],
-            $result['to']
+            'Tutor usage back-fill rebuilt %d dirty day(s), built %d day(s)%s',
+            $backfill['dirty'],
+            $backfill['built'],
+            $backfill['done'] ? ', complete' : ''
         ));
-        foreach ($result['days'] as $day) {
-            mtrace(sprintf(
-                '  daystart=%d dailyrows=%d sessionsclosed=%d',
-                $day['daystart'],
-                $day['dailyrows'],
-                $day['sessionsclosed']
-            ));
-        }
     }
 }

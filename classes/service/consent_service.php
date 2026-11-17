@@ -16,6 +16,8 @@
 
 namespace local_dixeo\service;
 
+use local_dixeo\repository\tutor_usage_rollup_repository;
+
 /**
  * Records one Terms of Use decision per user action.
  *
@@ -530,10 +532,13 @@ class consent_service {
         if ($userid < 1) {
             return;
         }
-        $DB->delete_records(tutor_usage_recorder::TABLE_EVENT, ['userid' => $userid]);
-        $DB->delete_records(tutor_usage_aggregator::TABLE_DAILY, ['userid' => $userid]);
-        $DB->delete_records(tutor_usage_aggregator::TABLE_SESSION, ['userid' => $userid]);
-        $DB->delete_records(tutor_usage_aggregator::TABLE_OPEN, ['userid' => $userid]);
+        // The rollup lock keeps a day build from writing rows from events read before this deletion.
+        tutor_usage_rollup_repository::with_lock(static function () use ($DB, $userid): void {
+            $DB->delete_records(tutor_usage_recorder::TABLE_EVENT, ['userid' => $userid]);
+            $DB->delete_records(tutor_usage_aggregator::TABLE_DAILY, ['userid' => $userid]);
+            $DB->delete_records(tutor_usage_aggregator::TABLE_SESSION, ['userid' => $userid]);
+            $DB->delete_records(tutor_usage_aggregator::TABLE_OPEN, ['userid' => $userid]);
+        });
     }
 
     /**

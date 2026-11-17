@@ -16,16 +16,23 @@
 
 namespace local_dixeo\service;
 
+use local_dixeo\repository\tutor_usage_rollup_repository;
+use local_dixeo\util\site_calendar;
+
 /**
- * Aggregates tutor usage events into daily rollups and closed sessions.
+ * Aggregates tutor usage events into daily totals and closed sessions.
+ *
+ * The forward run closes each past day (daily totals and sessions) from a watermark.
+ * Back-fill builds the daily totals of older days and rebuilds days that received a
+ * late event; it never touches sessions, which stay owned by the forward run.
  *
  * @package    local_dixeo
  * @copyright  2026 Edunao SAS (contact@edunao.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class tutor_usage_aggregator {
-    /** @var string Daily rollup table. */
-    public const TABLE_DAILY = 'local_dixeo_tutor_usage_daily';
+    /** @var string Daily totals table. */
+    public const TABLE_DAILY = tutor_usage_rollup_repository::TABLE_DAILY;
 
     /** @var string Closed sessions table. */
     public const TABLE_SESSION = 'local_dixeo_tutor_usage_session';
@@ -44,6 +51,108 @@ class tutor_usage_aggregator {
 
     /** @var int Maximum days to catch up in one task run (and on first run). */
     public const MAX_CATCHUP_DAYS = 180;
+
+    /** @var int Maximum days built by one back-fill run, dirty days included. */
+    public const BACKFILL_MAX_DAYS = 31;
+
+    /** @var int Back-fill time budget in seconds; no new day is started after it. */
+    public const BACKFILL_TIME_BUDGET = 60;
+
+    /** @var string Plugin config key: next day start back-fill examines going back; -1 when done. */
+    public const CONFIG_BACKFILL_NEXT = 'tutor_usage_backfill_next';
+
+    /** @var tutor_usage_rollup_repository Daily totals repository. */
+    private tutor_usage_rollup_repository $rollup;
+
+    /**
+     * Constructor.
+     *
+     * @param tutor_usage_rollup_repository|null $rollup Daily totals repository.
+     */
+    public function __construct(?tutor_usage_rollup_repository $rollup = null) {
+        $this->rollup = $rollup ?? new tutor_usage_rollup_repository();
+    }
+
+    /**
+     * Reset the daily totals when the site timezone changed, or initialise them on first run.
+     *
+     * @param int|null $now Reference timestamp (defaults to now).
+     * @return bool True when the daily totals were reset.
+     */
+    public function ensure_rollup_timezone(?int $now = null): bool {
+        $now = $now ?? time();
+        $timezone = site_calendar::timezone();
+        $stored = get_config('local_dixeo', tutor_usage_rollup_repository::CONFIG_TIMEZONE);
+        if ($stored !== false && (string) $stored === $timezone) {
+            return false;
+        }
+
+        $this->rollup->reset();
+        set_config(tutor_usage_rollup_repository::CONFIG_TIMEZONE, $timezone, 'local_dixeo');
+        set_config(self::CONFIG_BACKFILL_NEXT, (string) $this->get_previous_day_start($now), 'local_dixeo');
+        return true;
+    }
+
+    /**
+     * Rebuild dirty days, then build unbuilt days newest first down to the earliest event day.
+     *
+     * A run builds at most BACKFILL_MAX_DAYS days and starts no new day once
+     * BACKFILL_TIME_BUDGET seconds have passed. The cursor is stored after each day, so the
+     * next run resumes where this one stopped. Each build holds the rollup lock on its own.
+     *
+     * @param int|null $now Reference timestamp (defaults to now).
+     * @return array{dirty: int, built: int, done: bool}
+     */
+    public function backfill(?int $now = null): array {
+        $now = $now ?? time();
+        $started = time();
+        $withinbudget = static fn(): bool => (time() - $started) < self::BACKFILL_TIME_BUDGET;
+
+        $dirty = 0;
+        foreach ($this->rollup->dirty_days(self::BACKFILL_MAX_DAYS) as $daystart) {
+            if (!$withinbudget()) {
+                break;
+            }
+            $this->build_day_locked($daystart);
+            $dirty++;
+        }
+
+        $built = 0;
+        $stored = get_config('local_dixeo', self::CONFIG_BACKFILL_NEXT);
+        $yesterday = $this->get_previous_day_start($now);
+        $cursor = $stored === false || $stored === '' ? $yesterday : (int) $stored;
+        if ($cursor === -1) {
+            return ['dirty' => $dirty, 'built' => 0, 'done' => true];
+        }
+
+        $earliest = $this->get_earliest_event_daystart();
+        $cursor = min($this->get_day_start($cursor), $yesterday);
+        while ($earliest > 0 && $cursor >= $earliest) {
+            if ($dirty + $built >= self::BACKFILL_MAX_DAYS || !$withinbudget()) {
+                set_config(self::CONFIG_BACKFILL_NEXT, (string) $cursor, 'local_dixeo');
+                return ['dirty' => $dirty, 'built' => $built, 'done' => false];
+            }
+            if (!$this->rollup->is_built($cursor)) {
+                $this->build_day_locked($cursor);
+                $built++;
+            }
+            $cursor = $this->get_day_start($cursor - 1);
+            set_config(self::CONFIG_BACKFILL_NEXT, (string) $cursor, 'local_dixeo');
+        }
+
+        set_config(self::CONFIG_BACKFILL_NEXT, '-1', 'local_dixeo');
+        return ['dirty' => $dirty, 'built' => $built, 'done' => true];
+    }
+
+    /**
+     * Build the daily totals of one day while holding the rollup lock.
+     *
+     * @param int $daystart Site day start.
+     * @return int Rows written.
+     */
+    protected function build_day_locked(int $daystart): int {
+        return (int) tutor_usage_rollup_repository::with_lock(fn() => $this->rollup->build_day($daystart));
+    }
 
     /**
      * Aggregate all pending calendar days from the last watermark through yesterday.
@@ -190,10 +299,10 @@ class tutor_usage_aggregator {
         $dayend = $this->get_day_end($daystart);
         $asof = $asof ?? ($dayend + 1);
 
+        $dailyrows = $this->build_day_locked($daystart);
+
         $transaction = $DB->start_delegated_transaction();
         try {
-            $DB->delete_records(self::TABLE_DAILY, ['daystart' => $daystart]);
-            $dailyrows = $this->rebuild_daily_rows($daystart, $dayend);
             $sessionsclosed = $this->process_sessions_for_day($daystart, $dayend, $asof);
             $transaction->allow_commit();
         } catch (\Throwable $e) {
@@ -206,53 +315,6 @@ class tutor_usage_aggregator {
             'dailyrows' => $dailyrows,
             'sessionsclosed' => $sessionsclosed,
         ];
-    }
-
-    /**
-     * Rebuild daily rollup rows for a day from events.
-     *
-     * @param int $daystart Day start timestamp.
-     * @param int $dayend Day end timestamp.
-     * @return int Number of daily rows inserted.
-     */
-    protected function rebuild_daily_rows(int $daystart, int $dayend): int {
-        global $DB;
-
-        $sql = "SELECT courseid, userid, cmid, mode,
-                       SUM(CASE WHEN eventtype = :msg THEN 1 ELSE 0 END) AS messages,
-                       SUM(CASE WHEN eventtype = :quiz THEN 1 ELSE 0 END) AS quizcreated,
-                       SUM(CASE WHEN eventtype = :lesson THEN 1 ELSE 0 END) AS lessoncreated,
-                       MAX(timecreated) AS lastactive
-                  FROM {" . tutor_usage_recorder::TABLE_EVENT . "}
-                 WHERE timecreated >= :timestart AND timecreated <= :timeend
-              GROUP BY courseid, userid, cmid, mode";
-
-        $rows = $DB->get_recordset_sql($sql, [
-            'msg' => tutor_usage_recorder::EVENT_MESSAGE,
-            'quiz' => tutor_usage_recorder::EVENT_QUIZ_CREATED,
-            'lesson' => tutor_usage_recorder::EVENT_LESSON_CREATED,
-            'timestart' => $daystart,
-            'timeend' => $dayend,
-        ]);
-
-        $count = 0;
-        foreach ($rows as $row) {
-            $DB->insert_record(self::TABLE_DAILY, (object) [
-                'daystart' => $daystart,
-                'courseid' => (int) $row->courseid,
-                'userid' => (int) $row->userid,
-                'cmid' => (int) $row->cmid,
-                'mode' => (string) $row->mode,
-                'messages' => (int) $row->messages,
-                'quizcreated' => (int) $row->quizcreated,
-                'lessoncreated' => (int) $row->lessoncreated,
-                'lastactive' => (int) $row->lastactive,
-            ]);
-            $count++;
-        }
-        $rows->close();
-
-        return $count;
     }
 
     /**
@@ -570,7 +632,7 @@ class tutor_usage_aggregator {
      * @return int
      */
     public function get_day_start(int $timestamp): int {
-        return usergetmidnight($timestamp);
+        return site_calendar::day_start($timestamp);
     }
 
     /**
@@ -580,8 +642,7 @@ class tutor_usage_aggregator {
      * @return int
      */
     public function get_day_end(int $daystart): int {
-        $date = usergetdate($daystart);
-        return make_timestamp($date['year'], $date['mon'], $date['mday'], 23, 59, 59);
+        return site_calendar::day_end($daystart);
     }
 
     /**
