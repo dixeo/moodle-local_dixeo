@@ -37,7 +37,7 @@ use local_dixeo\service\user_preference_service;
  */
 final class user_preference_service_test extends \advanced_testcase {
     /**
-     * Generation language is one catalogue preference and starts as the interface language.
+     * Generation language is one catalogue preference and defaults to the interface language.
      */
     public function test_generation_language_is_listed(): void {
         $this->resetAfterTest();
@@ -106,5 +106,36 @@ final class user_preference_service_test extends \advanced_testcase {
         set_preferences::execute(\context_module::instance($page->cmid)->id, 0, [
             ['name' => user_preference_service::GENERATION_LANGUAGE, 'value' => 'en'],
         ]);
+    }
+
+    /**
+     * The generation language help says the value defaults to the preferred language in every pack.
+     */
+    public function test_generation_language_help_text_in_every_pack(): void {
+        $expected = [
+            'en' => 'Language used for quizzes and lessons the tutor generates. Defaults to your preferred language.',
+            'fr' => 'Langue des tests et des leçons générés par le tuteur. Par défaut, votre langue préférée.',
+            'de' => 'Sprache für Quiz und Lektionen, die der Tutor erzeugt. Standardmäßig Ihre bevorzugte Sprache.',
+            'es' => 'Idioma de los cuestionarios y las lecciones que genera el tutor. '
+                . 'De forma predeterminada, su idioma preferido.',
+            'it' => 'Lingua dei quiz e delle lezioni generati dal tutor. Per impostazione predefinita, la lingua preferita.',
+            'pt' => 'Idioma dos testes e das lições gerados pelo tutor. Por predefinição, o seu idioma preferido.',
+        ];
+        foreach ($expected as $lang => $text) {
+            $this->assertSame($text, $this->plugin_strings($lang)['generation_language_desc'], $lang);
+        }
+        $this->assertStringNotContainsString('It starts as', $this->plugin_strings('en')['generation_language_desc']);
+    }
+
+    /**
+     * Read one local_dixeo language pack directly from disk.
+     *
+     * @param string $lang Language code.
+     * @return array String key to text.
+     */
+    private function plugin_strings(string $lang): array {
+        $string = [];
+        include(__DIR__ . "/../../lang/{$lang}/local_dixeo.php");
+        return $string;
     }
 }
