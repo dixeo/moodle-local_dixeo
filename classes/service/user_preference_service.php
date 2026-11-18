@@ -47,6 +47,27 @@ class user_preference_service {
     }
 
     /**
+     * Whether My preferences shows at least one row outside a course.
+     *
+     * Same rules as the preferences-only dialog: a catalogue preference marked shown, or the
+     * Terms of Use row. The per-course conversation row is never counted. No API call.
+     *
+     * @param int $userid
+     * @return bool
+     */
+    public static function offers_rows(int $userid): bool {
+        if ($userid < 1 || isguestuser($userid)) {
+            return false;
+        }
+        foreach (self::get_for_user($userid) as $preference) {
+            if (!empty($preference['show'])) {
+                return true;
+            }
+        }
+        return (new consent_service())->show_manage_link($userid);
+    }
+
+    /**
      * Store the submitted preferences for one user.
      *
      * Unknown names and invalid values are rejected. Preferences omitted from the

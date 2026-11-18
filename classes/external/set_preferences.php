@@ -32,7 +32,7 @@ use core_external\external_value;
 use local_dixeo\service\user_preference_service;
 
 /**
- * Stores submitted user preferences and clears the applied course cache.
+ * Stores submitted user preferences for the current user.
  */
 class set_preferences extends external_api {
     /**
@@ -42,10 +42,10 @@ class set_preferences extends external_api {
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'contextid' => new external_value(PARAM_INT, 'Context whose applied cache is cleared', VALUE_DEFAULT, 0),
+            'contextid' => new external_value(PARAM_INT, 'Context validated for the write', VALUE_DEFAULT, 0),
             'courseid' => new external_value(
                 PARAM_INT,
-                'Course used when the opener has no context id',
+                'Course validated when the opener has no context id',
                 VALUE_DEFAULT,
                 0
             ),
@@ -59,10 +59,10 @@ class set_preferences extends external_api {
     }
 
     /**
-     * Store preferences for the current user and clear the applied cache.
+     * Store preferences for the current user.
      *
-     * An empty list changes nothing. A course context clears that course. Any other
-     * accepted context clears every course cache, matching a Dixeo-layer settings save.
+     * An empty list changes nothing. The context is validated only; no cache is cleared,
+     * because user preferences are read live and no course cache depends on them.
      *
      * @param int $contextid System or course context. Zero uses $courseid or the system.
      * @param int $courseid Course id when $contextid is zero.
@@ -85,7 +85,6 @@ class set_preferences extends external_api {
         $context = self::applied_context((int) $params['contextid'], (int) $params['courseid']);
         self::validate_context($context);
         user_preference_service::store_for_user((int) $USER->id, $params['preferences']);
-        service_factory::get_settings_config()->clear_applied_cache($context);
 
         return null;
     }
@@ -100,7 +99,7 @@ class set_preferences extends external_api {
     }
 
     /**
-     * Context whose course cache is cleared after the preference write.
+     * Context validated before the preference write.
      *
      * @param int $contextid
      * @param int $courseid

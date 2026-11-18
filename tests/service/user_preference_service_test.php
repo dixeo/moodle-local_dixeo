@@ -25,15 +25,20 @@
 
 namespace local_dixeo;
 
+use core_external\external_api;
+use local_dixeo\external\get_preferences;
 use local_dixeo\external\set_preferences;
+use local_dixeo\service\consent_service;
 use local_dixeo\service\generation_language_helper;
 use local_dixeo\service\user_preference_service;
+use local_dixeo\settings\config;
 
 /**
  * The settings modal reads and stores named user preferences.
  *
  * @covers \local_dixeo\service\user_preference_service
  * @covers \local_dixeo\external\set_preferences
+ * @covers \local_dixeo\external\get_preferences
  */
 final class user_preference_service_test extends \advanced_testcase {
     /**
@@ -94,7 +99,7 @@ final class user_preference_service_test extends \advanced_testcase {
     }
 
     /**
-     * Only a system or course context can clear the applied cache.
+     * Only a system or course context is accepted.
      */
     public function test_set_preferences_rejects_a_module_context(): void {
         $this->resetAfterTest();
@@ -106,6 +111,80 @@ final class user_preference_service_test extends \advanced_testcase {
         set_preferences::execute(\context_module::instance($page->cmid)->id, 0, [
             ['name' => user_preference_service::GENERATION_LANGUAGE, 'value' => 'en'],
         ]);
+    }
+
+    /**
+     * Without a shown preference and without the Terms of Use row, nothing is offered.
+     */
+    public function test_offers_rows_without_any_row(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $user = $this->getDataGenerator()->create_user(['lang' => 'en']);
+
+        $this->assertFalse(user_preference_service::offers_rows((int) $user->id));
+    }
+
+    /**
+     * The Terms of Use row is offered while Dixeo is on, or while the user has a consent record.
+     */
+    public function test_offers_rows_for_terms_row(): void {
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user(['lang' => 'en']);
+        $userid = (int) $user->id;
+
+        $this->assertTrue(user_preference_service::offers_rows($userid));
+
+        $this->setAdminUser();
+        (new config())->set('local_dixeo', 'enabled', \context_system::instance(), '0');
+        $this->assertFalse(user_preference_service::offers_rows($userid));
+        $this->setUser($user);
+        (new consent_service())->accept($userid);
+        $this->assertTrue(user_preference_service::offers_rows($userid));
+
+        $this->assertFalse(user_preference_service::offers_rows((int) guest_user()->id));
+    }
+
+    /**
+     * A save without a course stores the preference in the system context and rebuilds no course cache.
+     */
+    public function test_set_preferences_without_context_uses_system(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $first = $this->getDataGenerator()->create_course();
+        $second = $this->getDataGenerator()->create_course();
+        $firstrev = $DB->get_field('course', 'cacherev', ['id' => $first->id]);
+        $secondrev = $DB->get_field('course', 'cacherev', ['id' => $second->id]);
+        $this->setUser($this->getDataGenerator()->create_user(['lang' => 'en']));
+
+        set_preferences::execute(0, 0, [
+            ['name' => user_preference_service::GENERATION_LANGUAGE, 'value' => 'en'],
+        ]);
+
+        $returned = external_api::clean_returnvalue(get_preferences::execute_returns(), get_preferences::execute());
+        $values = array_column($returned['preferences'], 'value', 'name');
+        $this->assertSame('en', $values[user_preference_service::GENERATION_LANGUAGE]);
+        $this->assertEquals($firstrev, $DB->get_field('course', 'cacherev', ['id' => $first->id]));
+        $this->assertEquals($secondrev, $DB->get_field('course', 'cacherev', ['id' => $second->id]));
+    }
+
+    /**
+     * A save from a course validates the course and leaves its cache untouched.
+     */
+    public function test_set_preferences_from_a_course_clears_no_cache(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student', ['lang' => 'en']);
+        $rev = $DB->get_field('course', 'cacherev', ['id' => $course->id]);
+        $this->setUser($student);
+
+        set_preferences::execute(0, (int) $course->id, [
+            ['name' => user_preference_service::GENERATION_LANGUAGE, 'value' => 'en'],
+        ]);
+
+        $this->assertSame('en', get_user_preferences(generation_language_helper::PREFERENCE, null, (int) $student->id));
+        $this->assertEquals($rev, $DB->get_field('course', 'cacherev', ['id' => $course->id]));
     }
 
     /**

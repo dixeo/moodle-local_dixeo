@@ -403,6 +403,7 @@ $string['practice_quiz_scope_course_description'] = 'el curso completo «{$a->na
 $string['practice_quiz_scope_section_description'] = 'la sección «{$a->name}»';
 $string['preferences_delete_conversation'] = 'Eliminar la conversación del tutor';
 $string['preferences_delete_conversation_desc'] = 'Esto elimina solo su conversación con el tutor en el curso actual. Las conversaciones de otros cursos no cambian.';
+$string['preferences_link'] = 'Preferencias de Dixeo';
 $string['privacy:metadata:consent'] = 'Registros de la aceptación de las condiciones de uso, con el usuario, la hora y el aviso que se mostró.';
 $string['privacy:metadata:consent:action'] = 'Si el usuario otorgó o retiró la aceptación.';
 $string['privacy:metadata:consent:documentid'] = 'El aviso guardado al que se refiere esta decisión.';

@@ -70,6 +70,55 @@ function local_dixeo_extend_navigation_course(navigation_node $navigation, stdCl
 }
 
 /**
+ * Add the Dixeo preferences link to the User account section of the user's own Preferences page.
+ *
+ * @param navigation_node $navigation User settings node.
+ * @param stdClass $user User whose settings are built.
+ * @param context $usercontext That user's context.
+ * @param stdClass $course Current course.
+ * @param context $coursecontext Current course context.
+ */
+function local_dixeo_extend_navigation_user_settings(
+    navigation_node $navigation,
+    stdClass $user,
+    context $usercontext,
+    stdClass $course,
+    context $coursecontext
+): void {
+    global $USER, $PAGE;
+
+    if (!isloggedin() || isguestuser()) {
+        return;
+    }
+    if ((int) $user->id !== (int) $USER->id) {
+        return;
+    }
+    if (!$PAGE->has_set_url() || !$PAGE->url->compare(new moodle_url('/user/preferences.php'), URL_MATCH_BASE)) {
+        return;
+    }
+    // Core also builds the viewer's own settings on another user's Preferences page; the page context tells them apart.
+    if ($PAGE->context->contextlevel != CONTEXT_USER || (int) $PAGE->context->instanceid !== (int) $USER->id) {
+        return;
+    }
+    $useraccount = $navigation->find('useraccount', navigation_node::TYPE_CONTAINER);
+    if (!$useraccount) {
+        return;
+    }
+    if (!\local_dixeo\service\user_preference_service::offers_rows((int) $USER->id)) {
+        return;
+    }
+
+    $useraccount->add_node(navigation_node::create(
+        get_string('preferences_link', 'local_dixeo'),
+        new moodle_url('/user/preferences.php', null, 'local-dixeo-preferences'),
+        navigation_node::TYPE_SETTING,
+        null,
+        'local_dixeo_preferences'
+    ));
+    $PAGE->requires->js_call_amd('local_dixeo/preferences_link', 'init', ['local-dixeo-preferences']);
+}
+
+/**
  * Get the default namespace for this Moodle site.
  *
  * The namespace is only needed when multiple Moodle sites share the same API key.
