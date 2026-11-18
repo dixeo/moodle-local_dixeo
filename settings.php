@@ -119,18 +119,22 @@ if ($hassiteconfig) {
         new moodle_url('/local/dixeo/tutor_usage_report.php'),
         ['local/dixeo:viewtutorusagesite']
     ));
+}
 
-    // Conditionally add the Dixeo Course Designer link if the block is installed.
-    if (\local_dixeo\service\plugin_installation_service::is_plugin_installed('block_dixeo_designer')) {
-        $ADMIN->add(
-            'courses',
-            new admin_externalpage(
-                'block_dixeo_designer_designacourse',
-                get_string('designacourse', 'block_dixeo_designer'),
-                new moodle_url('/blocks/dixeo_designer/designer.php'),
-                ['local/dixeo:create']
-            ),
-            'restorecourse'
-        );
-    }
+// Design a course: listed for every user with the designer capability while Dixeo is on site-wide.
+// Block settings load only for site administrators, so this entry lives here.
+if (
+    \local_dixeo\service\plugin_installation_service::is_plugin_installed('block_dixeo_designer')
+    && \local_dixeo\external\service_factory::get_settings_config()->enabled_for(\context_system::instance())
+) {
+    $ADMIN->add(
+        'courses',
+        new admin_externalpage(
+            'block_dixeo_designer_designacourse',
+            get_string('designacourse', 'block_dixeo_designer'),
+            new moodle_url('/blocks/dixeo_designer/designer.php'),
+            ['local/dixeo:create']
+        ),
+        $ADMIN->locate('restorecourse') ? 'restorecourse' : null
+    );
 }
