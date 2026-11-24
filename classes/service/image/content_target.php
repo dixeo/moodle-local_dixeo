@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 use local_dixeo\service\image\content\location;
 
 /**

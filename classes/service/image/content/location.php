@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Canonical file location identity for content image jobs and version history.
  *

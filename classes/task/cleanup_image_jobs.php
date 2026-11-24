@@ -16,7 +16,6 @@
 
 namespace local_dixeo\task;
 
-
 use local_dixeo\external\service_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\failure_message;

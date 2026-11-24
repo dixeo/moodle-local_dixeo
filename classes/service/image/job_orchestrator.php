@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\apply\content_handler as apply_content_handler;
 use local_dixeo\service\image\poll\manager as poll_manager;

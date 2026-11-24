@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Maps module HTML fields to pluginfile storage for img-gen shortcodes.
  *

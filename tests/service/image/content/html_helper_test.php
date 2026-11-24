@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Tests for html_helper_test.
  * @covers \local_dixeo\service\image\content\html_helper

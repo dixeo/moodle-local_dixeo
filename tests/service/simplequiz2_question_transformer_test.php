@@ -28,7 +28,6 @@ namespace local_dixeo;
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\service\simplequiz2_question_transformer;
 
-
 /**
  * Tests for simplequiz2_question_transformer_test.
  * @covers \local_dixeo\service\simplequiz2_question_transformer

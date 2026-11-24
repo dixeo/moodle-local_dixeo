@@ -26,7 +26,6 @@ namespace local_dixeo\service;
 
 use local_dixeo\dsl\dsl_exception;
 
-
 /**
  * Shared transformer for simplequiz2 question JSON.
  */

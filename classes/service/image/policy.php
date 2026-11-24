@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 /**
  * Resolves image-generation availability from the Dixeo settings catalogue.
  *

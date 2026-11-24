@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Updates stored HTML fields for img-gen CSS class transitions.
  *

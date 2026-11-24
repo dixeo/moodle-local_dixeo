@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Cache-busting helpers for pluginfile image URLs.
  *

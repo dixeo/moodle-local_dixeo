@@ -30,8 +30,6 @@ use core_course\external\course_summary_exporter;
 use local_dixeo\service\image\structure\scope;
 use local_dixeo\service\image\structure\writer;
 
-
-
 defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/course/lib.php');

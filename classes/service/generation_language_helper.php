@@ -24,7 +24,6 @@
 
 namespace local_dixeo\service;
 
-
 /**
  * Helpers for tutor generation language selection.
  */

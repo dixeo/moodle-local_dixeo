@@ -32,8 +32,6 @@ use local_dixeo\service\job_service;
 use local_dixeo\service\module_generation_service;
 use local_dixeo\service\practice_quiz_service;
 
-
-
 defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/course/lib.php');

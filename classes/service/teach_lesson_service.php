@@ -29,7 +29,6 @@ use local_dixeo\api\exception\api_exception;
 use local_dixeo\context\course_context_builder;
 use local_dixeo\dto\operation_result;
 
-
 /**
  * Service for tutor teach-lesson generation jobs.
  */

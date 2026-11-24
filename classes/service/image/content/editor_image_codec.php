@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 use local_dixeo\dto\job_binding_metadata;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content_target;

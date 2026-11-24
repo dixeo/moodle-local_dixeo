@@ -265,7 +265,7 @@ class value_resolver {
      * @throws dsl_exception If access fails.
      */
     protected function access_segment(mixed $data, string $segment, string $fullpath): mixed {
-        // Handle array index: [0], [1], etc.
+        // A segment wrapped in square brackets is a numeric array index.
         if (str_starts_with($segment, '[') && str_ends_with($segment, ']')) {
             $index = (int) substr($segment, 1, -1);
 

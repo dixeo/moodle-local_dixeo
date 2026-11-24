@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\job_orchestrator;

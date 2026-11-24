@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\structure;
 
-
 use local_dixeo\service\image\image_target;
 
 /**

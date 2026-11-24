@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Optional callback for applying poll results with version history (filter modal path).
  *

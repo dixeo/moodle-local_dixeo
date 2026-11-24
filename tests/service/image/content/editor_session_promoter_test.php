@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Tests for editor_session_promoter save-time promotion.
  *

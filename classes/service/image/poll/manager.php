@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\poll;
 
-
 use core\task\manager as core_task_manager;
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\failure_message;

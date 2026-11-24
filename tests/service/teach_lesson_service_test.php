@@ -31,7 +31,6 @@ use local_dixeo\service\job_service;
 use local_dixeo\service\module_generation_service;
 use local_dixeo\service\teach_lesson_service;
 
-
 /**
  * Tests for teach_lesson_service_test.
  * @covers \local_dixeo\service\teach_lesson_service

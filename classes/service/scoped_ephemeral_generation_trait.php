@@ -27,7 +27,6 @@ namespace local_dixeo\service;
 use local_dixeo\context\context_builder_factory;
 use local_dixeo\context\course_context_builder;
 
-
 /**
  * Trait for practice quiz and teach lesson scoped generation services.
  */

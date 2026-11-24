@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\poll;
 
-
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\api\exception\rate_limit_exception;
 use local_dixeo\external\service_factory;

@@ -16,7 +16,6 @@
 
 namespace local_dixeo\repository\image;
 
-
 use local_dixeo\service\image\content\file_service;
 use local_dixeo\service\image\content\location;
 use local_dixeo\service\image\content\url_helper;

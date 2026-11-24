@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Tests for editor_image_codec encode/decode round-trip.
  *

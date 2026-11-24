@@ -1450,12 +1450,13 @@ final class tutor_usage_report_test extends \advanced_testcase {
         $a = (int) $coursea->id;
         $b = (int) $courseb->id;
         $c = (int) $coursec->id;
-        $s1 = $this->getDataGenerator()->create_and_enrol($coursea, 'student');
-        $u2 = $this->getDataGenerator()->create_and_enrol($courseb, 'student');
-        $u3 = $this->getDataGenerator()->create_and_enrol($courseb, 'student');
+        // Distinct names: the export is checked by name, and random generator names can collide.
+        $s1 = $this->getDataGenerator()->create_and_enrol($coursea, 'student', ['firstname' => 'Student', 'lastname' => 'One']);
+        $u2 = $this->getDataGenerator()->create_and_enrol($courseb, 'student', ['firstname' => 'User', 'lastname' => 'Two']);
+        $u3 = $this->getDataGenerator()->create_and_enrol($courseb, 'student', ['firstname' => 'User', 'lastname' => 'Three']);
         $this->getDataGenerator()->enrol_user($u3->id, $a, 'editingteacher');
-        $x = $this->getDataGenerator()->create_and_enrol($coursec, 'student');
-        $teacher = $this->getDataGenerator()->create_user();
+        $x = $this->getDataGenerator()->create_and_enrol($coursec, 'student', ['firstname' => 'Outside', 'lastname' => 'User']);
+        $teacher = $this->getDataGenerator()->create_user(['firstname' => 'Shared', 'lastname' => 'Teacher']);
         $this->getDataGenerator()->enrol_user($teacher->id, $a, 'editingteacher');
         $this->getDataGenerator()->enrol_user($teacher->id, $b, 'editingteacher');
 

@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 /**
  * Resolve pluginfile URLs to stored files and encode image bytes for API payloads.
  *

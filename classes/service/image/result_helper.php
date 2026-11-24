@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 /**
  * Shared helpers for Dixeo image API job result payloads.
  *

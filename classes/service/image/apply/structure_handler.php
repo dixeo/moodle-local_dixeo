@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\apply;
 
-
 use local_dixeo\service\image\structure\structure_target;
 use local_dixeo\service\image\structure\writer;
 

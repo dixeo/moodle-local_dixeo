@@ -24,7 +24,6 @@
 
 namespace local_dixeo\dto;
 
-
 /**
  * One structure for all tutor POST /v1/tutor/messages payloads.
  */

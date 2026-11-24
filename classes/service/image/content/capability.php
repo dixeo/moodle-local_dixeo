@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Course-context capability checks for embedded content image jobs.
  *

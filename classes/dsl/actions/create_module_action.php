@@ -34,8 +34,6 @@ use local_dixeo\dsl\value_resolver;
 use local_dixeo\service\module_activity_defaults_registry;
 use local_dixeo\service\module_addinstance_service;
 
-
-
 defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/course/lib.php');

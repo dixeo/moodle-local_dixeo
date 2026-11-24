@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\apply;
 
-
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content_target;
 use local_dixeo\service\image\h5p_card_target;

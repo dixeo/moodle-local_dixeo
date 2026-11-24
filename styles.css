@@ -1231,7 +1231,7 @@ label[for="local-dixeo-settings-category"] {
 }
 
 .local-dixeo-settings-status-summary .local-dixeo-settings-status-meta::before {
-    content: "\00B7";
+    /* Empty alternative text keeps screen readers from announcing the separator. */
     content: "\00B7" / "";
     margin-right: 8px;
 }

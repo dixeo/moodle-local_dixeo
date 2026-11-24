@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Module + editor session coordinates for img-gen round-trip in the content editor.
  *

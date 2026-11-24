@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image;
 
-
 /**
  * Unified identity for content and structure image jobs.
  *

@@ -30,7 +30,6 @@ use local_dixeo\context\course_context_builder;
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dto\operation_result;
 
-
 /**
  * Service for tutor practice quiz generation jobs.
  */

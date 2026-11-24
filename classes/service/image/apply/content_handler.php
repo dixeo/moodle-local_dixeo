@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\apply;
 
-
 use local_dixeo\repository\image\job_repository;
 use local_dixeo\service\image\content\apply_handler;
 use local_dixeo\service\image\content\slide_featured_image;

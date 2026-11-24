@@ -16,7 +16,6 @@
 
 namespace local_dixeo\service\image\content;
 
-
 /**
  * Target HTML field and filearea mapping for shortcode processing.
  *
