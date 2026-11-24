@@ -351,6 +351,8 @@ define([
             'filesync_status_outdated',
             'filesync_file_empty',
             'filesync_file_error',
+            'filesync_file_notext',
+            'filesync_file_notext_pdf',
             'filesync_file_retry',
             'filesync_file_too_large',
             'filesync_file_unmanaged',
@@ -457,6 +459,11 @@ define([
         }
         if (file.reason === 'empty') {
             return strings.filesync_file_empty;
+        }
+        if (file.reason === 'notext') {
+            return /\.pdf$/i.test(String(file.filename || ''))
+                ? strings.filesync_file_notext_pdf
+                : strings.filesync_file_notext;
         }
         if (file.reason === 'unmanaged') {
             return strings.filesync_file_unmanaged;

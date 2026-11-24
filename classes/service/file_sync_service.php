@@ -762,7 +762,17 @@ class file_sync_service {
         array $skippedfiles = []
     ): array {
         $remote = $this->index_remote_files($remotefiles);
-        $skipped = array_column($skippedfiles, 'reason', 'filename');
+        $skipped = [];
+        foreach ($skippedfiles as $entry) {
+            if (!is_array($entry) || !isset($entry['filename'])) {
+                continue;
+            }
+            // Map API rejections from their code, so entries saved before a reason changed show the current one.
+            $code = (string) ($entry['code'] ?? '');
+            $skipped[(string) $entry['filename']] = $code !== ''
+                ? self::rejection_reason($code)
+                : (string) ($entry['reason'] ?? '');
+        }
         $rows = [];
         foreach ($localfiles as $index => $file) {
             if (!is_array($file)) {
@@ -1095,12 +1105,15 @@ class file_sync_service {
     /**
      * Status-row reason for an API rejection code.
      *
+     * FILE_EMPTY means no text: zero-byte files are never sent, so the API only
+     * reports it for a file it could read no text from, such as a scanned PDF.
+     *
      * @param string $code Machine-readable code, or '' when the API sent none.
      * @return string
      */
     private static function rejection_reason(string $code): string {
         return match ($code) {
-            'FILE_EMPTY' => 'empty',
+            'FILE_EMPTY' => 'notext',
             'FILE_TOO_LARGE' => 'toolarge',
             'FILENAME_MISSING_EXTENSION', 'EXTENSION_NOT_ALLOWED',
             'MIME_TYPE_MISMATCH', 'MIME_TYPE_UNDETECTABLE' => 'unsupported',

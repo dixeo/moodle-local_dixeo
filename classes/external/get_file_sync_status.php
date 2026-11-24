@@ -105,7 +105,7 @@ class get_file_sync_status extends external_api {
                     'state' => new external_value(PARAM_ALPHA, 'synced, syncing, or problem'),
                     'reason' => new external_value(
                         PARAM_ALPHANUMEXT,
-                        'toolarge, unsupported, empty, error, retry, or blank when the file is synced or syncing',
+                        'toolarge, unsupported, empty, notext, error, retry, or blank when the file is synced or syncing',
                         VALUE_OPTIONAL
                     ),
                 ])
