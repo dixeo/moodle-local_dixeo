@@ -1216,8 +1216,28 @@ label[for="local-dixeo-settings-category"] {
     padding: 16px;
 }
 
+.local-dixeo-settings-status-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
+}
+
+.local-dixeo-settings-status-summary .local-dixeo-settings-status-text {
+    font-size: 12px;
+    font-weight: 400;
+    color: #4a5057;
+}
+
+.local-dixeo-settings-status-summary .local-dixeo-settings-status-meta::before {
+    content: "\00B7";
+    content: "\00B7" / "";
+    margin-right: 8px;
+}
+
 .local-dixeo-settings-status-text {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 14px;
     font-weight: 500;
     color: #1d2125;
