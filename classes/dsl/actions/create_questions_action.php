@@ -31,6 +31,8 @@ namespace local_dixeo\dsl\actions;
 
 use local_dixeo\dsl\dsl_exception;
 use local_dixeo\dsl\value_resolver;
+use local_dixeo\util\generated_choices;
+use local_dixeo\util\multichoice_fractions;
 use context_module;
 use core_question\local\bank\question_version_status;
 
@@ -51,19 +53,26 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
  *   "question_type": {"source": "$.question_type"},
  *   "fields": {
  *     "questiontext": {"source": "$.question"},
+ *     "choices": {"source": "$.choices"},
  *     "answers": {"source": "$.answers"},
  *     "correct_answer": {"source": "$.rightanswer"},
  *     "pairs": {"source": "$.pairs"},
  *     "items": {"source": "$.items"},
  *     "gaps": {"source": "$.gaps"},
- *     "wrong_feedback": {"source": "$.wrong_feedback"}
+ *     "wrong_feedback": {"source": "$.wrong_feedback"},
+ *     "partial_feedback": {"source": "$.partial_feedback"}
  *   }
  * }
+ *
+ * Choice questions read `choices` ({text, correct, feedback} per option) when the payload carries a valid list,
+ * and the legacy `answers` / `correct_answer` fields otherwise. Every generated string stored in a question is
+ * passed through clean_text(), because Moodle renders question parts without further cleaning.
  *
  * Supported question types:
  * - truefalse: True/False questions (rightanswer: 0=True, 1=False)
  * - singlechoice: Single correct answer (rightanswer: integer index)
- * - multichoice: Multiple correct answers (rightanswer: array of indices)
+ * - multichoice: Multiple correct answers (rightanswer: array of indices); each wrong option is graded negatively
+ *   (see multichoice_fractions)
  * - match: Matching pairs (pairs: array of {item, match} objects)
  * - ordering: Order items correctly (items: array of strings in correct order)
  * - gapselect: Fill in blanks (questiontext with {{placeholders}}, gaps: array of {answer, distractors})
@@ -76,6 +85,9 @@ class create_questions_action {
 
     /** @var float Penalty for incorrect answers. */
     protected const DEFAULT_PENALTY = 0.3333333;
+
+    /** @var int Most options a generated multiple choice question may store. */
+    protected const MAX_CHOICES = 8;
 
     /** @var float Per-question mark for the current quiz (100 / question count). */
     protected float $questiondefaultmark = self::DEFAULT_MARK;
@@ -276,25 +288,45 @@ class create_questions_action {
         global $USER;
 
         $questiontext = $fields['questiontext'] ?? '';
-        $answers = $fields['answers'] ?? [];
-        $correctanswer = $fields['correct_answer'] ?? 0;
-        $wrongfeedback = $fields['wrong_feedback'] ?? '';
+        $choices = generated_choices::normalise($fields['choices'] ?? null, self::MAX_CHOICES);
 
-        if (!is_array($answers) || count($answers) < 2) {
-            throw new dsl_exception(
-                'Multiple choice question requires at least 2 answers',
-                'create_questions',
-                ['answers_count' => is_array($answers) ? count($answers) : 0]
-            );
+        if ($choices !== null) {
+            $answers = array_column($choices, 'text');
+            $feedbacks = array_column($choices, 'feedback');
+            $correctindices = array_keys(array_filter(array_column($choices, 'correct')));
+        } else {
+            // LEGACY-QUIZ-FIELDS: Dixeo API responses without `choices` carry the question only
+            // in `answers` / `rightanswer`. Remove this fallback once the API no longer
+            // emits the legacy fields.
+            $answers = $fields['answers'] ?? [];
+            if (!is_array($answers) || count($answers) < 2) {
+                throw new dsl_exception(
+                    'Multiple choice question requires at least 2 answers',
+                    'create_questions',
+                    ['answers_count' => is_array($answers) ? count($answers) : 0]
+                );
+            }
+            $answers = array_values($answers);
+            $feedbacks = [];
+            $correctindices = array_values(array_unique(
+                $this->resolve_correct_answer_indices($answers, $fields['correct_answer'] ?? 0, $singleanswer)
+            ));
+        }
+
+        // More than one correct option can only be stored in multiple-answer mode, whatever the label says.
+        if (count($correctindices) > 1) {
+            $singleanswer = false;
         }
 
         // Build the question form data structure.
         $formdata = $this->build_multichoice_form_data(
             $categoryid,
-            $questiontext,
+            $this->generated_text($questiontext),
             $answers,
-            $correctanswer,
-            $wrongfeedback,
+            $correctindices,
+            $feedbacks,
+            $this->generated_text($fields['wrong_feedback'] ?? ''),
+            $this->partial_feedback_text($fields),
             $context,
             $singleanswer
         );
@@ -316,7 +348,7 @@ class create_questions_action {
             throw new dsl_exception(
                 'Failed to save multichoice question',
                 'create_questions',
-                ['questiontext' => substr($questiontext, 0, 100)]
+                ['questiontext' => substr((string) $questiontext, 0, 100)]
             );
         }
 
@@ -327,20 +359,25 @@ class create_questions_action {
      * Build the form data structure for a multichoice question.
      *
      * @param int $categoryid The question category ID.
-     * @param string $questiontext The question text.
-     * @param array $answers The answer choices.
-     * @param int|string|array $correctanswer The correct answer(s) - index, text, or array of indices.
-     * @param string $wrongfeedback Feedback shown when answer is wrong.
+     * @param string $questiontext The question text, already cleaned.
+     * @param array $answers The answer choices, as generated (cleaned here).
+     * @param int[] $correctindices Zero-based indices of the correct answers.
+     * @param array $feedbacks Generated feedback per answer index (cleaned here); missing entries are empty.
+     * @param string $wrongfeedback Incorrect-answer feedback, already cleaned.
+     * @param string $partialfeedback Partially-correct feedback, already cleaned.
      * @param array $context The runtime context.
      * @param bool $singleanswer True for single answer mode, false for multiple answers.
      * @return \stdClass The form data object.
+     * @throws dsl_exception If the answers cannot be graded.
      */
     protected function build_multichoice_form_data(
         int $categoryid,
         string $questiontext,
         array $answers,
-        int|string|array $correctanswer,
+        array $correctindices,
+        array $feedbacks,
         string $wrongfeedback,
+        string $partialfeedback,
         array $context,
         bool $singleanswer = true
     ): \stdClass {
@@ -370,40 +407,21 @@ class create_questions_action {
         // Feedback for correct/incorrect/partial answers.
         $correctfeedbacktext = get_string('feedback_correct', 'local_dixeo');
         $form->correctfeedback = ['text' => $correctfeedbacktext, 'format' => FORMAT_HTML];
-        $form->partiallycorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
+        $form->partiallycorrectfeedback = ['text' => $partialfeedback, 'format' => FORMAT_HTML];
         $form->incorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
         $form->shownumcorrect = 0;
 
-        // Build answers array.
         $form->answer = [];
-        $form->fraction = [];
+        $form->fraction = $this->multichoice_fractions(count($answers), $correctindices, $singleanswer);
         $form->feedback = [];
 
-        // Determine correct answer indices and fractions.
-        $correctindices = $this->resolve_correct_answer_indices($answers, $correctanswer, $singleanswer);
-        $correctcount = count($correctindices);
-
-        // For multiple answers, distribute fractions equally among correct answers.
-        $correctfraction = $correctcount > 0 ? (1.0 / $correctcount) : 0.0;
-
-        foreach ($answers as $index => $answertext) {
+        foreach (array_values($answers) as $index => $answertext) {
             $form->answer[$index] = [
-                'text' => is_string($answertext) ? $answertext : (string) $answertext,
+                'text' => $this->generated_text($answertext),
                 'format' => FORMAT_HTML,
             ];
-
-            // Set fraction based on whether this answer is correct.
-            $iscorrect = in_array($index, $correctindices, true);
-            if ($singleanswer) {
-                // Single answer: 1.0 for correct, 0.0 for incorrect.
-                $form->fraction[$index] = $iscorrect ? '1.0' : '0.0';
-            } else {
-                // Multiple answers: distribute fraction among correct, 0.0 for incorrect.
-                $form->fraction[$index] = $iscorrect ? (string) $correctfraction : '0.0';
-            }
-
             $form->feedback[$index] = [
-                'text' => '',
+                'text' => $this->generated_text($feedbacks[$index] ?? ''),
                 'format' => FORMAT_HTML,
             ];
         }
@@ -412,6 +430,69 @@ class create_questions_action {
         $form->noanswers = count($answers);
 
         return $form;
+    }
+
+    /**
+     * Fractions for the answers of a multichoice question.
+     *
+     * Questions with 2 to 8 answers use multichoice_fractions (wrong options graded negatively in multiple-answer
+     * mode). Larger legacy payloads keep the plain grading: 1/C for each correct answer and 0 for the others.
+     *
+     * @param int $count Number of answers.
+     * @param int[] $correctindices Zero-based indices of the correct answers.
+     * @param bool $singleanswer True for single answer mode.
+     * @return array<int, string> Fraction per answer index.
+     * @throws dsl_exception If the fractions cannot be computed.
+     */
+    protected function multichoice_fractions(int $count, array $correctindices, bool $singleanswer): array {
+        if ($count >= 2 && $count <= self::MAX_CHOICES) {
+            try {
+                return multichoice_fractions::for_options($count, $correctindices, $singleanswer);
+            } catch (\coding_exception $e) {
+                throw new dsl_exception(
+                    'Multiple choice answers cannot be graded',
+                    'create_questions',
+                    ['answers_count' => $count, 'correct_count' => count($correctindices)]
+                );
+            }
+        }
+
+        $correctfraction = count($correctindices) > 0 ? (string) (1.0 / count($correctindices)) : '0.0';
+        $fractions = [];
+        for ($index = 0; $index < $count; $index++) {
+            $iscorrect = in_array($index, $correctindices, true);
+            $fractions[$index] = $iscorrect ? ($singleanswer ? '1.0' : $correctfraction) : '0.0';
+        }
+        return $fractions;
+    }
+
+    /**
+     * Clean a generated string for storage in a question.
+     *
+     * Moodle renders question parts with noclean, so generated text gets the HTMLPurifier allowlist here.
+     *
+     * @param mixed $value Generated value.
+     * @return string Cleaned HTML, or '' for a non-scalar value.
+     */
+    protected function generated_text(mixed $value): string {
+        if (!is_scalar($value)) {
+            return '';
+        }
+        return clean_text((string) $value, FORMAT_HTML);
+    }
+
+    /**
+     * Partially-correct feedback: the generated partial_feedback, or wrong_feedback when it is empty.
+     *
+     * @param array $fields The resolved fields.
+     * @return string Cleaned HTML.
+     */
+    protected function partial_feedback_text(array $fields): string {
+        $partial = $fields['partial_feedback'] ?? null;
+        if (is_string($partial) && trim($partial) !== '') {
+            return $this->generated_text($partial);
+        }
+        return $this->generated_text($fields['wrong_feedback'] ?? '');
     }
 
     /**
@@ -540,15 +621,17 @@ class create_questions_action {
 
         $questiontext = $fields['questiontext'] ?? '';
         $correctanswer = $fields['correct_answer'] ?? 0;
-        $wrongfeedback = $fields['wrong_feedback'] ?? '';
+        $choices = generated_choices::normalise($fields['choices'] ?? null, 2);
 
         // Build the question form data structure.
         $formdata = $this->build_truefalse_form_data(
             $categoryid,
-            $questiontext,
+            $this->generated_text($questiontext),
             $correctanswer,
-            $wrongfeedback,
-            $context
+            $this->generated_text($fields['wrong_feedback'] ?? ''),
+            $context,
+            $choices === null ? '' : $this->generated_text($choices[0]['feedback']),
+            $choices === null ? '' : $this->generated_text($choices[1]['feedback'])
         );
 
         // Get the question type handler.
@@ -568,7 +651,7 @@ class create_questions_action {
             throw new dsl_exception(
                 'Failed to save truefalse question',
                 'create_questions',
-                ['questiontext' => substr($questiontext, 0, 100)]
+                ['questiontext' => substr((string) $questiontext, 0, 100)]
             );
         }
 
@@ -582,10 +665,12 @@ class create_questions_action {
      * API sends rightanswer: 0 = True is correct, 1 = False is correct.
      *
      * @param int $categoryid The question category ID.
-     * @param string $questiontext The question text.
+     * @param string $questiontext The question text, already cleaned.
      * @param int|string $correctanswer The correct answer (0=True, 1=False from API).
-     * @param string $wrongfeedback Feedback shown when answer is wrong.
+     * @param string $wrongfeedback Feedback shown when answer is wrong, already cleaned.
      * @param array $context The runtime context.
+     * @param string $truechoicefeedback Generated feedback for the True answer, already cleaned ('' when absent).
+     * @param string $falsechoicefeedback Generated feedback for the False answer, already cleaned ('' when absent).
      * @return \stdClass The form data object.
      */
     protected function build_truefalse_form_data(
@@ -593,7 +678,9 @@ class create_questions_action {
         string $questiontext,
         int|string $correctanswer,
         string $wrongfeedback,
-        array $context
+        array $context,
+        string $truechoicefeedback = '',
+        string $falsechoicefeedback = ''
     ): \stdClass {
         $form = new \stdClass();
 
@@ -619,14 +706,17 @@ class create_questions_action {
         $trueiscorrect = ($answerindex === 0);
         $form->correctanswer = $trueiscorrect ? 1 : 0;
 
-        // Feedback: "Correct!" for the right answer, wrong_feedback for the wrong answer.
+        // Feedback: the generated per-answer feedback when there is one, otherwise "Correct!" for the right
+        // answer and wrong_feedback for the wrong answer.
         $correctfeedbacktext = get_string('feedback_correct', 'local_dixeo');
+        $defaulttrue = $trueiscorrect ? $correctfeedbacktext : $wrongfeedback;
+        $defaultfalse = $trueiscorrect ? $wrongfeedback : $correctfeedbacktext;
         $form->feedbacktrue = [
-            'text' => $trueiscorrect ? $correctfeedbacktext : $wrongfeedback,
+            'text' => trim($truechoicefeedback) !== '' ? $truechoicefeedback : $defaulttrue,
             'format' => FORMAT_HTML,
         ];
         $form->feedbackfalse = [
-            'text' => $trueiscorrect ? $wrongfeedback : $correctfeedbacktext,
+            'text' => trim($falsechoicefeedback) !== '' ? $falsechoicefeedback : $defaultfalse,
             'format' => FORMAT_HTML,
         ];
 
@@ -664,10 +754,11 @@ class create_questions_action {
         // Build the question form data structure.
         $formdata = $this->build_match_form_data(
             $categoryid,
-            $questiontext,
+            $this->generated_text($questiontext),
             $pairs,
-            $wrongfeedback,
-            $context
+            $this->generated_text($wrongfeedback),
+            $context,
+            $this->partial_feedback_text($fields)
         );
 
         // Get the question type handler.
@@ -702,6 +793,7 @@ class create_questions_action {
      * @param array $pairs Array of pairs with 'item' and 'match' keys.
      * @param string $wrongfeedback Feedback shown when answer is wrong.
      * @param array $context The runtime context.
+     * @param string $partialfeedback Partially-correct feedback, already cleaned.
      * @return \stdClass The form data object.
      */
     protected function build_match_form_data(
@@ -709,7 +801,8 @@ class create_questions_action {
         string $questiontext,
         array $pairs,
         string $wrongfeedback,
-        array $context
+        array $context,
+        string $partialfeedback = ''
     ): \stdClass {
         $form = new \stdClass();
 
@@ -734,7 +827,7 @@ class create_questions_action {
         // Combined feedback.
         $correctfeedbacktext = get_string('feedback_correct', 'local_dixeo');
         $form->correctfeedback = ['text' => $correctfeedbacktext, 'format' => FORMAT_HTML];
-        $form->partiallycorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
+        $form->partiallycorrectfeedback = ['text' => $partialfeedback, 'format' => FORMAT_HTML];
         $form->incorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
         $form->shownumcorrect = 0;
 
@@ -747,10 +840,10 @@ class create_questions_action {
             $match = is_array($pair) ? ($pair['match'] ?? '') : '';
 
             $form->subquestions[$index] = [
-                'text' => $item,
+                'text' => $this->generated_text($item),
                 'format' => FORMAT_HTML,
             ];
-            $form->subanswers[$index] = $match;
+            $form->subanswers[$index] = $this->generated_text($match);
         }
 
         return $form;
@@ -787,10 +880,11 @@ class create_questions_action {
         // Build the question form data structure.
         $formdata = $this->build_ordering_form_data(
             $categoryid,
-            $questiontext,
+            $this->generated_text($questiontext),
             $items,
-            $wrongfeedback,
-            $context
+            $this->generated_text($wrongfeedback),
+            $context,
+            $this->partial_feedback_text($fields)
         );
 
         // Get the question type handler.
@@ -825,6 +919,7 @@ class create_questions_action {
      * @param array $items Array of items in correct order.
      * @param string $wrongfeedback Feedback shown when answer is wrong.
      * @param array $context The runtime context.
+     * @param string $partialfeedback Partially-correct feedback, already cleaned.
      * @return \stdClass The form data object.
      */
     protected function build_ordering_form_data(
@@ -832,7 +927,8 @@ class create_questions_action {
         string $questiontext,
         array $items,
         string $wrongfeedback,
-        array $context
+        array $context,
+        string $partialfeedback = ''
     ): \stdClass {
         $form = new \stdClass();
 
@@ -862,7 +958,7 @@ class create_questions_action {
         // Combined feedback.
         $correctfeedbacktext = get_string('feedback_correct', 'local_dixeo');
         $form->correctfeedback = ['text' => $correctfeedbacktext, 'format' => FORMAT_HTML];
-        $form->partiallycorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
+        $form->partiallycorrectfeedback = ['text' => $partialfeedback, 'format' => FORMAT_HTML];
         $form->incorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
         $form->shownumcorrect = 0;
 
@@ -870,7 +966,7 @@ class create_questions_action {
         $form->answer = [];
         foreach ($items as $index => $item) {
             $form->answer[$index] = [
-                'text' => is_string($item) ? $item : (string) $item,
+                'text' => $this->generated_text($item),
                 'format' => FORMAT_HTML,
             ];
         }
@@ -909,10 +1005,11 @@ class create_questions_action {
         // Build the question form data structure.
         $formdata = $this->build_gapselect_form_data(
             $categoryid,
-            $questiontext,
+            (string) $questiontext,
             $gaps,
-            $wrongfeedback,
-            $context
+            $this->generated_text($wrongfeedback),
+            $context,
+            $this->partial_feedback_text($fields)
         );
 
         // Get the question type handler.
@@ -950,6 +1047,7 @@ class create_questions_action {
      * @param array $gaps Array of gaps with 'answer' and 'distractors' keys.
      * @param string $wrongfeedback Feedback shown when answer is wrong.
      * @param array $context The runtime context.
+     * @param string $partialfeedback Partially-correct feedback, already cleaned.
      * @return \stdClass The form data object.
      */
     protected function build_gapselect_form_data(
@@ -957,7 +1055,8 @@ class create_questions_action {
         string $questiontext,
         array $gaps,
         string $wrongfeedback,
-        array $context
+        array $context,
+        string $partialfeedback = ''
     ): \stdClass {
         $form = new \stdClass();
 
@@ -986,7 +1085,7 @@ class create_questions_action {
             $correctposition = null;
             foreach ($alloptions as $optindex => $option) {
                 $choices[$choiceindex] = [
-                    'answer' => $option,
+                    'answer' => $this->generated_text($option),
                     'choicegroup' => $choicegroup,
                 ];
 
@@ -1008,7 +1107,8 @@ class create_questions_action {
 
         // Basic question properties.
         $form->category = $categoryid . ',' . $context['contextid'];
-        $form->name = $this->generate_question_name($questiontext);
+        $processedtext = $this->generated_text($processedtext);
+        $form->name = $this->generate_question_name($processedtext);
         $form->questiontext = [
             'text' => $processedtext,
             'format' => FORMAT_HTML,
@@ -1027,7 +1127,7 @@ class create_questions_action {
         // Combined feedback.
         $correctfeedbacktext = get_string('feedback_correct', 'local_dixeo');
         $form->correctfeedback = ['text' => $correctfeedbacktext, 'format' => FORMAT_HTML];
-        $form->partiallycorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
+        $form->partiallycorrectfeedback = ['text' => $partialfeedback, 'format' => FORMAT_HTML];
         $form->incorrectfeedback = ['text' => $wrongfeedback, 'format' => FORMAT_HTML];
         $form->shownumcorrect = 0;
 
