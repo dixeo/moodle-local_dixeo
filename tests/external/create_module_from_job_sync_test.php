@@ -242,4 +242,66 @@ final class create_module_from_job_sync_test extends \advanced_testcase {
         $this->assertTrue($out['success']);
         $this->assertGreaterThan(0, (int) $out['cmid']);
     }
+
+    /**
+     * A completed job whose question list is empty creates nothing and returns the generation_incomplete message.
+     */
+    public function test_empty_question_list_returns_generation_incomplete(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $course = $this->getDataGenerator()->create_course();
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->getDataGenerator()->get_plugin_generator('local_dixeo')->create_terms_acceptance(['userid' => $teacher->id]);
+        $this->setUser($teacher);
+
+        $jobid = \core\uuid::generate();
+        $repo = new job_repository();
+        $repo->register(
+            $jobid,
+            (int) $course->id,
+            (int) $teacher->id,
+            'default',
+            'module_generate',
+            null,
+            null,
+            \local_dixeo\job_access_mode::COURSE_SHARED
+        );
+        $result = [
+            'moduleType' => 'quiz',
+            'creation' => [
+                ['action' => 'create_module', 'save_as' => 'module', 'fields' => [
+                    'name' => ['source' => '$.name'], 'intro' => ['source' => '$.intro'],
+                ]],
+                ['action' => 'create_questions', 'module_ref' => '$module', 'foreach' => '$.questions',
+                    'question_type' => ['source' => '$.question_type'], 'fields' => [
+                        'questiontext' => ['source' => '$.question'],
+                    ]],
+            ],
+            'data' => ['name' => 'Quiz', 'intro' => 'Intro', 'questions' => []],
+        ];
+        $poller = $this->getMockBuilder(\local_dixeo\api\job_poller::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get_job_status'])
+            ->getMock();
+        $poller->method('get_job_status')->willReturn(new job_status(
+            jobid: $jobid,
+            type: 'module',
+            status: 'completed',
+            progress: 100,
+            createdat: time(),
+            result: $result
+        ));
+        service_factory::set_test_job_service(new job_service(null, $poller, $repo));
+        $before = $DB->count_records('course_modules', ['course' => $course->id]);
+
+        $out = create_module_from_job::execute($jobid, (int) $course->id, 1);
+        $this->resetDebugging();
+
+        $this->assertFalse($out['success']);
+        $this->assertSame(0, (int) $out['cmid']);
+        $this->assertSame('generation_incomplete', $out['errorcode']);
+        $this->assertSame(get_string('error:generation_incomplete', 'local_dixeo'), $out['errormessage']);
+        $this->assertSame($before, $DB->count_records('course_modules', ['course' => $course->id]));
+    }
 }

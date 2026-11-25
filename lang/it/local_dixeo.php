@@ -268,6 +268,7 @@ $string['error:consentrequired'] = 'Accetta le Condizioni d\'uso attuali di Dixe
 $string['error:content_rejected'] = 'Il modello ha rifiutato l\'istruzione. Riformulatela e riprovate.';
 $string['error:content_too_long'] = 'Questo contenuto è troppo grande per essere modificato con Dixeo AI (massimo {$a}).';
 $string['error:dixeo_disabled'] = 'Dixeo è disattivato.';
+$string['error:generation_incomplete'] = 'Dixeo non è riuscito a generare un quiz valido da queste istruzioni. Riprovate, oppure controllate il numero di opzioni e di risposte corrette richiesto. Nessuna attività è stata creata.';
 $string['error:generation_not_allowed'] = 'La persona che ha richiesto questa attività non può più generare attività in questo corso.';
 $string['error:image_dimensions'] = 'L\'immagine è troppo grande. Ogni lato deve misurare al massimo {$a->dimension} pixel e l\'immagine non deve superare {$a->megapixels} megapixel.';
 $string['error:image_edit_source'] = 'Questa immagine non può essere modificata con l\'IA di Dixeo. Deve essere un\'immagine PNG, JPEG o WebP di al massimo {$a->size} e {$a->dimension} pixel per lato.';

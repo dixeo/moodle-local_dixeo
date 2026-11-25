@@ -123,6 +123,9 @@ class interpreter {
         // Ensure we have the required module context.
         $modulecontext = $this->prepare_context($context);
 
+        // The DSL has no rollback, so an empty question list is refused before the module is created.
+        $this->assert_question_collections_not_empty($actions, $data, $modulecontext);
+
         $cmid = 0;
 
         foreach ($actions as $index => $action) {
@@ -170,6 +173,43 @@ class interpreter {
         }
 
         return $cmid;
+    }
+
+    /**
+     * Refuse a create_questions action whose question list resolves to an empty array.
+     *
+     * Runs before the first action, because create_module runs before create_questions and an empty list found
+     * there would leave an activity with no questions. A list that is missing or not an array is left to the
+     * action itself, which already reports it.
+     *
+     * @param array $actions The DSL actions.
+     * @param array $data The AI-generated data.
+     * @param array $context The prepared runtime context.
+     * @throws empty_generation_exception When a question list is empty.
+     */
+    private function assert_question_collections_not_empty(array $actions, array $data, array $context): void {
+        $resolver = new value_resolver($data, [], $context);
+        foreach ($actions as $action) {
+            if (
+                !is_array($action)
+                    || ($action['action'] ?? null) !== 'create_questions'
+                    || !is_string($action['foreach'] ?? null)
+            ) {
+                continue;
+            }
+            try {
+                $questions = $resolver->resolve_source($action['foreach'], 'foreach');
+            } catch (dsl_exception $e) {
+                continue;
+            }
+            if (is_array($questions) && count($questions) === 0) {
+                throw new empty_generation_exception(
+                    'Generated quiz has no questions',
+                    'create_questions',
+                    ['path' => $action['foreach']]
+                );
+            }
+        }
     }
 
     /**

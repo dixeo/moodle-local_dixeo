@@ -44,6 +44,7 @@ final class error_message {
         'ai_unavailable' => 'error:unavailable',
         'connection_error' => 'error:unavailable',
         'content_rejected' => 'error:content_rejected',
+        'generation_incomplete' => 'error:generation_incomplete',
         'payment_required' => 'error:payment_required',
         'insufficient_credits' => 'error:payment_required',
         'validation_error' => 'error:validation_failed',
