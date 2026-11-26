@@ -111,10 +111,11 @@ define([
     /**
      * Whether a failure comes from the connection rather than from the server.
      *
-     * A Moodle exception carries an errorcode. A lost connection makes core/ajax reject with a
-     * string ('', 'timeout', 'abort', an HTTP status text), a parse error (proxy error page) or
-     * the bare jqXHR. Any other Error, such as a TypeError thrown by handler code, is not a
-     * connection failure.
+     * A Moodle exception carries an errorcode. Up to Moodle 5.2, a lost connection makes core/ajax
+     * reject with a string ('', 'timeout', 'abort', an HTTP status text), a parse error (proxy
+     * error page) or the bare jqXHR. Any other Error, such as a TypeError thrown by handler code,
+     * is not a connection failure; call() and callMany() also recognise the Errors of the Moodle
+     * 5.3 core/ajax and tag them.
      *
      * @param {*} err Rejection value
      * @returns {boolean}
@@ -154,8 +155,25 @@ define([
         if (err === 'abort') {
             return 'abort';
         }
+        // From Moodle 5.3, the timeout of core/ajax aborts its fetch() request.
+        if (err && err.name === 'AbortError') {
+            return 'timeout';
+        }
         return 'network';
     };
+
+    /**
+     * Whether a core/ajax rejection is a connection failure.
+     *
+     * From Moodle 5.3, core/ajax runs on fetch() and rejects a lost connection with an Error that
+     * carries no errorcode: an HTTP error status such as a proxy timeout ("HTTP 524: "), a network
+     * failure (TypeError) or a timeout (AbortError). A server exception always carries an errorcode.
+     *
+     * @param {*} failure Rejection value of core/ajax
+     * @returns {boolean}
+     */
+    const isAjaxConnectionFailure = (failure) => isConnectionError(failure) ||
+        (failure instanceof Error && !failure.errorcode);
 
     /**
      * Turn a core/ajax deferred into a native promise that rejects with a tagged connection error
@@ -165,7 +183,7 @@ define([
      * @returns {Promise}
      */
     const settle = (deferred) => Promise.resolve(deferred).catch((failure) => {
-        throw isConnectionError(failure) ? connectionError(failure, reasonFor(failure)) : failure;
+        throw isAjaxConnectionFailure(failure) ? connectionError(failure, reasonFor(failure)) : failure;
     });
 
     /**

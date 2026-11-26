@@ -218,6 +218,29 @@ require([networkChecksConfig.module, 'core/ajax'], function(Network, Ajax) {
                     }
                 });
         },
+        // (k) The rejections of the Moodle 5.3 core/ajax for a lost connection are connection errors.
+        function() {
+            var failures = [
+                new Error('HTTP 524: '),
+                new TypeError('Failed to fetch'),
+                new DOMException('signal is aborted without reason', 'AbortError'),
+            ];
+            var counting = Ajax.call;
+            var reasons = failures.map(function(failure) {
+                Ajax.call = function() {
+                    return [Promise.reject(failure)];
+                };
+                return Network.call({methodname: 'core_get_string', args: {}}).then(function() {
+                    return 'resolved';
+                }, function(err) {
+                    return err && err.connection === true ? err.reason : 'server';
+                });
+            });
+            Ajax.call = counting;
+            return Promise.all(reasons).then(function(results) {
+                check('k', results.join() === 'network,network,timeout', results.join());
+            });
+        },
     ];
 
     checks.reduce(function(chain, next) {
