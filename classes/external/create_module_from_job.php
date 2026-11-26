@@ -33,6 +33,7 @@ use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
 use local_dixeo\external\traits\capability_check;
+use local_dixeo\dsl\empty_generation_exception;
 use local_dixeo\dsl\interpreter;
 use local_dixeo\api\exception\api_exception;
 use local_dixeo\dto\job_binding_metadata;
@@ -203,6 +204,13 @@ class create_module_from_job extends external_api {
                 0,
                 response_factory::safe_message($e),
                 $e->get_error_code()
+            );
+        } catch (empty_generation_exception $e) {
+            return response_factory::module_creation_result(
+                false,
+                0,
+                get_string('error:generation_incomplete', 'local_dixeo'),
+                'generation_incomplete'
             );
         } catch (\moodle_exception $e) {
             if ($e->errorcode === 'error:job_not_found') {

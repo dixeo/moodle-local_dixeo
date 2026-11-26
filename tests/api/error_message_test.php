@@ -32,6 +32,10 @@ final class error_message_test extends \basic_testcase {
     public function test_known_code_returns_mapped_string(): void {
         $this->assertSame(get_string('error:busy', 'local_dixeo'), error_message::message('rate_limit_exceeded'));
         $this->assertSame(get_string('error:unavailable', 'local_dixeo'), error_message::message('upstream_ai'));
+        $this->assertSame(
+            get_string('error:generation_incomplete', 'local_dixeo'),
+            error_message::message('generation_incomplete')
+        );
     }
 
     /**

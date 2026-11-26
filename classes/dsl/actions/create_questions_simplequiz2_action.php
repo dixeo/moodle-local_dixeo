@@ -48,6 +48,7 @@ use local_dixeo\service\simplequiz2_question_transformer;
  *   "foreach": "$.questions",
  *   "fields": {
  *     "questiontext": {"source": "$.text"},
+ *     "choices": {"source": "$.choices"},
  *     "options": {"source": "$.options"},
  *     "correct_answer": {"source": "$.answer"},
  *     "correctfeedback": {"source": "$.correctfeedback"},
@@ -59,12 +60,16 @@ use local_dixeo\service\simplequiz2_question_transformer;
  * API format (input):
  * {
  *   "text": "What is a cell?",
+ *   "choices": [{"text": "Basic unit of life", "correct": true}, {"text": "An organism", "correct": false},
+ *               {"text": "A tissue", "correct": false}],
  *   "options": ["Basic unit of life", "An organism", "A tissue"],
  *   "answer": 0,
  *   "correctfeedback": "Well done!",
  *   "partiallycorrectfeedback": "Almost there.",
  *   "incorrectfeedback": "Try again."
  * }
+ *
+ * `choices` may mark several options correct; responses without it use the single-answer `options` / `answer`.
  *
  * SimpleQuiz format (output):
  * {

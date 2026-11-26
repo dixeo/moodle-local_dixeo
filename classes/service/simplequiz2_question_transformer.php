@@ -25,6 +25,7 @@
 namespace local_dixeo\service;
 
 use local_dixeo\dsl\dsl_exception;
+use local_dixeo\util\generated_choices;
 
 /**
  * Shared transformer for simplequiz2 question JSON.
@@ -86,12 +87,30 @@ class simplequiz2_question_transformer {
     /**
      * Transform resolved DSL field values to SimpleQuiz format.
      *
-     * @param array $fields questiontext, options, correct_answer
+     * A valid `choices` list (several correct options allowed) is capped at {@see self::max_answers()}; without it
+     * the legacy single-answer `options` / `correct_answer` fields are used.
+     *
+     * @param array $fields questiontext, choices or options and correct_answer, and the three feedback texts
      * @return \stdClass
      * @throws dsl_exception
      */
     public static function transform_api_question(array $fields): \stdClass {
         $questiontext = $fields['questiontext'] ?? $fields['text'] ?? '';
+        $choices = generated_choices::normalise($fields['choices'] ?? null, self::max_answers());
+        if ($choices !== null) {
+            $question = self::question_with_feedback($questiontext, $fields);
+            foreach ($choices as $choice) {
+                $answer = new \stdClass();
+                $answer->text = self::clean_html($choice['text']);
+                $answer->iscorrect = $choice['correct'] ? 1 : 0;
+                $question->answers[] = $answer;
+            }
+            return $question;
+        }
+
+        // LEGACY-QUIZ-FIELDS: Dixeo API responses without `choices` carry the question only
+        // in `options` / `answer`. Remove this fallback once the API no longer
+        // emits the legacy fields.
         $options = $fields['options'] ?? [];
         $correctanswer = $fields['correct_answer'] ?? $fields['answer'] ?? 0;
 
@@ -112,6 +131,26 @@ class simplequiz2_question_transformer {
 
         $correctindex = is_numeric($correctanswer) ? (int) $correctanswer : 0;
 
+        $question = self::question_with_feedback($questiontext, $fields);
+
+        foreach ($options as $index => $optiontext) {
+            $answer = new \stdClass();
+            $answer->text = self::clean_html(is_string($optiontext) ? $optiontext : (string) $optiontext);
+            $answer->iscorrect = ($index === $correctindex) ? 1 : 0;
+            $question->answers[] = $answer;
+        }
+
+        return $question;
+    }
+
+    /**
+     * A question with its cleaned text and feedback texts and no answers yet.
+     *
+     * @param mixed $questiontext Generated question text.
+     * @param array $fields Resolved fields holding the feedback texts.
+     * @return \stdClass
+     */
+    private static function question_with_feedback(mixed $questiontext, array $fields): \stdClass {
         $question = new \stdClass();
         $question->text = self::clean_html(is_string($questiontext) ? $questiontext : (string) $questiontext);
         $question->correctfeedback = self::feedback_or_default(
@@ -127,14 +166,6 @@ class simplequiz2_question_transformer {
             'feedback_incorrect'
         );
         $question->answers = [];
-
-        foreach ($options as $index => $optiontext) {
-            $answer = new \stdClass();
-            $answer->text = self::clean_html(is_string($optiontext) ? $optiontext : (string) $optiontext);
-            $answer->iscorrect = ($index === $correctindex) ? 1 : 0;
-            $question->answers[] = $answer;
-        }
-
         return $question;
     }
 

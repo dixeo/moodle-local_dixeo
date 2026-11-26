@@ -31,6 +31,7 @@ use local_dixeo\external\service_factory;
 use local_dixeo\service\job_service;
 use local_dixeo\service\module_generation_service;
 use local_dixeo\service\practice_quiz_service;
+use local_dixeo\service\simplequiz2_question_transformer;
 
 defined('MOODLE_INTERNAL') || die();
 global $CFG;
@@ -269,7 +270,11 @@ final class practice_quiz_service_test extends \advanced_testcase {
                 'moduleType' => 'simplequiz2',
                 'data' => [
                     'questions' => [
-                        ['text' => 'Q', 'options' => ['1', '2', '3', '4', '5', '6'], 'answer' => 0],
+                        [
+                            'text' => 'Q',
+                            'options' => array_map('strval', range(1, simplequiz2_question_transformer::max_answers() + 1)),
+                            'answer' => 0,
+                        ],
                     ],
                 ],
             ]
