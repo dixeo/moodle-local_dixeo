@@ -10,4 +10,5 @@ Feature: Web service calls survive a lost connection
     And I wait until "DONE" "text" exists
     Then I should see "PASS h"
     And I should see "PASS i"
+    And I should see "PASS l"
     And I should not see "FAIL"

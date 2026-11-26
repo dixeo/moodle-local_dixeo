@@ -114,8 +114,8 @@ define([
      * A Moodle exception carries an errorcode. Up to Moodle 5.2, a lost connection makes core/ajax
      * reject with a string ('', 'timeout', 'abort', an HTTP status text), a parse error (proxy
      * error page) or the bare jqXHR. Any other Error, such as a TypeError thrown by handler code,
-     * is not a connection failure; call() and callMany() also recognise the Errors of the Moodle
-     * 5.3 core/ajax and tag them.
+     * is not a connection failure; call(), callMany() and settle() also recognise the Errors of the
+     * Moodle 5.3 core/ajax and tag them.
      *
      * @param {*} err Rejection value
      * @returns {boolean}
@@ -179,7 +179,12 @@ define([
      * Turn a core/ajax deferred into a native promise that rejects with a tagged connection error
      * on a connection failure and with the server error unchanged otherwise.
      *
-     * @param {object} deferred jQuery promise returned by core/ajax
+     * Promises of other modules built on core/ajax, such as core/fragment, must pass through here
+     * before they reach retryRead(), a retry window or isConnectionError(). Wrap a deferred that
+     * resolves with several values (core/fragment: html and js) in a native promise first, since
+     * only the first value is kept.
+     *
+     * @param {object} deferred Promise whose rejection is a core/ajax failure (jQuery or native)
      * @returns {Promise}
      */
     const settle = (deferred) => Promise.resolve(deferred).catch((failure) => {
@@ -468,6 +473,7 @@ define([
         READ_RETRY_DELAY_MS: READ_RETRY_DELAY_MS,
         connectionError: connectionError,
         isConnectionError: isConnectionError,
+        settle: settle,
         callMany: callMany,
         call: call,
         fetchWithTimeout: fetchWithTimeout,

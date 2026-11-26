@@ -42,7 +42,7 @@ $config = [
 ];
 
 $PAGE->requires->js_amd_inline('var networkChecksConfig = ' . json_encode($config) . ';' . <<<'JS'
-require([networkChecksConfig.module, 'core/ajax'], function(Network, Ajax) {
+require([networkChecksConfig.module, 'core/ajax', 'core/fragment', 'jquery'], function(Network, Ajax, Fragment, $) {
     var config = networkChecksConfig;
     var output = document.getElementById('network-results');
     var write = function(line) {
@@ -239,6 +239,72 @@ require([networkChecksConfig.module, 'core/ajax'], function(Network, Ajax) {
             Ajax.call = counting;
             return Promise.all(reasons).then(function(results) {
                 check('k', results.join() === 'network,network,timeout', results.join());
+            });
+        },
+        // (l) core/fragment reads settled through the network module: retryRead() resends a transport
+        // failure (4.x and 5.x forms) and gives up at once on a server error.
+        function() {
+            var counting = Ajax.call;
+            var abort = new Error('The operation was aborted.');
+            abort.name = 'AbortError';
+            var run = function(failures, failure) {
+                var calls = 0;
+                var lastFailure = null;
+                Ajax.call = function() {
+                    calls++;
+                    var deferred = $.Deferred();
+                    if (calls <= failures) {
+                        deferred.reject(failure);
+                    } else {
+                        deferred.resolve({html: '<p>ok</p>', javascript: ''});
+                    }
+                    return [deferred.promise()];
+                };
+                var load = function() {
+                    return Network.settle(new Promise(function(resolve, reject) {
+                        Fragment.loadFragment('core', 'stub', 1, {})
+                            .done(function(html) {
+                                resolve(html);
+                            })
+                            .fail(reject);
+                    })).catch(function(err) {
+                        lastFailure = err;
+                        throw err;
+                    });
+                };
+                return Network.retryRead(load, {delayMs: 1}).then(function(html) {
+                    return html === '<p>ok</p>' ? 'resolved after ' + calls : 'resolved with ' + html;
+                }, function(err) {
+                    var kind = err && err.connection === true ? err.reason : 'server';
+                    return kind + ' after ' + calls;
+                }).then(function(result) {
+                    var tagged = lastFailure && lastFailure.connection === true ? lastFailure.reason : 'server';
+                    return result + ' (' + tagged + ')';
+                });
+            };
+            var expected = [
+                [1, new TypeError('Failed to fetch'), 'resolved after 2 (network)'],
+                [1, new Error('HTTP 502: Bad Gateway'), 'resolved after 2 (network)'],
+                [1, abort, 'resolved after 2 (timeout)'],
+                [1, '', 'resolved after 2 (network)'],
+                [5, new TypeError('Failed to fetch'), 'network after 5 (network)'],
+                [1, {errorcode: 'x', message: 'm'}, 'server after 1 (server)'],
+            ];
+            return expected.reduce(function(chain, item) {
+                return chain.then(function(results) {
+                    return run(item[0], item[1]).then(function(result) {
+                        return results.concat([result]);
+                    });
+                });
+            }, Promise.resolve([])).then(function(results) {
+                Ajax.call = counting;
+                var want = expected.map(function(item) {
+                    return item[2];
+                });
+                check('l', results.join() === want.join(), results.join());
+            }, function(err) {
+                Ajax.call = counting;
+                throw err;
             });
         },
     ];
